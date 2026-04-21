@@ -14,4 +14,5 @@ searchable database, and remix slides across decks.
    cli
    web-ui
    backup-restore
+   export-images
    configuration

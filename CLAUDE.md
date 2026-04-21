@@ -205,7 +205,7 @@ aippt/
   enhancer.py       # AI slide enhancement pipeline
   layouts.py        # Slide layout selection and application
   images.py         # SVG/DALL-E image generation
-  ppt2outline.py    # PPTX-to-markdown reverse conversion
+  reverse.py        # PPTX-to-markdown reverse conversion
   ingest.py         # Reusable ingest pipeline (export images → catalog → tags)
   catalog.py        # SQLite catalog, hashing, versioning, tagging
   analyze.py        # Multimodal slide analysis (feedback, notes, tags, improvements)

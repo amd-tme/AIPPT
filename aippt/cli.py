@@ -90,7 +90,7 @@ def cmd_create(args):
 
 def cmd_reverse(args):
     """Convert a PowerPoint back to markdown outline."""
-    from aippt.ppt2outline import convert_pptx_to_outline
+    from aippt.reverse import convert_pptx_to_outline
 
     if not os.path.exists(args.input):
         logger.error(f"File not found: {args.input}")

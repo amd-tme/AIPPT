@@ -11,7 +11,7 @@ from typing import List, Dict, Optional, Tuple
 
 from pptx import Presentation
 
-from aippt.ppt2outline import extract_text_from_shape
+from aippt.reverse import extract_text_from_shape
 from aippt.sections import read_sections
 
 logger = logging.getLogger(__name__)

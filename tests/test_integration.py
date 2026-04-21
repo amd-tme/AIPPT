@@ -918,7 +918,7 @@ class TestReverseRoundTrip:
 
     def test_roundtrip_no_notes_leakage(self, tmp_path):
         """Create a deck, reverse it (with notes), create from reversed md — no notes in body."""
-        from aippt.ppt2outline import convert_pptx_to_outline
+        from aippt.reverse import convert_pptx_to_outline
         from aippt.pipeline import run_pipeline, PipelineConfig
         from pptx import Presentation as PresentationClass
 

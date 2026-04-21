@@ -1,11 +1,11 @@
-"""Tests for aippt.ppt2outline module."""
+"""Tests for aippt.reverse module."""
 
 import os
 import pytest
 from unittest.mock import MagicMock, patch
 from pptx import Presentation
 
-from aippt.ppt2outline import (
+from aippt.reverse import (
     extract_text_from_shape,
     convert_pptx_to_outline,
     _resolve_slide_image,

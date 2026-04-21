@@ -53,3 +53,9 @@ test-sections.md
 # Misc
 llm-examples/
 .pytest_cache/
+
+# Auto-generated config backups
+*.live-backup
+
+# Local design docs (analysis, plans, superpowers — moved out of tracked tree)
+.local-docs/

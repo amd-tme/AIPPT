@@ -47,17 +47,12 @@ python aippt.py serve --help
 
 **Basic conversion:**
 ```bash
-python ppt2outline.py your-deck.pptx output.md
+python aippt.py reverse your-deck.pptx output.md
 ```
 
 **Exclude speaker notes:**
 ```bash
-python ppt2outline.py your-deck.pptx output.md --no-notes
-```
-
-**Using new CLI:**
-```bash
-python aippt.py reverse your-deck.pptx output.md
+python aippt.py reverse your-deck.pptx output.md --no-notes
 ```
 
 **Expected output:** Markdown file with H1 headers for slide titles, bullet points for content.
