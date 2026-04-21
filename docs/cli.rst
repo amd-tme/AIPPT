@@ -1,0 +1,507 @@
+CLI Reference
+=============
+
+All commands use the unified entry point::
+
+    python aippt.py <command> [options]
+
+Use ``--debug`` on any command for detailed logging.
+
+create
+------
+
+Build a PowerPoint deck from a markdown outline.
+
+.. code-block:: text
+
+   aippt.py create <outline> <template> <output> [options]
+
+Arguments:
+
+- ``outline`` -- Markdown outline file
+- ``template`` -- PowerPoint template file
+- ``output`` -- Output ``.pptx`` file
+
+Options:
+
+- ``--enhance`` -- Use LLM to select layouts and generate speaker notes
+- ``--model MODEL`` -- Model name (overrides ``models.yaml`` default)
+- ``--gateway-config PATH`` -- Gateway YAML config (default: ``gateway.yaml``)
+- ``--api-key KEY`` -- API key for the LLM provider
+- ``--api-base URL`` -- Base URL for API endpoint
+- ``--api-provider {anthropic,openai,compatible}`` -- Force a specific provider
+- ``--test N`` -- Process only the first *N* slides (for quick testing)
+- ``--analyze-template`` -- Analyze template layouts before generating
+- ``--image-gen {claude,dalle,openai,none}`` -- Diagram generation mode (default: ``none``)
+
+Examples::
+
+    # Basic creation
+    python aippt.py create outline.md template.pptx output.pptx
+
+    # With AI enhancement
+    python aippt.py create outline.md template.pptx output.pptx --enhance
+
+    # Specific model and diagram generation
+    python aippt.py create outline.md template.pptx output.pptx --enhance --model gpt-4o --image-gen dalle
+
+    # Test run: first 3 slides only
+    python aippt.py create outline.md template.pptx output.pptx --enhance --test 3
+
+When ``--enhance`` is enabled, the LLM analyzes each slide and selects from
+five layout types (``bullet``, ``numbered``, ``two_column``, ``diagram``,
+``basic``), generates speaker notes, and suggests visuals. Original outline
+content is preserved on the slide body.
+
+reverse
+-------
+
+Convert an existing PowerPoint file back to a markdown outline.
+
+.. code-block:: text
+
+   aippt.py reverse <input> [output] [options]
+
+Arguments:
+
+- ``input`` -- Input ``.pptx`` file
+- ``output`` -- Output ``.md`` file (optional; prints to stdout if omitted)
+
+Options:
+
+- ``--no-notes`` -- Exclude speaker notes from output
+- ``--strip-notes`` -- Omit speaker notes entirely
+- ``--enhance`` -- Use LLM for high-quality multimodal outline generation
+- ``--model MODEL`` -- Model for enhancement (overrides ``models.yaml``)
+- ``--gateway-config PATH`` -- Gateway YAML config (default: ``gateway.yaml``)
+- ``--images-dir DIR`` -- Directory with pre-exported slide images (``Slide1.PNG``, ...)
+
+Examples::
+
+    python aippt.py reverse presentation.pptx output.md
+    python aippt.py reverse presentation.pptx output.md --strip-notes
+    python aippt.py reverse presentation.pptx output.md --enhance --images-dir images/deck/
+
+catalog
+-------
+
+Catalog a deck into the SQLite database (without image export).
+
+.. code-block:: text
+
+   aippt.py catalog <deck> [options]
+
+Arguments:
+
+- ``deck`` -- PowerPoint file to catalog
+
+Options:
+
+- ``--images-dir DIR`` -- Directory with exported slide images
+- ``--db PATH`` -- Database file path (default: ``slides.db``)
+
+Example::
+
+    python aippt.py catalog deck.pptx --images-dir images/deck/
+
+analyze
+-------
+
+Run AI analysis on a presentation. Four modes are available.
+
+.. code-block:: text
+
+   aippt.py analyze <deck> --mode <mode> [options]
+
+Arguments:
+
+- ``deck`` -- PowerPoint file
+
+Options:
+
+- ``--mode {feedback,notes,tags,improvements}`` -- Analysis mode (required)
+- ``--taxonomy CSV`` -- CSV file with predefined tags (for ``tags`` mode)
+- ``--model MODEL`` -- Model to use (overrides ``models.yaml``)
+- ``--api-key KEY`` -- API key
+- ``--gateway-config PATH`` -- Gateway config (default: ``gateway.yaml``)
+- ``--images-dir DIR`` -- Directory with slide images (enables multimodal analysis)
+- ``--db PATH`` -- Database path (default: ``slides.db``)
+
+Modes:
+
+- **feedback** -- Get design and content feedback (printed to stdout)
+- **notes** -- Generate speaker notes (written back to the PPTX)
+- **tags** -- Auto-tag slides using AI or a taxonomy (stored in the database)
+- **improvements** -- Get improvement suggestions
+
+Examples::
+
+    # Design feedback
+    python aippt.py analyze deck.pptx --mode feedback --images-dir images/deck/
+
+    # Generate speaker notes
+    python aippt.py analyze deck.pptx --mode notes --images-dir images/deck/
+
+    # Auto-tag with taxonomy
+    python aippt.py analyze deck.pptx --mode tags --taxonomy tags.csv
+
+    # Improvement suggestions
+    python aippt.py analyze deck.pptx --mode improvements --images-dir images/deck/
+
+improve
+-------
+
+Rewrite slide content using LLM analysis. The LLM sees each slide's image
+(when available) and text, then rewrites the body content. Revision history is
+tracked in speaker notes.
+
+.. code-block:: text
+
+   aippt.py improve <deck> [options]
+
+Arguments:
+
+- ``deck`` -- PowerPoint file to improve
+
+Options:
+
+- ``--output PATH`` -- Save to a different file (default: overwrite in place)
+- ``--dry-run`` -- Preview changes without modifying the file
+- ``--slides LIST`` -- Comma-separated slide numbers to improve (e.g. ``3,5,8``)
+- ``--passes N`` -- Number of improvement passes (default: ``1``)
+- ``--focus {general,accuracy,detail,brevity,structure}`` -- Focus area (default: ``general``)
+- ``--images-dir DIR`` -- Slide images directory
+- ``--model MODEL`` -- Model for rewrite
+- ``--gateway-config PATH`` -- Gateway config (default: ``gateway.yaml``)
+- ``--api-key KEY`` -- API key
+- ``--db PATH`` -- Database path (default: ``slides.db``)
+
+Examples::
+
+    # Preview changes
+    python aippt.py improve deck.pptx --dry-run
+
+    # Improve specific slides with a focus
+    python aippt.py improve deck.pptx --slides 3,5,8 --focus brevity
+
+    # Multiple passes, save to new file
+    python aippt.py improve deck.pptx --output improved.pptx --passes 2
+
+search
+------
+
+Query cataloged slides by tags, title, or section.
+
+.. code-block:: text
+
+   aippt.py search [options]
+
+Options:
+
+- ``--tags LIST`` -- Comma-separated tags to filter by
+- ``--title-contains TEXT`` -- Filter by title substring
+- ``--section TEXT`` -- Filter by section name (substring match)
+- ``--export-manifest PATH`` -- Export results as a remix manifest YAML
+- ``--db PATH`` -- Database path (default: ``slides.db``)
+
+Examples::
+
+    python aippt.py search --tags "security,architecture"
+    python aippt.py search --title-contains "zero trust"
+    python aippt.py search --tags "security" --export-manifest security-remix.yaml
+
+remix
+-----
+
+Assemble a new deck from a manifest of slides pulled from different source decks.
+
+.. code-block:: text
+
+   aippt.py remix <manifest> <output> [options]
+
+Arguments:
+
+- ``manifest`` -- YAML manifest file (e.g. generated by ``search --export-manifest``)
+- ``output`` -- Output ``.pptx`` file
+
+Options:
+
+- ``--db PATH`` -- Database path (default: ``slides.db``)
+
+Example::
+
+    python aippt.py remix manifest.yaml output.pptx
+
+ingest
+------
+
+One-step pipeline: export slide images, catalog the deck, and optionally
+generate AI tags.
+
+.. code-block:: text
+
+   aippt.py ingest <deck> [options]
+
+Arguments:
+
+- ``deck`` -- PowerPoint file to ingest
+
+Options:
+
+- ``--images-dir DIR`` -- Output directory for slide images (default: ``images/<deck-name>/``)
+- ``--db PATH`` -- Database file path (default: ``slides.db``)
+- ``--tags`` -- Generate AI tags after cataloging
+- ``--taxonomy CSV`` -- CSV file for taxonomy-constrained tagging
+- ``--model MODEL`` -- Model for tag generation
+- ``--gateway-config PATH`` -- Gateway config (default: ``gateway.yaml``)
+- ``--api-key KEY`` -- API key
+- ``--width N`` -- Image export width in pixels (default: ``1920``)
+- ``--height N`` -- Image export height in pixels (default: ``1080``)
+
+Examples::
+
+    # Basic ingest (images + catalog)
+    python aippt.py ingest deck.pptx
+
+    # With AI tagging
+    python aippt.py ingest deck.pptx --tags --model gpt-4o
+
+    # With taxonomy-constrained tags and custom image directory
+    python aippt.py ingest deck.pptx --tags --taxonomy tags.csv --images-dir images/deck/
+
+Image export requires PowerPoint (Windows or WSL with PowerPoint installed).
+
+export
+------
+
+Export slide metadata from the database to CSV.
+
+.. code-block:: text
+
+   aippt.py export [deck] [options]
+
+Arguments:
+
+- ``deck`` -- Specific deck file to export (optional)
+
+Options:
+
+- ``--all`` -- Export all cataloged decks
+- ``--output PATH`` -- Output CSV file (default: ``slides.csv``)
+- ``--db PATH`` -- Database path (default: ``slides.db``)
+
+Examples::
+
+    python aippt.py export deck.pptx --output slides.csv
+    python aippt.py export --all --output catalog.csv
+
+export-images
+-------------
+
+Export slides as PNG images using PowerPoint COM automation (Windows/WSL).
+
+.. code-block:: text
+
+   aippt.py export-images <deck> [out_dir] [options]
+
+Arguments:
+
+- ``deck`` -- PowerPoint file to export
+- ``out_dir`` -- Output directory (default: ``images/<deck-name>/``)
+
+Options:
+
+- ``--width N`` -- Image width in pixels (default: ``1920``)
+- ``--height N`` -- Image height in pixels (default: ``1080``)
+
+Examples::
+
+    python aippt.py export-images deck.pptx images/deck/
+    python aippt.py export-images deck.pptx images/deck/ --width 2560 --height 1440
+
+serve
+-----
+
+Launch the web UI (FastAPI + htmx).
+
+.. code-block:: text
+
+   aippt.py serve [options]
+
+Options:
+
+- ``--port N`` -- Port number (default: ``8000``)
+- ``--db PATH`` -- Database path (default: ``slides.db``)
+- ``--gateway-config PATH`` -- Gateway config for LLM access (default: ``gateway.yaml``)
+- ``--uploads-dir DIR`` -- Directory for uploaded files (default: ``uploads``)
+- ``--view-only`` -- Disable LLM features (auto-detected when no gateway/API keys)
+
+Examples::
+
+    python aippt.py serve --port 8000
+    python aippt.py serve --port 8000 --gateway-config gateway.yaml
+    python aippt.py serve --view-only
+
+models
+------
+
+View and manage model configuration stored in ``models.yaml``.
+
+.. code-block:: text
+
+   aippt.py models [subcommand] [options]
+
+With no subcommand, displays the current defaults.
+
+Subcommands:
+
+- ``init`` -- Create ``models.yaml`` from ``models.yaml.example``
+- ``set <operation> <model>`` -- Set the default model for an operation
+- ``list-available`` -- Show all models in the registry
+- ``reset`` -- (Deprecated) Reset all defaults to built-in values
+
+Operations: ``enhance``, ``improve``, ``feedback``, ``notes``, ``tags``, ``image``
+
+Examples::
+
+    python aippt.py models                        # Show current defaults
+    python aippt.py models list-available          # List all registry models
+    python aippt.py models set enhance gpt-4o      # Change default for enhance
+    python aippt.py models init                    # Create models.yaml from example
+
+tags
+----
+
+Manage the taxonomy of predefined tags.
+
+.. code-block:: text
+
+   aippt.py tags [subcommand] [options]
+
+With no subcommand, lists all taxonomy tags.
+
+Subcommands:
+
+- ``add <tag> [--category CAT]`` -- Add a tag to the taxonomy
+- ``remove <tag>`` -- Remove a tag from the taxonomy
+- ``import <csv_file>`` -- Import taxonomy from a CSV file
+- ``export <csv_file>`` -- Export taxonomy to a CSV file
+- ``rename <old_name> <new_name>`` -- Rename a taxonomy tag
+
+Options:
+
+- ``--db PATH`` -- Database path (default: ``slides.db``)
+
+Examples::
+
+    python aippt.py tags                          # List all tags
+    python aippt.py tags add "cloud" --category "Technology"
+    python aippt.py tags import taxonomy.csv
+    python aippt.py tags rename "old-name" "new-name"
+
+tag
+---
+
+Add tags to a specific slide.
+
+.. code-block:: text
+
+   aippt.py tag <slide_id> <tags> [options]
+
+Arguments:
+
+- ``slide_id`` -- Slide ID (integer)
+- ``tags`` -- Comma-separated tag names
+
+Options:
+
+- ``--db PATH`` -- Database path (default: ``slides.db``)
+
+Example::
+
+    python aippt.py tag 42 "security,compliance"
+
+untag
+-----
+
+Remove tags from a specific slide.
+
+.. code-block:: text
+
+   aippt.py untag <slide_id> [tags] [options]
+
+Arguments:
+
+- ``slide_id`` -- Slide ID (integer)
+- ``tags`` -- Comma-separated tag names (optional if ``--all`` is used)
+
+Options:
+
+- ``--all`` -- Remove all tags from the slide
+- ``--db PATH`` -- Database path (default: ``slides.db``)
+
+Examples::
+
+    python aippt.py untag 42 "compliance"
+    python aippt.py untag 42 --all
+
+write-notes
+-----------
+
+Write speaker notes from the database back into a PPTX file. Creates a
+timestamped backup (``.pptx.bak``) before modifying the file.
+
+.. code-block:: text
+
+   aippt.py write-notes <deck> [options]
+
+Arguments:
+
+- ``deck`` -- Path to the PPTX file
+
+Options:
+
+- ``--db PATH`` -- Database path (default: ``slides.db``)
+
+Example::
+
+    python aippt.py write-notes deck.pptx
+
+migrate-paths
+-------------
+
+Convert absolute database paths to relative paths for portability. This
+command is idempotent -- running it multiple times has no additional effect.
+
+.. code-block:: text
+
+   aippt.py migrate-paths [options]
+
+Options:
+
+- ``--db PATH`` -- Database path (default: ``slides.db``)
+- ``--base-dir DIR`` -- Base directory for relative paths (default: current directory)
+
+Example::
+
+    python aippt.py migrate-paths
+
+db-info
+-------
+
+Dump database schema, statistics, and content.
+
+.. code-block:: text
+
+   aippt.py db-info [options]
+
+Options:
+
+- ``--db PATH`` -- Database path (default: ``slides.db``)
+- ``--json`` -- Output as JSON instead of plain text
+- ``--output PATH`` -- Write output to a file instead of stdout
+
+Examples::
+
+    python aippt.py db-info
+    python aippt.py db-info --json --output dbinfo.json

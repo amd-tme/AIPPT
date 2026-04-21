@@ -1,0 +1,8 @@
+# LLM Gateway Skill Dependencies
+
+# Required for validation testing
+requests>=2.28.0
+
+# SDK dependencies (installed by users, not required for skill)
+# anthropic>=0.18.0
+# openai>=1.0.0

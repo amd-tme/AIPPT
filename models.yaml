@@ -1,0 +1,80 @@
+registry:
+  gpt-4o:
+    provider: openai
+    max_tokens: 128000
+    max_input_tokens: 128000
+    supports_vision: true
+    supports_images: true
+  gpt-4o-mini:
+    provider: openai
+    max_tokens: 128000
+    max_input_tokens: 128000
+    supports_vision: true
+    supports_images: true
+  gpt-4.1:
+    provider: openai
+    max_tokens: 128000
+    max_input_tokens: 128000
+    supports_vision: true
+    supports_images: true
+  o3-mini:
+    provider: openai
+    max_tokens: 128000
+    max_input_tokens: 128000
+    supports_vision: true
+    supports_images: false
+  dall-e-3:
+    provider: openai
+    max_tokens: 0
+    max_input_tokens: 0
+    supports_vision: false
+    supports_images: true
+  claude-3.5-sonnet:
+    provider: anthropic
+    max_tokens: 200000
+    max_input_tokens: 200000
+    supports_vision: true
+    supports_images: false
+  claude-3.5-haiku:
+    provider: anthropic
+    max_tokens: 200000
+    max_input_tokens: 200000
+    supports_vision: true
+    supports_images: false
+  claude-3.7-sonnet:
+    provider: anthropic
+    max_tokens: 200000
+    max_input_tokens: 200000
+    supports_vision: true
+    supports_images: false
+  claude-opus-4-6:
+    provider: anthropic
+    max_tokens: 200000
+    max_input_tokens: 200000
+    supports_vision: true
+    supports_images: false
+  claude-sonnet-4-6:
+    provider: anthropic
+    max_tokens: 200000
+    max_input_tokens: 200000
+    supports_vision: true
+    supports_images: false
+  gemini-2.0-flash:
+    provider: google
+    max_tokens: 1000000
+    max_input_tokens: 1000000
+    supports_vision: true
+    supports_images: true
+  gemini-2.5-pro:
+    provider: google
+    max_tokens: 1000000
+    max_input_tokens: 1000000
+    supports_vision: true
+    supports_images: true
+defaults:
+  enhance: claude-sonnet-4-6
+  notes: claude-sonnet-4-6
+  image: dall-e-3
+  tags: claude-sonnet-4-6
+  feedback: claude-sonnet-4-6
+  reverse: claude-sonnet-4-6

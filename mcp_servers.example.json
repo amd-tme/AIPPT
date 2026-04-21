@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "example-http": {
+      "url": "https://mcp.example.com/mcp",
+      "auth": "oauth"
+    },
+    "example-stdio": {
+      "command": "npx",
+      "args": ["@example/mcp-server"],
+      "env": {}
+    }
+  }
+}

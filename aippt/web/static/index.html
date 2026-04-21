@@ -1,0 +1,1896 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AIPPT</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    <style>
+        :root {
+            --pico-font-size: 16px;
+        }
+        nav h1 { margin: 0; font-size: 1.4rem; }
+        .slide-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1rem;
+        }
+        .slide-card {
+            border: 1px solid var(--pico-muted-border-color);
+            border-radius: var(--pico-border-radius);
+            overflow: hidden;
+            cursor: pointer;
+            transition: box-shadow 0.2s;
+            outline-offset: 2px;
+        }
+        .slide-card:hover {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .slide-card img {
+            width: 100%;
+            height: 180px;
+            object-fit: cover;
+            display: block;
+        }
+        .slide-card .card-body {
+            padding: 0.75rem;
+        }
+        .slide-card .card-body h4 {
+            margin: 0 0 0.25rem 0;
+            font-size: 0.95rem;
+        }
+        .slide-card .card-body small {
+            color: var(--pico-muted-color);
+        }
+        .tag {
+            display: inline-block;
+            padding: 0.15rem 0.5rem;
+            margin: 0.1rem;
+            border-radius: 1rem;
+            background: var(--pico-primary-background);
+            color: var(--pico-primary-inverse);
+            font-size: 0.8rem;
+        }
+        .deck-table td, .deck-table th {
+            padding: 0.5rem 0.75rem;
+        }
+        .no-image {
+            background: var(--pico-muted-border-color);
+            height: 180px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--pico-muted-color);
+            font-size: 0.85rem;
+        }
+        .tag-removable {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.15rem 0.5rem;
+            margin: 0.1rem;
+            border-radius: 1rem;
+            background: var(--pico-primary-background);
+            color: var(--pico-primary-inverse);
+            font-size: 0.8rem;
+        }
+        .tag-removable .tag-remove {
+            margin-left: 0.3rem;
+            cursor: pointer;
+            font-weight: bold;
+            opacity: 0.7;
+            border: none;
+            background: none;
+            color: inherit;
+            font-size: 0.85rem;
+            padding: 0 0.15rem;
+            line-height: 1;
+        }
+        .tag-removable .tag-remove:hover { opacity: 1; }
+        .autocomplete-wrapper {
+            position: relative;
+            display: inline-block;
+        }
+        .autocomplete-list {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: var(--pico-background-color);
+            border: 1px solid var(--pico-muted-border-color);
+            border-radius: var(--pico-border-radius);
+            max-height: 150px;
+            overflow-y: auto;
+            z-index: 100;
+            display: none;
+        }
+        .autocomplete-list.show { display: block; }
+        .autocomplete-list div {
+            padding: 0.35rem 0.75rem;
+            cursor: pointer;
+            font-size: 0.85rem;
+        }
+        .autocomplete-list div:hover {
+            background: var(--pico-primary-background);
+            color: var(--pico-primary-inverse);
+        }
+        .taxonomy-tags {
+            margin-bottom: 0.5rem;
+        }
+        .taxonomy-tag {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.15rem 0.5rem;
+            margin: 0.1rem;
+            border-radius: 1rem;
+            background: var(--pico-secondary-background);
+            color: var(--pico-secondary-inverse);
+            font-size: 0.8rem;
+        }
+        .taxonomy-tag .tag-remove {
+            margin-left: 0.3rem;
+            cursor: pointer;
+            font-weight: bold;
+            opacity: 0.7;
+            border: none;
+            background: none;
+            color: inherit;
+            font-size: 0.85rem;
+            padding: 0 0.15rem;
+            line-height: 1;
+        }
+        .taxonomy-tag .tag-remove:hover { opacity: 1; }
+        #toast {
+            position: fixed;
+            bottom: 1rem;
+            right: 1rem;
+            padding: 0.75rem 1.5rem;
+            border-radius: var(--pico-border-radius);
+            background: var(--pico-primary);
+            color: white;
+            display: none;
+            z-index: 1000;
+        }
+        #toast.show { display: block; }
+        .ai-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+            flex-wrap: wrap;
+        }
+        .ai-actions button {
+            width: auto;
+            margin: 0;
+            padding: 0.4rem 0.9rem;
+            font-size: 0.85rem;
+        }
+        #ai-result-panel {
+            margin-top: 1rem;
+            display: none;
+        }
+        #ai-result-panel.active { display: block; }
+        #ai-result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin-bottom: 0.5rem;
+        }
+        #ai-result-header strong { font-size: 0.95rem; }
+        #ai-result-header small { color: var(--pico-muted-color); }
+        #ai-result-body {
+            background: var(--pico-card-background-color, var(--pico-background-color));
+            border: 1px solid var(--pico-muted-border-color);
+            border-radius: var(--pico-border-radius);
+            padding: 0.75rem 1rem;
+            font-size: 0.85rem;
+            max-height: 300px;
+            overflow-y: auto;
+            line-height: 1.5;
+        }
+        #ai-result-body h2 {
+            font-size: 1rem;
+            margin: 1rem 0 0.4rem 0;
+            padding-bottom: 0.2rem;
+            border-bottom: 1px solid var(--pico-muted-border-color);
+        }
+        #ai-result-body h2:first-child { margin-top: 0; }
+        #ai-result-body ul {
+            margin: 0.25rem 0 0.5rem 1.2rem;
+            padding: 0;
+        }
+        #ai-result-body li { margin-bottom: 0.2rem; }
+        #ai-result-body p { margin: 0.4rem 0; }
+        #ai-spinner {
+            display: none;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 1rem;
+            color: var(--pico-muted-color);
+            font-size: 0.85rem;
+        }
+        #ai-spinner.active { display: flex; }
+        .spinner-icon {
+            width: 16px;
+            height: 16px;
+            border: 2px solid var(--pico-muted-border-color);
+            border-top-color: var(--pico-primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .upload-progress {
+            margin-bottom: 0.75rem;
+            padding: 0.75rem 1rem;
+            border: 1px solid var(--pico-muted-border-color);
+            border-radius: var(--pico-border-radius);
+            font-size: 0.85rem;
+        }
+        .upload-progress .progress-title {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+        .upload-progress .step {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.2rem 0;
+        }
+        .upload-progress .step .step-icon {
+            width: 16px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+        .upload-progress .step.done .step-icon { color: #2d8a4e; }
+        .upload-progress .step.error .step-icon,
+        .upload-progress .step.skipped .step-icon { color: #cf6679; }
+        .upload-progress .step.running .step-icon .spinner-icon {
+            display: inline-block;
+        }
+        .upload-progress .step.waiting { color: var(--pico-muted-color); }
+        .upload-progress .step .step-detail {
+            color: var(--pico-muted-color);
+            margin-left: auto;
+            font-size: 0.8rem;
+        }
+        #save-notes-btn {
+            margin-top: 0.5rem;
+            width: auto;
+            padding: 0.4rem 0.9rem;
+            font-size: 0.85rem;
+        }
+        #save-notes-btn.hidden { display: none !important; }
+        .hidden { display: none !important; }
+        .create-panel {
+            border: 1px solid var(--pico-muted-border-color);
+            border-radius: var(--pico-border-radius);
+            margin-bottom: 1.5rem;
+        }
+        .create-panel summary {
+            padding: 0.75rem 1rem;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+        .create-panel .panel-body {
+            padding: 0 1rem 1rem 1rem;
+        }
+        .create-panel textarea {
+            font-family: monospace;
+            font-size: 0.85rem;
+            min-height: 150px;
+            resize: vertical;
+        }
+        .create-options {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin: 0.75rem 0;
+        }
+        .create-options label {
+            margin: 0;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            cursor: pointer;
+        }
+        .create-options select {
+            margin: 0;
+            padding: 0.3rem 0.5rem;
+            font-size: 0.85rem;
+            width: auto;
+        }
+        .slide-nav-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            width: 100%;
+        }
+        .slide-nav-center {
+            flex: 1;
+            min-width: 0;
+            text-align: center;
+        }
+        .slide-nav-center h3 {
+            margin: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .slide-position {
+            font-size: 0.8rem;
+            color: var(--pico-muted-color);
+            letter-spacing: 0.03em;
+        }
+        .slide-nav-btn {
+            flex-shrink: 0;
+            width: auto;
+            margin: 0;
+            padding: 0.3rem 0.7rem;
+            font-size: 0.8rem;
+            white-space: nowrap;
+        }
+        .slide-nav-btn:disabled {
+            opacity: 0.35;
+            cursor: not-allowed;
+        }
+        /* Tag browsing sidebar */
+        .layout-with-sidebar {
+            display: flex;
+            gap: 1.5rem;
+        }
+        .tag-sidebar {
+            width: 240px;
+            flex-shrink: 0;
+            border-right: 1px solid var(--pico-muted-border-color);
+            padding-right: 1rem;
+            max-height: calc(100vh - 120px);
+            overflow-y: auto;
+        }
+        .tag-sidebar h3 {
+            font-size: 1rem;
+            margin: 0 0 0.5rem 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .tag-sidebar .clear-tags-btn {
+            font-size: 0.75rem;
+            padding: 0.15rem 0.5rem;
+            width: auto;
+            margin: 0;
+        }
+        .tag-category {
+            margin-bottom: 0.75rem;
+        }
+        .tag-category summary {
+            font-weight: 600;
+            font-size: 0.85rem;
+            cursor: pointer;
+            padding: 0.2rem 0;
+        }
+        .tag-category .tag-list {
+            padding: 0.25rem 0 0 0;
+        }
+        .sidebar-tag {
+            display: flex;
+            align-items: center;
+            padding: 0.25rem 0.4rem;
+            margin: 0.1rem 0;
+            border-radius: var(--pico-border-radius);
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: background 0.15s;
+        }
+        .sidebar-tag:hover {
+            background: var(--pico-muted-border-color);
+        }
+        .sidebar-tag.selected {
+            background: var(--pico-primary-background);
+            color: var(--pico-primary-inverse);
+        }
+        .sidebar-tag .tag-count {
+            margin-left: auto;
+            font-size: 0.75rem;
+            opacity: 0.7;
+            min-width: 1.5em;
+            text-align: right;
+        }
+        .layout-content {
+            flex: 1;
+            min-width: 0;
+        }
+        .nav-tags-btn {
+            width: auto;
+            margin: 0;
+            padding: 0.3rem 0.7rem;
+            font-size: 0.85rem;
+        }
+        #tag-filter-info {
+            margin-bottom: 1rem;
+            padding: 0.5rem 0.75rem;
+            background: var(--pico-primary-background);
+            color: var(--pico-primary-inverse);
+            border-radius: var(--pico-border-radius);
+            font-size: 0.85rem;
+            display: none;
+        }
+        #tag-filter-info.active { display: flex; justify-content: space-between; align-items: center; }
+    </style>
+</head>
+<body>
+    <nav class="container">
+        <ul>
+            <li><h1>AIPPT</h1></li>
+            <li><span id="view-only-badge" style="display:none; background:var(--pico-primary-background); color:var(--pico-primary-inverse); padding:0.15rem 0.5rem; border-radius:1rem; font-size:0.75rem; font-weight:600;">Library Mode</span></li>
+        </ul>
+        <ul>
+            <li><button class="nav-tags-btn outline" id="tags-toggle-btn" onclick="toggleTagSidebar()">Tags</button></li>
+            <li><a href="#" onclick="showDecks(); return false;">Decks</a></li>
+            <li><a href="#" onclick="showSearch(); return false;">Search</a></li>
+            <li><a href="#" onclick="showSettings(); return false;">Settings</a></li>
+            <li><a href="/docs/index.html" target="_blank">Docs</a></li>
+            <li><a href="/api/export" target="_blank" role="button" class="outline">Export CSV</a></li>
+        </ul>
+    </nav>
+
+    <main class="container">
+        <div id="main-layout">
+        <!-- Tag browsing sidebar -->
+        <aside class="tag-sidebar" id="tag-sidebar" style="display:none;">
+            <h3>Tags <button class="clear-tags-btn outline" onclick="clearTagSelection()">Clear all</button></h3>
+            <div id="tag-sidebar-content"><p style="color:var(--pico-muted-color); font-size:0.85rem;">Loading...</p></div>
+        </aside>
+        <div class="layout-content" id="layout-content">
+        <div id="tag-filter-info"><span id="tag-filter-text"></span><button class="outline" style="width:auto; padding:0.15rem 0.5rem; font-size:0.75rem; margin:0;" onclick="clearTagSelection()">Clear</button></div>
+        <!-- Tag-filtered results grid -->
+        <section id="tag-results" style="display:none;">
+            <h2 id="tag-results-title">Filtered Slides</h2>
+            <div class="slide-grid" id="tag-results-grid"></div>
+        </section>
+        <!-- Deck list view -->
+        <section id="deck-list">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+                <h2 style="margin:0;">Cataloged Decks</h2>
+                <div style="display:flex; align-items:center; gap:0.75rem;">
+                    <label style="margin:0; font-size:0.85rem; display:flex; align-items:center; gap:0.35rem; cursor:pointer;">
+                        <input type="checkbox" id="deck-generate-tags" style="margin:0;">
+                        Generate AI tags
+                    </label>
+                    <button id="deck-upload-btn" class="outline" onclick="document.getElementById('deck-upload-file').click()">Upload Deck</button>
+                    <input type="file" id="deck-upload-file" accept=".pptx" style="display:none;" onchange="uploadDeck(this)">
+                </div>
+            </div>
+            <details class="create-panel" id="create-panel">
+                <summary>Create Deck from Outline</summary>
+                <div class="panel-body">
+                    <p style="margin-bottom:0.5rem; font-size:0.85rem; color:var(--pico-muted-color);">
+                        Paste a markdown outline or upload a .md file:
+                    </p>
+                    <textarea id="create-outline-text" placeholder="# My Presentation&#10;## Slide 1: Introduction&#10;- Key point one&#10;- Key point two"></textarea>
+                    <div style="margin-bottom:0.5rem; display:flex; align-items:center; gap:0.5rem;">
+                        <button class="outline" onclick="document.getElementById('create-image-files').click()" style="width:auto; padding:0.3rem 0.7rem; font-size:0.85rem;">Attach Images</button>
+                        <input type="file" id="create-image-files" accept="image/*" multiple style="display:none;" onchange="updateImageLabel(this)">
+                        <span id="create-image-count" style="font-size:0.8rem; color:var(--pico-muted-color);"></span>
+                    </div>
+                    <div class="create-options">
+                        <button class="outline" onclick="document.getElementById('create-md-file').click()" style="width:auto; padding:0.3rem 0.7rem; font-size:0.85rem;">Upload .md</button>
+                        <input type="file" id="create-md-file" accept=".md,.txt" style="display:none;" onchange="loadMdFile(this)">
+                        <label>
+                            <input type="checkbox" id="create-enhance" checked style="margin:0;">
+                            Enhanced mode
+                        </label>
+                        <label>
+                            Model:
+                            <select id="create-model-select"></select>
+                        </label>
+                        <label>
+                            Audience:
+                            <select id="create-audience">
+                                <option value="mixed" selected>Mixed / General</option>
+                                <option value="engineers">Engineers</option>
+                                <option value="executives">Executives</option>
+                                <option value="product">Product</option>
+                            </select>
+                        </label>
+                        <button id="create-btn" onclick="createDeck()" style="width:auto; margin-left:auto;">Create Presentation</button>
+                    </div>
+                    <div id="create-progress" style="display:none;" class="upload-progress">
+                        <div class="progress-title">Generating presentation...</div>
+                        <div class="step waiting" id="create-step-parse">
+                            <span class="step-icon">○</span>
+                            <span class="step-label">Parse outline</span>
+                            <span class="step-detail"></span>
+                        </div>
+                        <div class="step waiting" id="create-step-enhance" style="display:none;">
+                            <span class="step-icon">○</span>
+                            <span class="step-label">Enhance slides</span>
+                            <span class="step-detail"></span>
+                        </div>
+                        <div class="step waiting" id="create-step-build">
+                            <span class="step-icon">○</span>
+                            <span class="step-label">Build slides</span>
+                            <span class="step-detail"></span>
+                        </div>
+                        <div class="step waiting" id="create-step-ingest">
+                            <span class="step-icon">○</span>
+                            <span class="step-label">Catalog deck</span>
+                            <span class="step-detail"></span>
+                        </div>
+                    </div>
+                </div>
+            </details>
+            <div id="deck-upload-progress" style="display:none;" class="upload-progress">
+                <div class="progress-title">Processing: <span id="upload-progress-filename"></span></div>
+                <div class="step waiting" id="step-export_images">
+                    <span class="step-icon">○</span>
+                    <span class="step-label">Export images</span>
+                    <span class="step-detail"></span>
+                </div>
+                <div class="step waiting" id="step-catalog">
+                    <span class="step-icon">○</span>
+                    <span class="step-label">Catalog deck</span>
+                    <span class="step-detail"></span>
+                </div>
+                <div class="step waiting" id="step-tags" style="display:none;">
+                    <span class="step-icon">○</span>
+                    <span class="step-label">Generate AI tags</span>
+                    <span class="step-detail"></span>
+                </div>
+            </div>
+            <table class="deck-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Slides</th>
+                        <th>Author</th>
+                        <th>Created</th>
+                        <th>Updated</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="deck-tbody"></tbody>
+            </table>
+        </section>
+
+        <!-- Slide browser view -->
+        <section id="slide-browser" style="display:none;">
+            <p>
+                <a href="#" onclick="showDecks(); return false;">&larr; Back to decks</a>
+            </p>
+            <h2 id="browser-title">Slides</h2>
+            <div class="slide-grid" id="slide-grid"></div>
+        </section>
+
+        <!-- Search view -->
+        <section id="search-view" style="display:none;">
+            <h2>Search Slides</h2>
+            <form onsubmit="event.preventDefault(); doSearch();">
+                <div class="grid">
+                    <label>
+                        Title contains
+                        <input type="text" id="search-title" placeholder="e.g. ROCm">
+                    </label>
+                    <label>
+                        Tags (comma-separated)
+                        <input type="text" id="search-tags" placeholder="e.g. security, architecture">
+                    </label>
+                </div>
+                <button type="submit">Search</button>
+            </form>
+            <div class="slide-grid" id="search-results" style="margin-top:1rem;"></div>
+        </section>
+
+        <!-- Settings view -->
+        <section id="settings-view" style="display:none;">
+            <h2>Model Defaults</h2>
+            <p id="settings-source" style="color:var(--pico-muted-color);"></p>
+            <table class="deck-table">
+                <thead>
+                    <tr>
+                        <th>Operation</th>
+                        <th>Current Model</th>
+                        <th>Change</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="settings-tbody"></tbody>
+            </table>
+            <button class="outline" onclick="resetModels()">Reset All to Defaults</button>
+
+            <hr style="margin-top:2rem;">
+            <h2>Default Template</h2>
+            <p id="template-source" style="color:var(--pico-muted-color);"></p>
+            <div class="grid" style="grid-template-columns: 1fr auto; align-items:end;">
+                <label>
+                    Template path
+                    <input type="text" id="template-path-input" placeholder="templates/default.pptx" style="margin-bottom:0;">
+                </label>
+                <button onclick="saveTemplatePath()" style="margin-bottom:0;">Save</button>
+            </div>
+
+            <hr style="margin-top:2rem;">
+
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h2 style="margin:0;">Taxonomy</h2>
+                <div>
+                    <label for="taxonomy-import-file" class="outline" role="button" style="display:inline-block; cursor:pointer; margin-right:0.5rem;">Import CSV</label>
+                    <input type="file" id="taxonomy-import-file" accept=".csv" style="display:none;" onchange="importTaxonomy(this)">
+                    <a href="/api/taxonomy/export" role="button" class="outline" style="display:inline-block;">Export CSV</a>
+                </div>
+            </div>
+
+            <div style="margin-top:1rem;">
+                <div class="grid" style="grid-template-columns: 2fr 1fr auto;">
+                    <input type="text" id="taxonomy-add-name" placeholder="Tag name">
+                    <input type="text" id="taxonomy-add-category" placeholder="Category">
+                    <button onclick="addTaxonomyTag()">Add</button>
+                </div>
+            </div>
+
+            <div id="taxonomy-list" style="margin-top:1rem;"></div>
+
+            <h3 style="margin-top:2rem;">Available Models</h3>
+            <table class="deck-table">
+                <thead>
+                    <tr>
+                        <th>Provider</th>
+                        <th>Model</th>
+                        <th>Vision</th>
+                        <th>Images</th>
+                        <th>Context</th>
+                    </tr>
+                </thead>
+                <tbody id="available-models-tbody"></tbody>
+            </table>
+        </section>
+
+        </div><!-- /.layout-content -->
+        </div><!-- /#main-layout -->
+
+        <!-- Slide detail modal -->
+        <dialog id="slide-dialog">
+            <article style="max-width:800px; max-height:90vh; overflow-y:auto;">
+                <header>
+                    <button aria-label="Close" rel="prev" onclick="closeSlideDialog()"></button>
+                    <div class="slide-nav-header">
+                        <button class="slide-nav-btn" id="nav-prev" onclick="navigateSlide(-1)" title="Previous slide (Left arrow)" disabled>&larr; Prev</button>
+                        <div class="slide-nav-center">
+                            <h3 id="detail-title">Slide Title</h3>
+                            <span class="slide-position" id="slide-position"></span>
+                        </div>
+                        <button class="slide-nav-btn" id="nav-next" onclick="navigateSlide(1)" title="Next slide (Right arrow)" disabled>Next &rarr;</button>
+                    </div>
+                </header>
+                <div id="detail-image"></div>
+
+                <div id="detail-meta" style="margin-top:0.75rem; font-size:0.85rem; color:var(--pico-muted-color); display:flex; gap:1.5rem; flex-wrap:wrap;"></div>
+
+                <div class="ai-actions">
+                    <button class="outline" id="btn-analyze" onclick="runAiAction('analyze')">Analyze</button>
+                    <button class="outline" id="btn-notes" onclick="runAiAction('notes')">Suggest Notes</button>
+                    <button class="outline" id="btn-improvements" onclick="runAiAction('improvements')">Suggest Improvements</button>
+                </div>
+
+                <div id="ai-spinner"><div class="spinner-icon"></div><span id="ai-spinner-label">Analyzing slide...</span></div>
+
+                <div id="ai-result-panel">
+                    <div id="ai-result-header">
+                        <strong id="ai-result-title"></strong>
+                        <small id="ai-result-model"></small>
+                    </div>
+                    <div id="ai-result-body"></div>
+                    <button class="outline hidden" id="save-notes-btn" onclick="saveNotes()">Save to Slide Notes</button>
+                </div>
+
+                <div style="margin-top:1rem;">
+                    <strong>Tags:</strong>
+                    <span id="detail-tags"></span>
+                </div>
+                <div style="margin-top:0.5rem; display:flex; gap:0.5rem; align-items:start;">
+                    <div class="autocomplete-wrapper" style="flex:1;">
+                        <input type="text" id="new-tag-input" placeholder="Add tag..." style="margin-bottom:0;" oninput="onTagInput(this.value)" onkeydown="onTagKeydown(event)">
+                        <div class="autocomplete-list" id="tag-autocomplete"></div>
+                    </div>
+                    <button class="outline" onclick="addTag()" style="width:auto; white-space:nowrap;">Add Tag</button>
+                </div>
+                <div style="margin-top:1rem;">
+                    <div style="display:flex; align-items:center; justify-content:space-between;">
+                        <strong>Speaker Notes</strong>
+                        <button class="outline" id="notes-history-btn" onclick="toggleNotesHistory()" style="width:auto; padding:0.2rem 0.6rem; font-size:0.75rem;">History</button>
+                    </div>
+                    <div id="notes-history-panel" class="hidden" style="margin-top:0.5rem; margin-bottom:0.5rem; max-height:200px; overflow-y:auto; border:1px solid var(--pico-muted-border-color); border-radius:4px; padding:0.5rem; font-size:0.8rem;"></div>
+                    <textarea id="detail-notes" rows="5" style="width:100%; font-size:0.85rem; margin-top:0.5rem; resize:vertical;" oninput="updateNotesDirtyState()"></textarea>
+                    <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:0.25rem;">
+                        <button class="outline" id="notes-cancel-btn" onclick="cancelNotesEdit()" style="width:auto; padding:0.3rem 0.7rem; font-size:0.8rem;" disabled>Cancel</button>
+                        <button id="notes-save-btn" onclick="saveEditedNotes()" style="width:auto; padding:0.3rem 0.7rem; font-size:0.8rem;" disabled>Save Notes</button>
+                    </div>
+                </div>
+            </article>
+        </dialog>
+
+        <div id="toast"></div>
+    </main>
+
+    <script>
+        let currentSlideId = null;
+        let savedNotesValue = '';
+        let slideList = [];       // ordered slide IDs for nav context
+        let currentSlideIndex = -1;
+        let viewOnly = false;
+
+        async function fetchConfig() {
+            try {
+                const resp = await fetch('/api/config');
+                if (resp.ok) {
+                    const config = await resp.json();
+                    viewOnly = config.view_only || false;
+                }
+            } catch (e) { /* ignore */ }
+            if (viewOnly) applyViewOnlyMode();
+        }
+
+        function applyViewOnlyMode() {
+            const tip = 'LLM not configured';
+            // Nav badge
+            document.getElementById('view-only-badge').style.display = '';
+            // Generate AI tags checkbox
+            const tagsCheckbox = document.getElementById('deck-generate-tags');
+            tagsCheckbox.disabled = true;
+            tagsCheckbox.checked = false;
+            tagsCheckbox.parentElement.title = tip;
+            // Create Deck panel controls
+            document.getElementById('create-outline-text').disabled = true;
+            document.getElementById('create-outline-text').placeholder = tip;
+            document.getElementById('create-enhance').disabled = true;
+            document.getElementById('create-model-select').disabled = true;
+            document.getElementById('create-audience').disabled = true;
+            document.getElementById('create-btn').disabled = true;
+            document.getElementById('create-btn').title = tip;
+            const mdUploadBtn = document.querySelector('#create-panel .panel-body .create-options button.outline');
+            if (mdUploadBtn) { mdUploadBtn.disabled = true; }
+            document.getElementById('create-panel').setAttribute('title', tip);
+        }
+
+        function applyViewOnlyToSlideDialog() {
+            if (!viewOnly) return;
+            const tip = 'LLM not configured';
+            ['btn-analyze', 'btn-notes', 'btn-improvements'].forEach(id => {
+                const btn = document.getElementById(id);
+                btn.disabled = true;
+                btn.title = tip;
+            });
+        }
+
+        function applyViewOnlyToSettings() {
+            if (!viewOnly) return;
+            const tip = 'LLM not configured';
+            // Disable all model select dropdowns and save buttons
+            document.querySelectorAll('#settings-tbody select').forEach(sel => {
+                sel.disabled = true;
+                sel.title = tip;
+            });
+            document.querySelectorAll('#settings-tbody button').forEach(btn => {
+                btn.disabled = true;
+                btn.title = tip;
+            });
+            // Disable reset button
+            const resetBtn = document.querySelector('#settings-view > button.outline');
+            if (resetBtn && resetBtn.textContent.includes('Reset')) {
+                resetBtn.disabled = true;
+                resetBtn.title = tip;
+            }
+        }
+
+        async function showDecks() {
+            hide('slide-browser');
+            hide('search-view');
+            hide('settings-view');
+            hide('tag-results');
+            document.getElementById('tag-filter-info').classList.remove('active');
+            show('deck-list');
+            loadCreateModels();
+            const resp = await fetch('/api/decks');
+            if (!resp.ok) { toast('Error loading decks'); return; }
+            const decks = await resp.json();
+            const tbody = document.getElementById('deck-tbody');
+            tbody.innerHTML = decks.map(d => `
+                <tr style="cursor:pointer" onclick="browseDeck(${d.id}, '${escAttr(d.display_name || d.name)}')">
+                    <td><strong>${esc(d.display_name || d.name)}</strong></td>
+                    <td>${d.slide_count}</td>
+                    <td>${esc(d.author || '')}</td>
+                    <td>${fmtDate(d.created_date || d.cataloged_at)}</td>
+                    <td>${fmtDate(d.updated_at)}</td>
+                    <td onclick="event.stopPropagation()">
+                        <button class="outline" style="width:auto; padding:0.3rem 0.7rem; font-size:0.8rem;" onclick="downloadDeck(${d.id})">Download</button>
+                        <button class="outline" style="width:auto; padding:0.3rem 0.7rem; font-size:0.8rem; margin-left:0.3rem;" onclick="writeNotesToDeck(${d.id})">Write Notes to Deck</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        async function browseDeck(deckId, name) {
+            hide('deck-list');
+            hide('search-view');
+            hide('settings-view');
+            hide('tag-results');
+            show('slide-browser');
+            document.getElementById('browser-title').textContent = name;
+            const resp = await fetch(`/api/decks/${deckId}/slides`);
+            if (!resp.ok) { toast('Error loading slides'); return; }
+            const slides = await resp.json();
+            renderSlideGrid('slide-grid', slides);
+        }
+
+        async function showSearch() {
+            hide('deck-list');
+            hide('slide-browser');
+            hide('settings-view');
+            hide('tag-results');
+            show('search-view');
+            document.getElementById('search-results').innerHTML = '';
+        }
+
+        async function doSearch() {
+            const title = document.getElementById('search-title').value;
+            const tags = document.getElementById('search-tags').value;
+            const params = new URLSearchParams();
+            if (title) params.set('title', title);
+            if (tags) params.set('tags', tags);
+            const resp = await fetch(`/api/search?${params}`);
+            if (!resp.ok) { toast('Search failed'); return; }
+            const results = await resp.json();
+            renderSlideGrid('search-results', results);
+            if (results.length === 0) {
+                document.getElementById('search-results').innerHTML = '<p>No matching slides found.</p>';
+            }
+        }
+
+        function renderSlideGrid(containerId, slides) {
+            // Capture slide IDs for prev/next navigation
+            const ids = slides.map(s => s.id);
+            const container = document.getElementById(containerId);
+            container.innerHTML = slides.map((s, idx) => {
+                const imgHtml = s.image_path
+                    ? `<img src="/slide-image/${s.id}" alt="Slide ${s.position}" loading="lazy">`
+                    : `<div class="no-image">No image</div>`;
+                const tags = (s.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join(' ');
+                return `
+                    <div class="slide-card" tabindex="0" role="button" onclick="openSlideFromGrid(${JSON.stringify(ids)}, ${idx})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openSlideFromGrid(${JSON.stringify(ids)}, ${idx})}">
+                        ${imgHtml}
+                        <div class="card-body">
+                            <h4>Slide ${s.position}: ${esc(s.title || 'Untitled')}</h4>
+                            <div>${tags}</div>
+                            ${s.deck_name ? `<small>${esc(s.display_deck_name || s.deck_name)}</small>` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function openSlideFromGrid(ids, index) {
+            slideList = ids;
+            currentSlideIndex = index;
+            showSlideDetail(ids[index]);
+        }
+
+        async function showSlideDetail(slideId) {
+            currentSlideId = slideId;
+            resetAiPanel();
+            const resp = await fetch(`/api/slides/${slideId}`);
+            if (!resp.ok) { toast('Slide not found'); return; }
+            const slide = await resp.json();
+
+            document.getElementById('detail-title').textContent =
+                `Slide ${slide.position}: ${slide.title || 'Untitled'}`;
+
+            const imgDiv = document.getElementById('detail-image');
+            imgDiv.innerHTML = slide.image_path
+                ? `<img src="/slide-image/${slideId}" alt="Slide">`
+                : '<p>No image available</p>';
+
+            // Metadata row
+            const metaDiv = document.getElementById('detail-meta');
+            const metaAuthor = slide.author ? esc(slide.author) : '&mdash;';
+            const metaCreated = fmtDate(slide.slide_created_date) || '&mdash;';
+            const metaUpdated = fmtDate(slide.updated_at) || '&mdash;';
+            metaDiv.innerHTML =
+                `<span><strong>Author:</strong> ${metaAuthor}</span>` +
+                `<span><strong>Created:</strong> ${metaCreated}</span>` +
+                `<span><strong>Last Updated:</strong> ${metaUpdated}</span>`;
+
+            // Fetch tags
+            await refreshTags(slideId);
+
+            savedNotesValue = slide.notes || '';
+            document.getElementById('detail-notes').value = savedNotesValue;
+            updateNotesDirtyState();
+            document.getElementById('notes-history-panel').classList.add('hidden');
+            updateNavButtons();
+            document.getElementById('slide-dialog').showModal();
+            applyViewOnlyToSlideDialog();
+        }
+
+        async function refreshTags(slideId) {
+            const resp = await fetch(`/api/slides/${slideId}/tags`).catch(() => null);
+            if (resp && resp.ok) {
+                const data = await resp.json();
+                renderDetailTags(data.tags, slideId);
+            } else {
+                renderDetailTags([], slideId);
+            }
+        }
+
+        function renderDetailTags(tags, slideId) {
+            const tagsSpan = document.getElementById('detail-tags');
+            if (tags && tags.length > 0) {
+                tagsSpan.innerHTML = tags.map(t =>
+                    `<span class="tag-removable">${esc(t)}<button class="tag-remove" onclick="removeTag(${slideId}, '${escAttr(t)}')" title="Remove tag">&times;</button></span>`
+                ).join(' ');
+            } else {
+                tagsSpan.innerHTML = '<em>none</em>';
+            }
+        }
+
+        async function removeTag(slideId, tagName) {
+            const resp = await fetch(`/api/slides/${slideId}/tags/${encodeURIComponent(tagName)}`, {method: 'DELETE'});
+            if (resp.ok) {
+                const data = await resp.json();
+                renderDetailTags(data.tags, slideId);
+                toast(`Removed: ${tagName}`);
+            } else {
+                toast('Error removing tag');
+            }
+        }
+
+        async function addTag() {
+            if (!currentSlideId) return;
+            const input = document.getElementById('new-tag-input');
+            const tagName = input.value.trim();
+            if (!tagName) return;
+
+            const resp = await fetch(`/api/slides/${currentSlideId}/tags`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({tags: [tagName], source: 'manual'}),
+            });
+            if (!resp.ok) { toast('Error adding tag'); return; }
+            const data = await resp.json();
+            renderDetailTags(data.tags, currentSlideId);
+            input.value = '';
+            hideAutocomplete();
+            toast(`Tagged: ${tagName}`);
+        }
+
+        // --- Tag autocomplete ---
+        let taxonomyTags = [];
+
+        async function loadTaxonomyTags() {
+            try {
+                const resp = await fetch('/api/taxonomy');
+                const data = await resp.json();
+                taxonomyTags = data.tags.map(t => t.name);
+            } catch (e) {
+                taxonomyTags = [];
+            }
+        }
+
+        function onTagInput(value) {
+            const list = document.getElementById('tag-autocomplete');
+            if (!value.trim() || taxonomyTags.length === 0) {
+                list.classList.remove('show');
+                return;
+            }
+            const query = value.trim().toLowerCase();
+            const matches = taxonomyTags.filter(t => t.includes(query)).slice(0, 8);
+            if (matches.length === 0) {
+                list.classList.remove('show');
+                return;
+            }
+            list.innerHTML = matches.map(t =>
+                `<div onclick="selectAutocomplete('${escAttr(t)}')">${esc(t)}</div>`
+            ).join('');
+            list.classList.add('show');
+        }
+
+        function selectAutocomplete(tag) {
+            document.getElementById('new-tag-input').value = tag;
+            hideAutocomplete();
+        }
+
+        function hideAutocomplete() {
+            document.getElementById('tag-autocomplete').classList.remove('show');
+        }
+
+        function onTagKeydown(e) {
+            if (e.key === 'Enter') { e.preventDefault(); addTag(); }
+            if (e.key === 'Escape') { hideAutocomplete(); }
+        }
+
+        let availableModels = [];
+
+        async function showSettings() {
+            hide('deck-list');
+            hide('slide-browser');
+            hide('search-view');
+            hide('tag-results');
+            show('settings-view');
+            await Promise.all([loadSettings(), loadTaxonomyView(), loadTemplateSettings()]);
+        }
+
+        async function loadSettings() {
+            const [configResp, modelsResp] = await Promise.all([
+                fetch('/api/models'),
+                fetch('/api/models/available'),
+            ]);
+            if (!configResp.ok || !modelsResp.ok) { toast('Error loading settings'); return; }
+            const config = await configResp.json();
+            availableModels = await modelsResp.json();
+
+            document.getElementById('settings-source').textContent = `Source: ${config.source}`;
+
+            const tbody = document.getElementById('settings-tbody');
+            const ops = Object.keys(config.defaults).sort();
+            tbody.innerHTML = ops.map(op => {
+                const current = config.defaults[op];
+                const options = availableModels.map(m =>
+                    `<option value="${esc(m.name)}" ${m.name === current ? 'selected' : ''}>${esc(m.name)}</option>`
+                ).join('');
+                return `
+                    <tr>
+                        <td><strong>${esc(op)}</strong></td>
+                        <td>${esc(current)}</td>
+                        <td><select id="model-select-${esc(op)}">${options}</select></td>
+                        <td><button class="outline" onclick="saveModel('${esc(op)}')">Save</button></td>
+                    </tr>
+                `;
+            }).join('');
+
+            const availTbody = document.getElementById('available-models-tbody');
+            availTbody.innerHTML = availableModels.map(m => {
+                const ctx = m.max_input_tokens < 1000000
+                    ? `${Math.floor(m.max_input_tokens / 1000)}k`
+                    : `${Math.floor(m.max_input_tokens / 1000000)}M`;
+                return `
+                    <tr>
+                        <td>${esc(m.provider)}</td>
+                        <td>${esc(m.name)}</td>
+                        <td>${m.supports_vision ? 'yes' : 'no'}</td>
+                        <td>${m.supports_images ? 'yes' : 'no'}</td>
+                        <td>${ctx}</td>
+                    </tr>
+                `;
+            }).join('');
+            applyViewOnlyToSettings();
+        }
+
+        async function saveModel(operation) {
+            const select = document.getElementById(`model-select-${operation}`);
+            const model = select.value;
+            const resp = await fetch('/api/models', {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({defaults: {[operation]: model}}),
+            });
+            if (resp.ok) {
+                toast(`Saved: ${operation} = ${model}`);
+                await loadSettings();
+            } else {
+                toast('Error saving model configuration');
+            }
+        }
+
+        async function resetModels() {
+            const resp = await fetch('/api/models/reset', {method: 'POST'});
+            if (resp.ok) {
+                toast('Reset to built-in defaults');
+                await loadSettings();
+            } else {
+                toast('Error resetting model configuration');
+            }
+        }
+
+        // --- Taxonomy management ---
+
+        async function loadTaxonomyView() {
+            const resp = await fetch('/api/taxonomy');
+            if (!resp.ok) { toast('Error loading taxonomy'); return; }
+            const data = await resp.json();
+            taxonomyTags = data.tags.map(t => t.name);  // refresh autocomplete cache
+            const container = document.getElementById('taxonomy-list');
+            const cats = data.by_category;
+            const catKeys = Object.keys(cats).sort();
+            if (catKeys.length === 0) {
+                container.innerHTML = '<p style="color:var(--pico-muted-color);">Taxonomy is empty. Add tags or import a CSV.</p>';
+                return;
+            }
+            container.innerHTML = catKeys.map(cat => `
+                <div style="margin-bottom:0.75rem;">
+                    <strong>${esc(cat)}</strong>
+                    <div class="taxonomy-tags">
+                        ${cats[cat].map(t => `<span class="taxonomy-tag">${esc(t)}<button class="tag-remove" onclick="removeTaxonomyTag('${escAttr(t)}')" title="Remove">&times;</button></span>`).join(' ')}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function addTaxonomyTag() {
+            const nameInput = document.getElementById('taxonomy-add-name');
+            const catInput = document.getElementById('taxonomy-add-category');
+            const name = nameInput.value.trim();
+            if (!name) return;
+            const resp = await fetch('/api/taxonomy', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({name: name, category: catInput.value.trim()}),
+            });
+            if (resp.ok) {
+                nameInput.value = '';
+                catInput.value = '';
+                toast(`Added: ${name}`);
+                await loadTaxonomyView();
+            } else {
+                toast('Error adding tag');
+            }
+        }
+
+        async function removeTaxonomyTag(name) {
+            const resp = await fetch(`/api/taxonomy/${encodeURIComponent(name)}`, {method: 'DELETE'});
+            if (resp.ok) {
+                toast(`Removed: ${name}`);
+                await loadTaxonomyView();
+            } else {
+                toast('Error removing tag');
+            }
+        }
+
+        async function importTaxonomy(input) {
+            if (!input.files.length) return;
+            const formData = new FormData();
+            formData.append('file', input.files[0]);
+            const resp = await fetch('/api/taxonomy/import', {method: 'POST', body: formData});
+            if (resp.ok) {
+                const data = await resp.json();
+                toast(`Imported ${data.total} tags (${data.new} new, ${data.updated} updated)`);
+                await loadTaxonomyView();
+            } else {
+                toast('Error importing taxonomy');
+            }
+            input.value = '';  // reset file input
+        }
+
+        // --- Deck upload / download ---
+
+        async function uploadDeck(input) {
+            if (!input.files.length) return;
+            const file = input.files[0];
+            const generateTags = document.getElementById('deck-generate-tags').checked;
+
+            // Disable upload controls
+            const uploadBtn = document.getElementById('deck-upload-btn');
+            uploadBtn.disabled = true;
+            input.disabled = true;
+
+            // Show progress UI
+            const progressEl = document.getElementById('deck-upload-progress');
+            document.getElementById('upload-progress-filename').textContent = file.name;
+            const tagsStep = document.getElementById('step-tags');
+            tagsStep.style.display = generateTags ? 'flex' : 'none';
+            // Reset all steps to waiting
+            for (const step of progressEl.querySelectorAll('.step')) {
+                step.className = 'step waiting';
+                step.querySelector('.step-icon').textContent = '○';
+                step.querySelector('.step-detail').textContent = '';
+            }
+            progressEl.style.display = 'block';
+
+            const formData = new FormData();
+            formData.append('file', file);
+            if (generateTags) formData.append('generate_tags', 'true');
+
+            try {
+                const resp = await fetch('/api/decks/upload-stream', {method: 'POST', body: formData});
+
+                if (!resp.ok) {
+                    const data = await resp.json();
+                    toast(`Upload failed: ${data.error || resp.statusText}`);
+                    progressEl.style.display = 'none';
+                    uploadBtn.disabled = false;
+                    input.disabled = false;
+                    input.value = '';
+                    return;
+                }
+
+                // Read SSE stream
+                const reader = resp.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                while (true) {
+                    const {done, value} = await reader.read();
+                    if (done) break;
+                    buffer += decoder.decode(value, {stream: true});
+
+                    // Process complete SSE messages (separated by double newline)
+                    const parts = buffer.split('\n\n');
+                    buffer = parts.pop();  // keep incomplete part
+                    for (const part of parts) {
+                        if (!part.trim()) continue;
+                        let eventType = 'message';
+                        let eventData = '';
+                        for (const line of part.split('\n')) {
+                            if (line.startsWith('event: ')) eventType = line.slice(7).trim();
+                            else if (line.startsWith('data: ')) eventData = line.slice(6).trim();
+                        }
+                        if (!eventData) continue;
+                        let data;
+                        try { data = JSON.parse(eventData); } catch { continue; }
+                        handleUploadEvent(eventType, data);
+                    }
+                }
+            } catch (e) {
+                toast('Upload failed: network error');
+            }
+
+            progressEl.style.display = 'none';
+            uploadBtn.disabled = false;
+            input.disabled = false;
+            input.value = '';
+            await showDecks();
+        }
+
+        function handleUploadEvent(eventType, data) {
+            if (eventType === 'progress') {
+                const stepEl = document.getElementById('step-' + data.step);
+                if (!stepEl) return;
+                stepEl.className = 'step ' + data.status;
+                const icon = stepEl.querySelector('.step-icon');
+                const detail = stepEl.querySelector('.step-detail');
+                if (data.status === 'running') {
+                    icon.innerHTML = '<div class="spinner-icon"></div>';
+                } else if (data.status === 'done') {
+                    icon.textContent = '✓';
+                } else if (data.status === 'error' || data.status === 'skipped') {
+                    icon.textContent = '✗';
+                }
+                detail.textContent = data.detail || '';
+            } else if (eventType === 'complete') {
+                const parts = [`Uploaded "${data.display_name || data.deck_name}" — ${data.slide_count} slide${data.slide_count !== 1 ? 's' : ''}`];
+                if (data.images_exported) parts.push('images exported');
+                if (data.tags_generated) parts.push('tags generated');
+                toast(parts.join(', '));
+            } else if (eventType === 'error') {
+                toast(`Upload failed: ${data.detail}`);
+            }
+        }
+
+        function downloadDeck(deckId) {
+            window.location.href = `/api/decks/${deckId}/download`;
+        }
+
+        async function writeNotesToDeck(deckId) {
+            if (!confirm('Write DB notes back to the PPTX file? A backup will be created.')) return;
+            try {
+                const resp = await fetch(`/api/decks/${deckId}/write-notes`, { method: 'POST' });
+                const data = await resp.json();
+                if (!resp.ok) {
+                    toast('Error: ' + (data.error || 'Unknown error'));
+                    return;
+                }
+                let msg = `Wrote notes to ${data.slides_written} of ${data.slides_total} slides`;
+                if (data.slides_skipped > 0) msg += ` (${data.slides_skipped} skipped)`;
+                toast(msg);
+            } catch (err) {
+                toast('Error: ' + err.message);
+            }
+        }
+
+        // --- AI actions ---
+
+        let lastNotesText = null;
+
+        function updateNavButtons() {
+            const prevBtn = document.getElementById('nav-prev');
+            const nextBtn = document.getElementById('nav-next');
+            const posSpan = document.getElementById('slide-position');
+            if (slideList.length <= 1) {
+                prevBtn.disabled = true;
+                nextBtn.disabled = true;
+                posSpan.textContent = '';
+                return;
+            }
+            prevBtn.disabled = currentSlideIndex <= 0;
+            nextBtn.disabled = currentSlideIndex >= slideList.length - 1;
+            posSpan.textContent = `${currentSlideIndex + 1} of ${slideList.length}`;
+        }
+
+        function navigateSlide(direction) {
+            const newIndex = currentSlideIndex + direction;
+            if (newIndex < 0 || newIndex >= slideList.length) return;
+            // Dirty-notes guard
+            const textarea = document.getElementById('detail-notes');
+            if (textarea && textarea.value !== savedNotesValue) {
+                if (!confirm('You have unsaved notes changes. Discard them?')) return;
+            }
+            currentSlideIndex = newIndex;
+            showSlideDetail(slideList[newIndex]);
+        }
+
+        function closeSlideDialog() {
+            const textarea = document.getElementById('detail-notes');
+            if (textarea && textarea.value !== savedNotesValue) {
+                if (!confirm('You have unsaved notes changes. Discard them?')) return;
+            }
+            document.getElementById('slide-dialog').close();
+            resetAiPanel();
+        }
+
+        function resetAiPanel() {
+            document.getElementById('ai-result-panel').classList.remove('active');
+            document.getElementById('ai-spinner').classList.remove('active');
+            document.getElementById('save-notes-btn').classList.add('hidden');
+            lastNotesText = null;
+            setAiButtonsDisabled(false);
+        }
+
+        function setAiButtonsDisabled(disabled) {
+            ['btn-analyze', 'btn-notes', 'btn-improvements'].forEach(id => {
+                document.getElementById(id).disabled = disabled;
+            });
+        }
+
+        const AI_ACTION_LABELS = {
+            analyze: 'Analyzing slide...',
+            notes: 'Generating notes...',
+            improvements: 'Analyzing improvements...',
+        };
+
+        const AI_RESULT_TITLES = {
+            analyze: 'Analysis',
+            notes: 'Suggested Notes',
+            improvements: 'Improvement Suggestions',
+        };
+
+        async function runAiAction(action) {
+            if (!currentSlideId) return;
+            resetAiPanel();
+            setAiButtonsDisabled(true);
+
+            const spinner = document.getElementById('ai-spinner');
+            document.getElementById('ai-spinner-label').textContent = AI_ACTION_LABELS[action] || 'Working...';
+            spinner.classList.add('active');
+
+            const endpoint = `/api/slides/${currentSlideId}/${action}`;
+            let data;
+            try {
+                const resp = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({}),
+                });
+                data = await resp.json();
+                if (!resp.ok) {
+                    toast(`Error: ${data.error || resp.statusText}`);
+                    spinner.classList.remove('active');
+                    setAiButtonsDisabled(false);
+                    return;
+                }
+            } catch (e) {
+                toast('Request failed');
+                spinner.classList.remove('active');
+                setAiButtonsDisabled(false);
+                return;
+            }
+
+            spinner.classList.remove('active');
+            setAiButtonsDisabled(false);
+
+            document.getElementById('ai-result-title').textContent = AI_RESULT_TITLES[action] || action;
+            document.getElementById('ai-result-model').textContent = data.model ? `model: ${data.model}` : '';
+            document.getElementById('ai-result-body').innerHTML = renderMarkdown(data.result || '');
+            document.getElementById('ai-result-panel').classList.add('active');
+
+            if (action === 'notes') {
+                lastNotesText = data.result || '';
+                document.getElementById('save-notes-btn').classList.remove('hidden');
+            } else {
+                document.getElementById('save-notes-btn').classList.add('hidden');
+                lastNotesText = null;
+            }
+        }
+
+        function updateNotesDirtyState() {
+            const textarea = document.getElementById('detail-notes');
+            const isDirty = textarea.value !== savedNotesValue;
+            document.getElementById('notes-save-btn').disabled = !isDirty;
+            document.getElementById('notes-cancel-btn').disabled = !isDirty;
+            textarea.style.borderColor = isDirty ? 'var(--pico-primary)' : '';
+        }
+
+        function cancelNotesEdit() {
+            document.getElementById('detail-notes').value = savedNotesValue;
+            updateNotesDirtyState();
+        }
+
+        async function saveEditedNotes() {
+            if (!currentSlideId) return;
+            const notes = document.getElementById('detail-notes').value.trim();
+            if (!notes) { toast('Notes cannot be empty'); return; }
+
+            const resp = await fetch(`/api/slides/${currentSlideId}/notes/save`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({notes: notes, source: 'web'}),
+            });
+            if (resp.ok) {
+                savedNotesValue = notes;
+                updateNotesDirtyState();
+                toast('Notes saved');
+            } else {
+                const data = await resp.json().catch(() => ({}));
+                toast(`Error saving notes: ${data.error || 'unknown error'}`);
+            }
+        }
+
+        async function toggleNotesHistory() {
+            const panel = document.getElementById('notes-history-panel');
+            if (!panel.classList.contains('hidden')) {
+                panel.classList.add('hidden');
+                return;
+            }
+            if (!currentSlideId) return;
+
+            panel.innerHTML = '<em>Loading...</em>';
+            panel.classList.remove('hidden');
+
+            const resp = await fetch(`/api/slides/${currentSlideId}/notes/history`);
+            if (!resp.ok) {
+                panel.innerHTML = '<em>Error loading history</em>';
+                return;
+            }
+            const data = await resp.json();
+            if (data.history.length === 0) {
+                panel.innerHTML = '<em>No edit history</em>';
+                return;
+            }
+
+            panel.innerHTML = data.history.map(h => {
+                const date = h.created_at || 'Unknown date';
+                const source = esc(h.source || 'unknown');
+                const text = esc(h.new_value || '(empty)');
+                const preview = text.length > 200 ? text.slice(0, 200) + '...' : text;
+                return `<div style="margin-bottom:0.5rem; padding-bottom:0.5rem; border-bottom:1px solid var(--pico-muted-border-color);">` +
+                    `<div style="font-size:0.75rem; color:var(--pico-muted-color);">${esc(date)} (${source})</div>` +
+                    `<div style="white-space:pre-wrap; margin-top:0.2rem;">${preview}</div>` +
+                    `</div>`;
+            }).join('');
+        }
+
+        async function saveNotes() {
+            if (!currentSlideId || !lastNotesText) return;
+            const resp = await fetch(`/api/slides/${currentSlideId}/notes/save`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({notes: lastNotesText, source: 'ai'}),
+            });
+            if (resp.ok) {
+                savedNotesValue = lastNotesText;
+                document.getElementById('detail-notes').value = lastNotesText;
+                updateNotesDirtyState();
+                document.getElementById('save-notes-btn').classList.add('hidden');
+                toast('Notes saved');
+            } else {
+                const data = await resp.json().catch(() => ({}));
+                toast(`Error saving notes: ${data.error || 'unknown error'}`);
+            }
+        }
+
+        function renderMarkdown(text) {
+            // Lightweight markdown-to-HTML: headers, bullets, bold, italic, paragraphs.
+            // All text is escaped first to prevent XSS, then markdown syntax is converted.
+            const escaped = esc(text);
+            return escaped
+                .split('\n')
+                .reduce((acc, line) => {
+                    const headerMatch = line.match(/^#{1,3}\s+(.+)$/);
+                    if (headerMatch) {
+                        // Close any open list
+                        if (acc.inList) { acc.html += '</ul>'; acc.inList = false; }
+                        acc.html += `<h2>${headerMatch[1]}</h2>`;
+                    } else if (line.match(/^\s*[-*]\s+/)) {
+                        if (!acc.inList) { acc.html += '<ul>'; acc.inList = true; }
+                        acc.html += `<li>${line.replace(/^\s*[-*]\s+/, '')}</li>`;
+                    } else if (line.trim() === '') {
+                        if (acc.inList) { acc.html += '</ul>'; acc.inList = false; }
+                    } else {
+                        if (acc.inList) { acc.html += '</ul>'; acc.inList = false; }
+                        acc.html += `<p>${line}</p>`;
+                    }
+                    return acc;
+                }, { html: '', inList: false })
+                .html
+                // Bold: **text** or __text__
+                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                .replace(/__(.+?)__/g, '<strong>$1</strong>')
+                // Italic: *text* or _text_
+                .replace(/\*(.+?)\*/g, '<em>$1</em>')
+                .replace(/_(.+?)_/g, '<em>$1</em>');
+        }
+
+        function fmtDate(val) {
+            // Return just the date portion (YYYY-MM-DD) from an ISO timestamp or date string.
+            // Returns empty string for null/undefined/empty input.
+            if (!val) return '';
+            // ISO timestamps like "2024-03-15T10:30:00" or plain "2024-03-15" both work:
+            // take the first 10 characters.
+            return String(val).slice(0, 10);
+        }
+
+        function show(id) { document.getElementById(id).style.display = ''; }
+        function hide(id) { document.getElementById(id).style.display = 'none'; }
+        function esc(s) {
+            const d = document.createElement('div');
+            d.textContent = s || '';
+            return d.innerHTML;
+        }
+        function escAttr(s) {
+            // Escape for use inside single-quoted JS strings within onclick handlers.
+            // Use JS escapes (\\ and \x27) instead of HTML entities so the value
+            // survives HTML-decode → JS-parse without breaking the string literal.
+            return esc(s).replace(/\\/g, '\\\\').replace(/'/g, '\\x27');
+        }
+        let toastTimer = null;
+        function toast(msg) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.classList.add('show');
+            if (toastTimer) clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => { t.classList.remove('show'); toastTimer = null; }, 2000);
+        }
+
+        // Close dialog on backdrop click
+        document.getElementById('slide-dialog').addEventListener('click', function(e) {
+            if (e.target === this) closeSlideDialog();
+        });
+
+        document.getElementById('slide-dialog').addEventListener('keydown', function(e) {
+            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                const saveBtn = document.getElementById('notes-save-btn');
+                if (!saveBtn.disabled) {
+                    e.preventDefault();
+                    saveEditedNotes();
+                }
+            }
+            // Arrow key navigation — skip when focus is in an input or textarea
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                const tag = document.activeElement?.tagName;
+                if (tag === 'TEXTAREA' || tag === 'INPUT' || tag === 'SELECT') return;
+                e.preventDefault();
+                navigateSlide(e.key === 'ArrowLeft' ? -1 : 1);
+            }
+        });
+
+        // --- Create deck from outline ---
+
+        async function loadCreateModels() {
+            try {
+                const resp = await fetch('/api/models/available');
+                if (!resp.ok) return;
+                const models = await resp.json();
+                const select = document.getElementById('create-model-select');
+                let defaultModel = '';
+                try {
+                    const configResp = await fetch('/api/models');
+                    if (configResp.ok) {
+                        const config = await configResp.json();
+                        defaultModel = config.defaults?.enhance || '';
+                    }
+                } catch {}
+                select.innerHTML = models.map(m =>
+                    `<option value="${esc(m.name)}" ${m.name === defaultModel ? 'selected' : ''}>${esc(m.name)}</option>`
+                ).join('');
+            } catch {}
+        }
+
+        function loadMdFile(input) {
+            if (!input.files.length) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                document.getElementById('create-outline-text').value = e.target.result;
+                toast('Loaded: ' + input.files[0].name);
+            };
+            reader.readAsText(input.files[0]);
+            input.value = '';
+        }
+
+        function updateImageLabel(input) {
+            const count = input.files.length;
+            document.getElementById('create-image-count').textContent =
+                count ? count + ' image' + (count > 1 ? 's' : '') + ' selected' : '';
+        }
+
+        async function createDeck() {
+            const outlineText = document.getElementById('create-outline-text').value.trim();
+            if (!outlineText) {
+                toast('Please enter a markdown outline or upload a .md file');
+                return;
+            }
+
+            const enhance = document.getElementById('create-enhance').checked;
+            const model = document.getElementById('create-model-select').value;
+            const audience = document.getElementById('create-audience').value;
+
+            const createBtn = document.getElementById('create-btn');
+            createBtn.disabled = true;
+
+            const progressEl = document.getElementById('create-progress');
+            const enhanceStep = document.getElementById('create-step-enhance');
+            enhanceStep.style.display = enhance ? 'flex' : 'none';
+            for (const step of progressEl.querySelectorAll('.step')) {
+                step.className = 'step waiting';
+                step.querySelector('.step-icon').textContent = '○';
+                step.querySelector('.step-detail').textContent = '';
+            }
+            progressEl.style.display = 'block';
+
+            const formData = new FormData();
+            formData.append('outline_text', outlineText);
+            formData.append('enhance', enhance.toString());
+            if (model) formData.append('model', model);
+            if (audience && audience !== 'mixed') formData.append('audience', audience);
+
+            // Attach image files for IMAGE: directive resolution
+            const imageInput = document.getElementById('create-image-files');
+            for (const file of imageInput.files) {
+                formData.append('image_files', file);
+            }
+
+            try {
+                const resp = await fetch('/api/decks/create', {method: 'POST', body: formData});
+
+                if (!resp.ok) {
+                    let msg = resp.statusText;
+                    try { const data = await resp.json(); msg = data.error || msg; } catch {}
+                    toast('Create failed: ' + msg);
+                    progressEl.style.display = 'none';
+                    createBtn.disabled = false;
+                    return;
+                }
+
+                const reader = resp.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                while (true) {
+                    const {done, value} = await reader.read();
+                    if (done) break;
+                    buffer += decoder.decode(value, {stream: true});
+
+                    const parts = buffer.split('\n\n');
+                    buffer = parts.pop();
+                    for (const part of parts) {
+                        if (!part.trim()) continue;
+                        let eventType = 'message';
+                        let eventData = '';
+                        for (const line of part.split('\n')) {
+                            if (line.startsWith('event: ')) eventType = line.slice(7).trim();
+                            else if (line.startsWith('data: ')) eventData = line.slice(6).trim();
+                        }
+                        if (!eventData) continue;
+                        let data;
+                        try { data = JSON.parse(eventData); } catch { continue; }
+                        handleCreateEvent(eventType, data);
+                    }
+                }
+            } catch (e) {
+                toast('Create failed: network error');
+            }
+
+            progressEl.style.display = 'none';
+            createBtn.disabled = false;
+            imageInput.value = '';
+            document.getElementById('create-image-count').textContent = '';
+            await showDecks();
+        }
+
+        function handleCreateEvent(eventType, data) {
+            if (eventType === 'progress') {
+                const stepEl = document.getElementById('create-step-' + data.step);
+                if (!stepEl) return;
+                stepEl.className = 'step ' + data.status;
+                const icon = stepEl.querySelector('.step-icon');
+                const detail = stepEl.querySelector('.step-detail');
+                if (data.status === 'running') {
+                    icon.innerHTML = '<div class="spinner-icon"></div>';
+                } else if (data.status === 'done') {
+                    icon.textContent = '✓';
+                } else if (data.status === 'error' || data.status === 'skipped') {
+                    icon.textContent = '✗';
+                }
+                detail.textContent = data.detail || '';
+            } else if (eventType === 'complete') {
+                toast(`Created "${data.display_name || data.deck_name}" — ${data.slide_count} slide${data.slide_count !== 1 ? 's' : ''}`);
+            } else if (eventType === 'error') {
+                toast('Create failed: ' + data.detail);
+            }
+        }
+
+        // --- Template settings ---
+
+        async function loadTemplateSettings() {
+            try {
+                const resp = await fetch('/api/templates');
+                if (resp.ok) {
+                    const data = await resp.json();
+                    document.getElementById('template-path-input').value = data.default_template || '';
+                    document.getElementById('template-source').textContent = 'Source: ' + (data.source || 'templates.yaml');
+                } else {
+                    document.getElementById('template-path-input').value = '';
+                    document.getElementById('template-source').textContent = 'templates.yaml not configured';
+                }
+            } catch {
+                document.getElementById('template-source').textContent = 'Error loading template config';
+            }
+        }
+
+        async function saveTemplatePath() {
+            const path = document.getElementById('template-path-input').value.trim();
+            if (!path) { toast('Template path cannot be empty'); return; }
+            const resp = await fetch('/api/templates', {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({default_template: path}),
+            });
+            if (resp.ok) {
+                toast('Template path saved');
+                await loadTemplateSettings();
+            } else {
+                const data = await resp.json().catch(() => ({}));
+                toast('Error: ' + (data.error || 'Failed to save'));
+            }
+        }
+
+        // --- Tag browsing sidebar ---
+
+        let sidebarTags = [];       // [{name, category, count}, ...]
+        let selectedTags = new Set();
+        let sidebarOpen = localStorage.getItem('tagSidebarOpen') === 'true';
+
+        function toggleTagSidebar() {
+            sidebarOpen = !sidebarOpen;
+            localStorage.setItem('tagSidebarOpen', sidebarOpen);
+            applySidebarState();
+            if (sidebarOpen) loadSidebarTags();
+        }
+
+        function applySidebarState() {
+            const sidebar = document.getElementById('tag-sidebar');
+            const layout = document.getElementById('main-layout');
+            const btn = document.getElementById('tags-toggle-btn');
+            if (sidebarOpen) {
+                sidebar.style.display = '';
+                layout.classList.add('layout-with-sidebar');
+                btn.classList.remove('outline');
+            } else {
+                sidebar.style.display = 'none';
+                layout.classList.remove('layout-with-sidebar');
+                btn.classList.add('outline');
+            }
+        }
+
+        async function loadSidebarTags() {
+            try {
+                const resp = await fetch('/api/tags');
+                if (!resp.ok) return;
+                const data = await resp.json();
+                sidebarTags = data.tags || [];
+                renderSidebar();
+            } catch {
+                document.getElementById('tag-sidebar-content').innerHTML =
+                    '<p style="color:var(--pico-muted-color); font-size:0.85rem;">Error loading tags</p>';
+            }
+        }
+
+        function renderSidebar() {
+            const container = document.getElementById('tag-sidebar-content');
+            if (sidebarTags.length === 0) {
+                container.innerHTML = '<p style="color:var(--pico-muted-color); font-size:0.85rem;">No tags found. Ingest decks with tags to populate.</p>';
+                return;
+            }
+            // Group by category
+            const groups = {};
+            for (const t of sidebarTags) {
+                const cat = t.category || 'Other';
+                if (!groups[cat]) groups[cat] = [];
+                groups[cat].push(t);
+            }
+            const catKeys = Object.keys(groups).sort((a, b) => {
+                if (a === 'Other') return 1;
+                if (b === 'Other') return -1;
+                return a.localeCompare(b);
+            });
+            container.innerHTML = catKeys.map(cat => {
+                const tags = groups[cat];
+                return `<details class="tag-category" open>
+                    <summary>${esc(cat)} <small style="font-weight:normal; opacity:0.6;">(${tags.length})</small></summary>
+                    <div class="tag-list">
+                        ${tags.map(t => `<div class="sidebar-tag${selectedTags.has(t.name) ? ' selected' : ''}" onclick="toggleTag('${escAttr(t.name)}')" role="checkbox" aria-checked="${selectedTags.has(t.name)}" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleTag('${escAttr(t.name)}')}">
+                            <span>${esc(t.name)}</span>
+                            <span class="tag-count">${t.count}</span>
+                        </div>`).join('')}
+                    </div>
+                </details>`;
+            }).join('');
+        }
+
+        function toggleTag(name) {
+            if (selectedTags.has(name)) {
+                selectedTags.delete(name);
+            } else {
+                selectedTags.add(name);
+            }
+            renderSidebar();
+            applyTagFilter();
+        }
+
+        function clearTagSelection() {
+            selectedTags.clear();
+            renderSidebar();
+            applyTagFilter();
+        }
+
+        async function applyTagFilter() {
+            const filterInfo = document.getElementById('tag-filter-info');
+            const tagResults = document.getElementById('tag-results');
+            if (selectedTags.size === 0) {
+                filterInfo.classList.remove('active');
+                tagResults.style.display = 'none';
+                // Show whichever view was active
+                const deckList = document.getElementById('deck-list');
+                if (deckList.style.display === 'none' &&
+                    document.getElementById('slide-browser').style.display === 'none' &&
+                    document.getElementById('search-view').style.display === 'none' &&
+                    document.getElementById('settings-view').style.display === 'none') {
+                    show('deck-list');
+                }
+                return;
+            }
+            // Show filter info
+            const tagNames = [...selectedTags];
+            document.getElementById('tag-filter-text').textContent =
+                `Filtering by: ${tagNames.join(' + ')}`;
+            filterInfo.classList.add('active');
+
+            // Fetch filtered slides
+            const params = new URLSearchParams();
+            params.set('tags', tagNames.join(','));
+            const resp = await fetch(`/api/search?${params}`);
+            if (!resp.ok) { toast('Filter failed'); return; }
+            const results = await resp.json();
+
+            // Show tag results, hide other views
+            hide('deck-list');
+            hide('slide-browser');
+            hide('search-view');
+            hide('settings-view');
+            tagResults.style.display = '';
+
+            document.getElementById('tag-results-title').textContent =
+                `${results.length} slide${results.length !== 1 ? 's' : ''} matching ${tagNames.join(' + ')}`;
+            renderSlideGrid('tag-results-grid', results);
+            if (results.length === 0) {
+                document.getElementById('tag-results-grid').innerHTML =
+                    '<p>No slides match all selected tags.</p>';
+            }
+        }
+
+        // Load config, decks, sidebar, and taxonomy on page load
+        fetchConfig().then(() => {
+            applySidebarState();
+            if (sidebarOpen) loadSidebarTags();
+            showDecks();
+        });
+        loadTaxonomyTags();
+    </script>
+</body>
+</html>

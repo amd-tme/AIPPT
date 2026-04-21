@@ -1,0 +1,43 @@
+name: AMD Corporate
+description: Black/white/gray with teal accent, matching corp.pptx template
+
+# Colors extracted from ppt/theme/theme1.xml "AMD Palette" color scheme.
+# dk1=000000, lt1=FFFFFF, dk2=5E5E5E, lt2=9D9FA2
+# accent1=636466, accent2=9D9FA2, accent3=C1A968, accent4=F26522
+# accent5=ED1C24, accent6=00C2DE, hlink=D5D5D5, folHlink=A9A9A9
+#
+# IMPORTANT: AMD slides are BLACK and WHITE. No navy, no dark blue.
+# The template has zero blue tones — keep it grayscale + accent colors.
+
+colors:
+  background: "000000"
+  background_alt: "000000"
+  surface: "636466"
+  text_primary: "FFFFFF"
+  text_secondary: "9D9FA2"
+  text_body: "D5D5D5"
+  accent: "00C2DE"
+  accent_alt: "C1A968"
+  warning: "ED1C24"
+
+fonts:
+  heading: "Arial"
+  body: "Arial"
+  mono: "Consolas"
+
+logo:
+  path: "themes/assets/amd-wordmark.png"
+  position: "bottom-right"
+  width_inches: 1.26
+  height_inches: 0.36
+  x_inches: 11.83           # SW(13.33) - 1.5
+  y_inches: 7.0             # SH(7.5) - 0.5
+
+slide:
+  layout: "LAYOUT_WIDE"      # 13.33" × 7.5" — all guide coordinates use this size
+  margin_inches: 0.64
+
+footer:
+  show: true
+  text: ""
+  show_slide_numbers: true

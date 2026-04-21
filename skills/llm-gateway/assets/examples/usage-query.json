@@ -1,0 +1,61 @@
+{
+  "description": "Example usage queries and expected responses",
+  "examples": [
+    {
+      "input": {
+        "query": "How do I use claude-sonnet-4-5?",
+        "action": "usage",
+        "output_format": "markdown"
+      },
+      "expected_output": {
+        "model": "claude-sonnet-4-5@20250929",
+        "provider": "vertex_ai",
+        "sdk": "anthropic"
+      }
+    },
+    {
+      "input": {
+        "query": "Show me code for GPT-4",
+        "action": "usage",
+        "output_format": "markdown"
+      },
+      "expected_output": {
+        "model": "gpt-4",
+        "provider": "azure_openai",
+        "sdk": "openai"
+      }
+    },
+    {
+      "input": {
+        "query": "How to use jina embeddings?",
+        "action": "usage",
+        "output_format": "markdown"
+      },
+      "expected_output": {
+        "model": "jina-embeddings-v3",
+        "provider": "onprem",
+        "sdk": "openai",
+        "capability": "embeddings"
+      }
+    },
+    {
+      "input": {
+        "query": "What models are available?",
+        "action": "list"
+      },
+      "expected_output": {
+        "categories": ["chat", "embeddings", "vision"]
+      }
+    },
+    {
+      "input": {
+        "query": "Validate claude-sonnet-4-5",
+        "action": "validate"
+      },
+      "expected_output": {
+        "status": "pass",
+        "capabilities_tested": ["chat", "streaming"]
+      }
+    }
+  ]
+}

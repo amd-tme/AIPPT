@@ -1,0 +1,12 @@
+venv/
+.git/
+backup/
+backups/
+__pycache__/
+*.pyc
+.worktrees/
+uploads/
+images/
+slides.db
+.pytest_cache/
+docs/plans/

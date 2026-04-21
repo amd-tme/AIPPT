@@ -1,0 +1,32 @@
+name: Default
+description: Clean dark theme, no branding
+
+colors:
+  background: "1E293B"
+  background_alt: "0F172A"
+  surface: "334155"
+  text_primary: "F8FAFC"
+  text_secondary: "94A3B8"
+  text_body: "CBD5E1"
+  accent: "3B82F6"
+  accent_alt: "10B981"
+  warning: "EF4444"
+
+fonts:
+  heading: "Trebuchet MS"
+  body: "Calibri"
+  mono: "Consolas"
+
+logo:
+  path: ""
+  position: "bottom-right"
+  width_inches: 0
+
+slide:
+  layout: "LAYOUT_WIDE"      # 13.33" × 7.5" — all guide coordinates use this size
+  margin_inches: 0.5
+
+footer:
+  show: true
+  text: ""
+  show_slide_numbers: true

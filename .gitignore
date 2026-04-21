@@ -1,0 +1,54 @@
+venv/
+__pycache__/
+**/__pycache__/
+*.pyc
+
+# Presentations and slide images
+*.pptx
+*.pptx.bak
+*.pdf
+decks/
+images/
+output/
+outlines/
+uploads/
+templates/
+backup/
+backups/
+
+# Databases
+*.db
+*.db.backup
+*.tar.gz
+
+# Environment and secrets
+.env
+.mcp.json
+gateway.yaml
+mcp_servers.json
+
+# IDE / plugins
+.claude/
+!.claude/skills/
+!.claude/skills/**
+.playwright-mcp/
+.superpowers/
+
+# Build / packaging
+*.egg-info/
+dist/
+build/
+docs/_build/
+
+# Git
+.worktrees/
+
+# Scratch files in project root
+excalidraw-*.png
+enhanced-pipeline-text.md
+git-course-*.md
+test-sections.md
+
+# Misc
+llm-examples/
+.pytest_cache/

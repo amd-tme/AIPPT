@@ -1,0 +1,29 @@
+services:
+  aippt:
+    image: ${REGISTRY:-localhost:5000}/${IMAGE_NAME:-aippt}:${TAG:-latest}
+    ports:
+      - "${AIPPT_PORT:-8000}:8000"
+    volumes:
+      - ./uploads:/app/uploads
+      - ./images:/app/images
+      - ./slides.db:/app/slides.db
+      - ./models.yaml:/app/models.yaml:ro
+    environment:
+      - AIPPT_VIEW_ONLY=1
+
+  aippt-full:
+    image: ${REGISTRY:-localhost:5000}/${IMAGE_NAME:-aippt}:${TAG:-latest}
+    ports:
+      - "${AIPPT_PORT:-8000}:8000"
+    volumes:
+      - ./uploads:/app/uploads
+      - ./images:/app/images
+      - ./slides.db:/app/slides.db
+      - ./models.yaml:/app/models.yaml:ro
+      - ./gateway.yaml:/app/gateway.yaml:ro
+    environment:
+      - AIPPT_VIEW_ONLY=0
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - AMD_LLM_KEY=${AMD_LLM_KEY:-}
+    profiles: ["full"]

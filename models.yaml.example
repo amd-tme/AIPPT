@@ -1,0 +1,90 @@
+# models.yaml -- Model registry and per-operation defaults for Outline2PPT
+#
+# SETUP: Copy this file to models.yaml before using any model-related commands.
+#        Run 'outline2ppt models init' to do this automatically.
+#
+# REGISTRY: Every model the system can use must be listed here.
+#           To add a model, add an entry under 'registry'.
+#           To remove one, delete its entry.
+#
+# DEFAULTS: Each value must reference a model name in the registry above.
+#           Run 'outline2ppt models set <operation> <model>' to change a default.
+#           Run 'outline2ppt models' to view the active configuration.
+#           Run 'outline2ppt models list-available' to see all registry models.
+#           CLI --model flags override defaults for a single invocation.
+
+registry:
+  # OpenAI models
+  gpt-4o:
+    provider: openai
+    max_tokens: 128000
+    max_input_tokens: 128000
+    supports_vision: true
+    supports_images: true
+  gpt-4o-mini:
+    provider: openai
+    max_tokens: 128000
+    max_input_tokens: 128000
+    supports_vision: true
+    supports_images: true
+  gpt-4.1:
+    provider: openai
+    max_tokens: 128000
+    max_input_tokens: 128000
+    supports_vision: true
+    supports_images: true
+  o3-mini:
+    provider: openai
+    max_tokens: 128000
+    max_input_tokens: 128000
+    supports_vision: true
+    supports_images: false
+  dall-e-3:
+    provider: openai
+    max_tokens: 0
+    max_input_tokens: 0
+    supports_vision: false
+    supports_images: true
+
+  # Anthropic models
+  claude-3.5-sonnet:
+    provider: anthropic
+    max_tokens: 200000
+    max_input_tokens: 200000
+    supports_vision: true
+    supports_images: false
+  claude-3.5-haiku:
+    provider: anthropic
+    max_tokens: 200000
+    max_input_tokens: 200000
+    supports_vision: true
+    supports_images: false
+  claude-3.7-sonnet:
+    provider: anthropic
+    max_tokens: 200000
+    max_input_tokens: 200000
+    supports_vision: true
+    supports_images: false
+
+  # Google models
+  gemini-2.0-flash:
+    provider: google
+    max_tokens: 1000000
+    max_input_tokens: 1000000
+    supports_vision: true
+    supports_images: true
+  gemini-2.5-pro:
+    provider: google
+    max_tokens: 1000000
+    max_input_tokens: 1000000
+    supports_vision: true
+    supports_images: true
+
+# Per-operation defaults -- each value must reference a model in the registry above.
+defaults:
+  enhance: "claude-3.5-sonnet"    # Used by: outline2ppt create --enhance
+  improve: "claude-3.5-sonnet"   # Used by: outline2ppt improve
+  feedback: "gpt-4o"              # Used by: outline2ppt analyze --mode feedback
+  notes: "gpt-4o"                 # Used by: outline2ppt analyze --mode notes
+  tags: "gpt-4o"                  # Used by: outline2ppt analyze --mode tags
+  image: "dall-e-3"               # Used by: outline2ppt create --image-gen dalle

@@ -1,0 +1,11 @@
+# Outline2PPT directory configuration
+# All paths are relative to the directory containing this file.
+# Absolute paths are also supported for advanced use cases.
+directories:
+  outlines: outlines/
+  templates: templates/
+  uploads: uploads/
+  output: output/
+  backups: backups/
+  images: images/
+  db: slides.db

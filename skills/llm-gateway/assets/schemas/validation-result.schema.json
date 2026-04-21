@@ -1,0 +1,60 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "LLM Gateway Validation Result",
+  "description": "Result of validating an LLM Gateway model",
+  "type": "object",
+  "required": ["model", "status", "timestamp"],
+  "properties": {
+    "model": {
+      "type": "string",
+      "description": "Model name that was validated"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["pass", "fail", "timeout", "not_found"],
+      "description": "Validation result status"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When validation was performed"
+    },
+    "response_time_ms": {
+      "type": "integer",
+      "description": "Response time in milliseconds"
+    },
+    "endpoint": {
+      "type": "string",
+      "description": "Endpoint that was tested"
+    },
+    "provider": {
+      "type": "string",
+      "description": "Provider used for the model"
+    },
+    "capabilities_tested": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Capabilities that were validated"
+    },
+    "error": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "Error type"
+        },
+        "message": {
+          "type": "string",
+          "description": "Error message"
+        },
+        "suggestion": {
+          "type": "string",
+          "description": "Suggested fix"
+        }
+      },
+      "description": "Error details if validation failed"
+    }
+  }
+}
