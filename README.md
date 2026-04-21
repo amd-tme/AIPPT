@@ -133,7 +133,11 @@ Source material → /create-outline → outline.md → /create-deck → deck.ppt
 | `/create-deck` | Generate a `.pptx` from an outline using either the **pptxgenjs** engine (creative, themed JS scripts) or **python-pptx** (strict template/placeholder fills). |
 | `/deck-review` | Visual QA on a finished deck — renders slides to images, runs `aippt analyze`, captures app screenshots, drafts Excalidraw diagrams. |
 
+> **The skills work standalone.** You don't need the AIPPT web UI, CLI, or Python environment to use `/create-outline`, `/create-deck`, or `/deck-review`. The pptxgenjs engine (default for `/create-deck`) needs only Node.js and npm; the python-pptx engine requires only a Python venv. The web UI and catalog features add value — searchable slide library, AI tagging, deck ingest — but they're optional. If you just want to turn source material into a polished deck through conversation, the skills are the only entry point you need.
+
 The `/create-deck` workflow generates a JS or Python build script alongside the PPTX. The script is treated as the source of truth for the deck — see [`outlines/slides-as-code-design.md`](outlines/slides-as-code-design.md) for the design behind the upcoming `/edit-deck` skill, which closes the loop with conversational deck editing.
+
+See [`examples/slides-as-code-design/`](examples/slides-as-code-design/) for a real deck built by `/create-deck`, including the generated build script, PDF, and PPTX.
 
 ## CLI
 
@@ -206,6 +210,7 @@ skills/                 # Claude Code skill definitions
 templates/              # Bundled PowerPoint templates
 themes/                 # pptxgenjs theme YAMLs
 outlines/               # Example and working outlines
+examples/               # Generated example decks (script + PPTX + PDF)
 docs/                   # Sphinx documentation source
 serve.sh                # Web UI launcher
 aippt.py                # CLI entry point
