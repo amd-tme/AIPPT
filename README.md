@@ -139,7 +139,10 @@ Source material → /create-outline → outline.md → /create-deck → deck.ppt
 
 The `/create-deck` workflow generates a JS or Python build script alongside the PPTX. The script is treated as the source of truth for the deck — see [`outlines/slides-as-code-design.md`](outlines/slides-as-code-design.md) for the design behind the upcoming `/edit-deck` skill, which closes the loop with conversational deck editing.
 
-See [`examples/slides-as-code-design/`](examples/slides-as-code-design/) for a real deck built by `/create-deck`, including the generated build script, PDF, and PPTX.
+Two example decks show the skills in action:
+
+- [`examples/slides-as-code-design/`](examples/slides-as-code-design/) — a 27-slide deck explaining the slides-as-code design concept; self-contained CommonJS (`.js`) with all layout helpers inlined
+- [`examples/meme-directives-test/`](examples/meme-directives-test/) — a 12-slide deck that exercises every `LAYOUT:` and `IMAGE:` directive combination; uses the shared `lib/pptxgenjs-helpers.mjs` helper (`.mjs`, ES Modules)
 
 ## CLI
 
@@ -212,7 +215,7 @@ skills/                 # Claude Code skill definitions
 templates/              # Bundled PowerPoint templates
 themes/                 # pptxgenjs theme YAMLs (work in progress — may need manual tweaks)
 outlines/               # Example and working outlines
-examples/               # Generated example decks (script + PPTX + PDF)
+examples/               # Example decks: outline, build script, PPTX, and PDF
 docs/                   # Sphinx documentation source
 serve.sh                # Web UI launcher
 aippt.py                # CLI entry point
