@@ -150,13 +150,15 @@ To add or update a skill, edit files under `skills/<name>/`. The `.claude/skills
 
 ## Gateway Configuration
 
-Create `gateway.yaml` to route LLM calls through a corporate API gateway:
+Create `gateway.yaml` to route LLM calls through a corporate API gateway. The AMD internal gateway (`https://llm-api.amd.com`) requires a mandatory `user: <NTID>` header on every request (enforced May 2, 2026). Copy `gateway.yaml.example` as a starting point.
 
 ```yaml
 gateway:
-  base_url: "https://llm-api.example.com"
+  base_url: "https://llm-api.amd.com"
   auth_header: "Ocp-Apim-Subscription-Key"
-  auth_value_env: "GATEWAY_API_KEY"
+  auth_value_env: "AMD_LLM_KEY"       # your individual API key
+  user_header: "user"
+  user_value_env: "AIPPT_USER_NTID"   # your NTID (e.g. melliott)
 providers:
   openai:
     path: "/OpenAI"
@@ -165,6 +167,8 @@ providers:
   google:
     path: "/VertexAI"
 ```
+
+The web UI shows an NTID input field (top-right) that persists to `localStorage` and is sent with all LLM requests, allowing per-user NTID without editing `gateway.yaml`.
 
 ## Docker Deployment
 
@@ -349,30 +353,49 @@ The `pptx` skill (from `anthropic-agent-skills/document-skills`) provides optimi
 - **Playwright + soffice**: Automated visual regression / feedback loops
 - **Excalidraw**: Creating diagrams for `IMAGE:` directives in outlines
 
+## Project Tracking
+
+This project uses an **Obsidian vault** for planning, PRD tracking, and daily logs — not GitHub Issues or Planner.
+
+**Vault root:** `/mnt/c/Users/melliott/git/obsidian-vault/`
+
+| Resource | Path |
+|----------|------|
+| Daily work log | `10 - Daily/YYYY-MM-DD.md` — add a `## 🛠️ Work Log` section with AIPPT subsection |
+| PRD tracker | `30 - Projects/AIPPT/AIPPT PRD Tracker.md` |
+| PRD files | `30 - Projects/AIPPT/PRDs/` |
+| Dev notes | `30 - Projects/AIPPT/AIPPT Dev Notes.md` |
+| Feedback | `30 - Projects/AIPPT/AIPPT Feedback.md` |
+
+**After completing meaningful work** (feature implemented, PRD finished, branch merged):
+1. Add an entry to today's daily log under `## 🛠️ Work Log`
+2. Update `AIPPT PRD Tracker.md` — move PRD to In Progress / Completed as appropriate
+3. Update the relevant PRD file's frontmatter `status` field (`draft` → `in-review` → `implemented`)
+
+## Local Planning Docs
+
+`.local-docs/` is gitignored — it holds session-specific planning files that mirror the vault.
+
+| Path | Purpose |
+|------|---------|
+| `.local-docs/plans/` | Active PRD and implementation plans |
+| `.local-docs/plans/implemented/` | Completed PRDs (archive) |
+
+When completing a PRD: move its `.local-docs/` copy to `plans/implemented/` **and** update the vault tracker + PRD frontmatter.
+
 ## Worktree-Based Development
 
 **Prefer worktree-based development on this project.** Each feature or PRD gets its own worktree with an isolated branch. This keeps the main working directory clean and allows parallel development.
 
-### Current Worktrees
-
-| Worktree | Branch | Purpose |
-|----------|--------|---------|
-| `.` (project root) | `actually-useful` | Integration branch -- merge features here |
-| `.worktrees/pipeline-refactor/` | `feature/pipeline-refactor` | Extract create pipeline from cli.py into pipeline.py + builder.py |
-
 ### Worktree Workflow
 
 ```bash
-# Work in a feature worktree
-cd .worktrees/tag-browsing/
-# ... make changes, commit ...
+# Create a new worktree for a feature
+git worktree add .worktrees/<name> -b feature/<branch-name> main
 
-# When feature is complete, merge into actually-useful
-cd /home/matt/git/shamsway/aippt   # back to main worktree
-git merge feature/tag-browsing-sidebar
-
-# Create a new worktree for a new feature
-git worktree add .worktrees/<name> -b feature/<branch-name> actually-useful
+# When feature is complete, merge into main
+cd /home/matt/git/shamsway/aippt
+git merge feature/<branch-name>
 
 # Remove a worktree after merging
 git worktree remove .worktrees/<name>
@@ -381,33 +404,14 @@ git branch -d feature/<branch-name>
 
 ### Worktree Guidelines
 
-- **Feature work**: Always use a dedicated worktree branched from `actually-useful`
-- **Bug fixes / minor changes**: Use the `.worktrees/dev/` worktree
-- **Integration**: Merge completed features into `actually-useful` from the main working directory
-- **Naming**: Worktrees go in `.worktrees/<short-name>/`, branches use `feature/<descriptive-name>`
-- **PRDs**: Each PRD in `docs/plans/` maps to a worktree/branch for implementation
+- **Feature work**: Branch from `main`, use `feature/<descriptive-name>`
+- **Worktrees**: Go in `.worktrees/<short-name>/` (gitignored)
+- **PRDs**: Tracked in `30 - Projects/AIPPT/AIPPT PRD Tracker.md` in the Obsidian vault (see Project Tracking section above). The vault tracker is the authoritative source — not this file.
 - **Cleanup**: Remove worktrees and delete branches after merging
 
-### Active PRDs
+### Current Active Branches
 
-| PRD | Branch | Status |
-|-----|--------|--------|
-| `docs/plans/2026-03-04-rebrand-to-aippt.md` | `feature/rebrand-to-aippt` | Draft |
-| `docs/plans/2026-03-04-docker-deployment.md` | `feature/docker-deployment` | Draft |
-| `docs/plans/2026-03-04-sphinx-documentation.md` | `feature/sphinx-docs` | Draft |
-| `docs/plans/2026-03-04-tag-browsing-sidebar.md` | -- | Merged |
-| `docs/plans/2026-03-04-library-view-only-mode.md` | -- | Merged |
-| `docs/plans/2026-03-04-portable-library-export.md` | -- | Merged |
-| `docs/plans/2026-03-03-hide-uuid-display-names.md` | -- | Merged |
-| `docs/plans/2026-03-05-enhance-content-rewriting.md` | -- | Merged |
-| `docs/plans/2026-03-05-image-text-co-display.md` | -- | Merged |
-| `docs/plans/2026-03-05-web-cli-parity.md` | -- | Merged |
-| `docs/plans/2026-03-05-cli-deck-management.md` | -- | Merged |
-| `docs/plans/2026-03-08-slide-notes-metadata.md` | -- | Merged |
-| `docs/plans/2026-03-08-mcp-image-generation.md` | -- | Merged |
-| `docs/plans/2026-03-09-audience-aware-enhancement.md` | -- | Merged (PR #1) |
-| `docs/plans/2026-03-09-insight-driven-title-rewriting.md` | -- | Merged (PR #1) |
-| `docs/plans/2026-03-09-iterative-improvement-loop.md` | -- | Merged (PR #1) |
-| `docs/plans/2026-03-09-deck-level-narrative-planning.md` | -- | Merged (PR #1) |
-| `docs/plans/2026-03-09-pipeline-refactor.md` | `feature/pipeline-refactor` | Draft |
-| `docs/plans/2026-03-10-create-deck-skill.md` | `feature/create-deck-skill` | Merged |
+| Branch | Status | Notes |
+|--------|--------|-------|
+| `main` | Integration | Primary branch |
+| `feature/slide-masters` | In Review | Slide masters for pptxgenjs; awaiting merge |
