@@ -414,4 +414,3 @@ git branch -d feature/<branch-name>
 | Branch | Status | Notes |
 |--------|--------|-------|
 | `main` | Integration | Primary branch |
-| `feature/slide-masters` | In Review | Slide masters for pptxgenjs; awaiting merge |

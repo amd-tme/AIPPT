@@ -87,6 +87,64 @@ class TestMasterDefinition:
         assert len(p_m.slides) == len(p_n.slides) == 6
 
 
+class TestChromeNotDuplicated:
+    """Content slides have no logo/footer shapes when masters are active."""
+
+    def test_content_slides_have_no_image_shapes(self, tmp_path):
+        """Logo should be on the master, not baked into individual slides."""
+        out = str(tmp_path / "master.pptx")
+        _generate_deck(use_master=True, output_path=out)
+        p = Presentation(out)
+        from pptx.enum.shapes import MSO_SHAPE_TYPE
+
+        for i, slide in enumerate(p.slides):
+            images = [
+                s for s in slide.shapes
+                if s.shape_type == MSO_SHAPE_TYPE.PICTURE
+            ]
+            assert len(images) == 0, (
+                f"Slide {i + 1} ({slide.slide_layout.name}) has {len(images)} "
+                f"image shapes — logo should be on the master, not the slide"
+            )
+
+    def test_content_slides_use_placeholder_slide_numbers(self, tmp_path):
+        """Slide numbers should come from the master placeholder, not addFooter."""
+        out = str(tmp_path / "master.pptx")
+        _generate_deck(use_master=True, output_path=out)
+        p = Presentation(out)
+
+        for i, slide in enumerate(p.slides):
+            if slide.slide_layout.name != "CONTENT_MASTER":
+                continue
+            for shape in slide.shapes:
+                if not shape.is_placeholder:
+                    continue
+                from pptx.enum.shapes import PP_PLACEHOLDER
+                if shape.placeholder_format.type == PP_PLACEHOLDER.SLIDE_NUMBER:
+                    break
+            else:
+                pytest.fail(
+                    f"Slide {i + 1} (CONTENT_MASTER) has no slide number "
+                    f"placeholder — expected one inherited from the master"
+                )
+
+    def test_no_master_slides_have_manual_footer(self, tmp_path):
+        """Without masters, slides should have manually added footer shapes."""
+        out = str(tmp_path / "no_master.pptx")
+        _generate_deck(use_master=False, output_path=out)
+        p = Presentation(out)
+
+        # Bullet slide (index 1) should have a manual slide number text shape
+        slide = p.slides[1]
+        has_manual_number = any(
+            hasattr(s, "text") and s.text.strip() == "2" and not s.is_placeholder
+            for s in slide.shapes
+        )
+        assert has_manual_number, (
+            "Non-master bullet slide should have a manually added slide number"
+        )
+
+
 class TestBackwardCompat:
     """Default useSlideMaster=false produces identical structure to today."""
 
