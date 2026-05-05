@@ -38,6 +38,9 @@ class PipelineConfig:
     # File context
     outline_path: Optional[str] = None
 
+    # Corporate template merge
+    corp_template: Optional[str] = None
+
     # Callbacks
     progress_callback: Optional[Callable] = field(default=None, repr=False)
 
@@ -371,6 +374,21 @@ def run_pipeline(config: PipelineConfig) -> PipelineResult:
         logger.info(f"PowerPoint presentation completed: {config.output_path}")
     except Exception as e:
         raise RuntimeError(f"Error saving final presentation: {str(e)}") from e
+
+    # Corporate template merge post-processing
+    if config.corp_template:
+        from aippt.template_merge import merge_with_template
+        pre_merge = config.output_path + ".pre-merge.pptx"
+        os.rename(config.output_path, pre_merge)
+        try:
+            merge_result = merge_with_template(pre_merge, config.corp_template, config.output_path)
+            logger.info(
+                f"Corporate template merge: {merge_result['slide_count']} slides, "
+                f"{len(set(a['target_layout'] for a in merge_result['layout_assignments']))} layout types used"
+            )
+        finally:
+            if os.path.exists(pre_merge):
+                os.unlink(pre_merge)
 
     title = slides[0]['title'] if slides else ""
     return PipelineResult(
