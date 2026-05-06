@@ -44,7 +44,6 @@ master:
     background: "131416"
   content:
     background: "131416"
-    eyebrow: true
     glow_line: true
   section_divider:
     panel_width_pct: 18
