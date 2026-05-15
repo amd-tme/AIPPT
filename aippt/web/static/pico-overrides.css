@@ -9,7 +9,14 @@
  * Load order: pico.min.css → tokens.css → pico-overrides.css → inline styles.
  */
 
-:root {
+/*
+ * Specificity note: Pico v2 sets per-theme variables under
+ * [data-theme=dark] / [data-theme=light] / :root:not([data-theme=dark])
+ * — all (0,2,0). Plain :root (0,1,0) loses. We use :root.dark and
+ * :root.theme-amd-light (also 0,2,0) and rely on source order winning.
+ */
+:root.dark,
+:root.theme-amd-light {
     /* ── Color mapping ──────────────────────────────────── */
     --pico-primary: var(--accent);
     --pico-primary-background: var(--accent);

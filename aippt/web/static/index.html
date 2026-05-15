@@ -4,8 +4,9 @@
     <script>
         (function () {
             var saved = localStorage.getItem('aippt_theme');
-            var cls = saved === 'light' ? 'theme-amd-light' : 'dark';
-            document.documentElement.classList.add(cls);
+            var isLight = saved === 'light';
+            document.documentElement.classList.add(isLight ? 'theme-amd-light' : 'dark');
+            document.documentElement.setAttribute('data-theme', isLight ? 'light' : 'dark');
         })();
     </script>
     <meta charset="utf-8">
@@ -2041,6 +2042,7 @@
             html.classList.add('no-transitions');
             html.classList.toggle('dark', !goingLight);
             html.classList.toggle('theme-amd-light', goingLight);
+            html.setAttribute('data-theme', goingLight ? 'light' : 'dark');
             localStorage.setItem('aippt_theme', goingLight ? 'light' : 'dark');
             requestAnimationFrame(function () {
                 requestAnimationFrame(function () {
