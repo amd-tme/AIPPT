@@ -1,5 +1,7 @@
 """Tests for web API route handlers."""
 import os
+from unittest.mock import patch
+
 import pytest
 from fastapi.testclient import TestClient
 from pptx import Presentation
@@ -258,6 +260,15 @@ class TestTemplateEndpoints:
 
 
 class TestCreateDeckEndpoint:
+    @pytest.fixture(autouse=True)
+    def _relax_image_requirement(self, monkeypatch):
+        """These tests run on Linux but cannot reach SharePoint. The strict
+        Graph render path is exercised by TestCreateDeckHardening; here we
+        verify the create/save plumbing without requiring real image export."""
+        monkeypatch.setattr(
+            "aippt.web.routes._require_images_for_render", lambda: False
+        )
+
     def test_create_with_outline_text_no_enhance(self, client, tmp_path, monkeypatch):
         from pptx import Presentation
         template_path = str(tmp_path / "template.pptx")
@@ -276,6 +287,7 @@ class TestCreateDeckEndpoint:
                 "outline_text": "# Test\n## Slide 1: Hello\n- World\n",
                 "enhance": "false",
             },
+            headers={"Authorization": "Bearer tok"},
         )
         assert resp.status_code == 200
         assert resp.headers["content-type"].startswith("text/event-stream")
@@ -283,7 +295,11 @@ class TestCreateDeckEndpoint:
         assert "event: complete" in body
 
     def test_create_rejects_empty_input(self, client):
-        resp = client.post("/api/decks/create", data={})
+        resp = client.post(
+            "/api/decks/create",
+            data={},
+            headers={"Authorization": "Bearer tok"},
+        )
         assert resp.status_code == 400
 
     def test_create_with_md_file_upload(self, client, tmp_path, monkeypatch):
@@ -304,6 +320,7 @@ class TestCreateDeckEndpoint:
             "/api/decks/create",
             data={"enhance": "false"},
             files={"outline_file": ("outline.md", md_content, "text/markdown")},
+            headers={"Authorization": "Bearer tok"},
         )
         assert resp.status_code == 200
         body = resp.text
@@ -326,6 +343,7 @@ class TestCreateDeckEndpoint:
         resp = client.post(
             "/api/decks/create",
             data={"outline_text": md_content, "enhance": "false"},
+            headers={"Authorization": "Bearer tok"},
         )
         assert resp.status_code == 200
 
@@ -370,6 +388,7 @@ class TestCreateDeckEndpoint:
             "/api/decks/create",
             data={"outline_text": md_content, "enhance": "false"},
             files=[("image_files", ("photo.png", test_png, "image/png"))],
+            headers={"Authorization": "Bearer tok"},
         )
         assert resp.status_code == 200
         assert "event: complete" in resp.text
@@ -412,6 +431,7 @@ class TestCreateDeckEndpoint:
             resp = client.post(
                 "/api/decks/create",
                 data={"outline_text": "# Test\n## Slide 1: Hi\n- OK\n", "enhance": "false"},
+                headers={"Authorization": "Bearer tok"},
             )
 
         assert resp.status_code == 200
@@ -455,3 +475,110 @@ class TestApiTagsEndpoint:
         data = resp.json()
         tag = next(t for t in data["tags"] if t["name"] == "misc-tag")
         assert tag["category"] == ""
+
+
+# ---------------------------------------------------------------------------
+# R6: /api/decks/create needs the same R1/R2 hardening as /api/decks/upload.
+#
+# Without these, the create endpoint silently:
+#   - Accepts requests with no Microsoft token (Bearer-less)
+#   - Lands a deck with no images when the Graph render path fails
+#   - Routes every browser user's renders through the same SP folder
+#     (because NTID is never threaded)
+# ---------------------------------------------------------------------------
+
+
+class TestCreateDeckHardening:
+    """Same Bearer/NTID/fail-loud contract as /api/decks/upload (R1+R2+R4)."""
+
+    @pytest.fixture
+    def template_setup(self, tmp_path, monkeypatch):
+        from pptx import Presentation
+        template_path = str(tmp_path / "template.pptx")
+        prs = Presentation()
+        prs.save(template_path)
+        config_path = str(tmp_path / "templates.yaml")
+        (tmp_path / "templates.yaml").write_text(
+            f"default_template: {template_path}\n")
+        monkeypatch.setattr(
+            "aippt.config.DEFAULT_TEMPLATE_CONFIG_PATH", config_path
+        )
+        return template_path
+
+    def test_missing_bearer_returns_401(self, client, template_setup):
+        resp = client.post(
+            "/api/decks/create",
+            data={"outline_text": "# T\n## S1\n- x\n", "enhance": "false"},
+        )
+        assert resp.status_code == 401
+        assert "sign-in" in resp.json()["error"].lower() or \
+               "microsoft" in resp.json()["error"].lower()
+
+    def test_basic_auth_is_rejected(self, client, template_setup):
+        resp = client.post(
+            "/api/decks/create",
+            data={"outline_text": "# T\n## S1\n- x\n", "enhance": "false"},
+            headers={"Authorization": "Basic dXNlcjpwYXNz"},
+        )
+        assert resp.status_code == 401
+
+    @patch("aippt.web.routes.ingest_deck")
+    def test_ntid_header_is_threaded_to_ingest(
+        self, mock_ingest, client, template_setup,
+    ):
+        mock_ingest.return_value = {
+            "deck_id": 1, "deck_name": "d", "slide_count": 1,
+            "images_exported": True, "tags_generated": False,
+            "source_tracked": False,
+        }
+        resp = client.post(
+            "/api/decks/create",
+            data={"outline_text": "# T\n## S1\n- x\n", "enhance": "false"},
+            headers={
+                "Authorization": "Bearer tok",
+                "X-AIPPT-NTID": "melliott",
+            },
+        )
+        assert resp.status_code == 200
+        _ = resp.text  # drain SSE
+        assert mock_ingest.call_args.kwargs.get("ntid") == "melliott"
+        assert mock_ingest.call_args.kwargs.get("ms_token") == "tok"
+
+    @patch("aippt.web.routes.ingest_deck")
+    def test_create_requires_images_on_linux(
+        self, mock_ingest, client, template_setup,
+    ):
+        import sys
+        mock_ingest.return_value = {
+            "deck_id": 1, "deck_name": "d", "slide_count": 1,
+            "images_exported": True, "tags_generated": False,
+            "source_tracked": False,
+        }
+        resp = client.post(
+            "/api/decks/create",
+            data={"outline_text": "# T\n## S1\n- x\n", "enhance": "false"},
+            headers={"Authorization": "Bearer tok"},
+        )
+        assert resp.status_code == 200
+        _ = resp.text
+        if sys.platform.startswith("linux"):
+            assert mock_ingest.call_args.kwargs.get("require_images") is True
+
+    @patch("aippt.web.routes.ingest_deck")
+    def test_create_graph_error_emits_sse_error_event(
+        self, mock_ingest, client, template_setup,
+    ):
+        from aippt import graph
+        mock_ingest.side_effect = graph.GraphError(
+            401, "InvalidAuthenticationToken", "Token expired",
+        )
+        resp = client.post(
+            "/api/decks/create",
+            data={"outline_text": "# T\n## S1\n- x\n", "enhance": "false"},
+            headers={"Authorization": "Bearer tok"},
+        )
+        assert resp.status_code == 200  # SSE always 200
+        body = resp.text
+        assert "event: error" in body
+        assert "Token expired" in body
+        assert "event: complete" not in body

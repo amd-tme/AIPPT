@@ -930,12 +930,21 @@ async def create_deck_stream(
     """API: Create a deck from markdown outline, streaming progress as SSE."""
     if getattr(request.app.state, "view_only", False):
         return JSONResponse({"error": VIEW_ONLY_MSG}, status_code=403)
+
+    ms_token = _extract_bearer_token(request)
+    if not ms_token:
+        return JSONResponse(
+            {"error": "Microsoft sign-in required for ingest. "
+                      "Sign in with the Microsoft button and retry."},
+            status_code=401,
+        )
+    ntid = _extract_ntid_header(request)
+
     import asyncio
     import json
     import queue as _queue
 
     from aippt.pipeline import run_pipeline, PipelineConfig
-    from aippt.ingest import ingest_deck
     from aippt.config import get_template_default, TemplateConfigError
 
     # --- Validate inputs before entering SSE mode ---
@@ -1036,8 +1045,10 @@ async def create_deck_stream(
                 deck_path=output_path,
                 db_path=db_path,
                 gateway_config=gateway_config,
-                require_images=False,
+                require_images=_require_images_for_render(),
                 progress_callback=ingest_progress,
+                ms_token=ms_token,
+                ntid=ntid,
             )
             return {**result, **ingest_result}
 
@@ -1064,6 +1075,13 @@ async def create_deck_stream(
 
         try:
             result = await future
+        except graph.GraphError as exc:
+            yield _format_sse("error", {
+                "detail": f"Microsoft Graph error: {exc.message}",
+                "code": exc.error_code,
+                "status": _graph_error_status(exc),
+            })
+            return
         except Exception as exc:
             yield _format_sse("error", {"detail": str(exc)})
             return
