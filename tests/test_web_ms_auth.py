@@ -236,6 +236,66 @@ class TestUploadBearer:
 # ---------------------------------------------------------------------------
 
 
+class TestUploadStrictBearer:
+    """Authorization must be strictly 'Bearer <token>' — any other scheme
+    (Basic, Digest, raw token) must be rejected as if no token were sent.
+
+    Without this, `Authorization: Basic anything` slipped past the gate as
+    a 'raw token' and tokens were never validated for shape."""
+
+    @patch("aippt.web.routes.ingest_deck")
+    def test_basic_auth_is_rejected(
+        self, mock_ingest, client, fake_pptx_bytes
+    ):
+        resp = client.post(
+            "/api/decks/upload",
+            files={"file": ("deck.pptx", fake_pptx_bytes,
+                            "application/vnd.openxmlformats-officedocument.presentationml.presentation")},
+            headers={"Authorization": "Basic dXNlcjpwYXNz"},
+        )
+        assert resp.status_code == 401, resp.text
+        mock_ingest.assert_not_called()
+
+    @patch("aippt.web.routes.ingest_deck")
+    def test_raw_token_without_scheme_is_rejected(
+        self, mock_ingest, client, fake_pptx_bytes
+    ):
+        resp = client.post(
+            "/api/decks/upload",
+            files={"file": ("deck.pptx", fake_pptx_bytes,
+                            "application/vnd.openxmlformats-officedocument.presentationml.presentation")},
+            headers={"Authorization": "rawtokenwithoutscheme"},
+        )
+        assert resp.status_code == 401, resp.text
+        mock_ingest.assert_not_called()
+
+    @patch("aippt.web.routes.ingest_deck")
+    def test_digest_auth_is_rejected(
+        self, mock_ingest, client, fake_pptx_bytes
+    ):
+        resp = client.post(
+            "/api/decks/upload",
+            files={"file": ("deck.pptx", fake_pptx_bytes,
+                            "application/vnd.openxmlformats-officedocument.presentationml.presentation")},
+            headers={"Authorization": "Digest username=foo"},
+        )
+        assert resp.status_code == 401, resp.text
+        mock_ingest.assert_not_called()
+
+    @patch("aippt.web.routes.ingest_deck")
+    def test_bearer_with_empty_token_is_rejected(
+        self, mock_ingest, client, fake_pptx_bytes
+    ):
+        resp = client.post(
+            "/api/decks/upload",
+            files={"file": ("deck.pptx", fake_pptx_bytes,
+                            "application/vnd.openxmlformats-officedocument.presentationml.presentation")},
+            headers={"Authorization": "Bearer "},
+        )
+        assert resp.status_code == 401, resp.text
+        mock_ingest.assert_not_called()
+
+
 class TestUploadFailLoudOnRenderFailure:
     """When Graph render fails, the upload endpoint must NOT silently return
     200 with a no-images deck. It must propagate a non-2xx status."""

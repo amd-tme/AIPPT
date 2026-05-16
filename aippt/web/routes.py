@@ -703,18 +703,25 @@ def _graph_error_status(exc) -> int:
 
 
 def _extract_bearer_token(request: Request) -> str:
-    """Return the bearer token from the Authorization header, or '' if absent.
+    """Return the bearer token from the Authorization header, or '' if absent
+    or not a Bearer-scheme header.
 
-    Case-insensitive on the 'Bearer' prefix; trims surrounding whitespace.
+    Strict: only ``Authorization: Bearer <token>`` is accepted (case-insensitive
+    on 'Bearer'). Anything else — Basic, Digest, a raw token without a scheme,
+    or 'Bearer ' with no token — returns '' so the caller treats it as
+    unauthenticated.
+
+    Tolerating raw tokens here would let any non-empty Authorization value
+    (e.g. ``Authorization: Basic dXNlcjpwYXNz``) slip past the gate.
     """
     raw = request.headers.get("Authorization", "").strip()
     if not raw:
         return ""
-    # Case-insensitive 'Bearer' prefix removal
     parts = raw.split(None, 1)
-    if len(parts) == 2 and parts[0].lower() == "bearer":
-        return parts[1].strip()
-    return raw  # tolerate raw token without prefix
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        return ""
+    token = parts[1].strip()
+    return token  # empty after strip → '' → treated as unauthenticated
 
 
 @router.post('/api/auth/microsoft/start')
