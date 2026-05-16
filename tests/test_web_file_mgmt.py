@@ -78,7 +78,7 @@ def _upload(client, filename="my_deck.pptx", num_slides=3, generate_tags=False):
 
 class TestUploadDeck:
 
-    @patch("aippt.ingest.cmd_export_images", return_value=1)
+    @patch("aippt.ingest.cmd_export_images", return_value=0)
     def test_upload_valid_pptx(self, _mock_export, client):
         """Upload a valid PPTX and verify the response fields and deck list."""
         response = _upload(client, num_slides=3)
@@ -97,8 +97,8 @@ class TestUploadDeck:
         # Slide count matches what we put in
         assert data["slide_count"] == 3
 
-        # Image export was unavailable (mocked to fail)
-        assert data["images_exported"] is False
+        # Image export succeeded (mocked)
+        assert data["images_exported"] is True
         assert data["tags_generated"] is False
 
         # Deck appears in the list endpoint
@@ -120,7 +120,7 @@ class TestUploadDeck:
         data = response.json()
         assert "error" in data
 
-    @patch("aippt.ingest.cmd_export_images", return_value=1)
+    @patch("aippt.ingest.cmd_export_images", return_value=0)
     def test_upload_duplicate(self, _mock_export, client):
         """Uploading the same PPTX bytes twice should succeed both times."""
         buf = make_pptx(num_slides=2)
@@ -170,7 +170,7 @@ class TestUploadDeck:
         assert data["tags_generated"] is True
         assert "tags generated" in data["message"]
 
-    @patch("aippt.ingest.cmd_export_images", return_value=1)
+    @patch("aippt.ingest.cmd_export_images", return_value=0)
     def test_upload_without_generate_tags_flag(self, _mock_export, client):
         """Default upload without generate_tags should not generate tags."""
         response = _upload(client, num_slides=1)
@@ -187,7 +187,7 @@ class TestUploadDeck:
 
 class TestDownloadDeck:
 
-    @patch("aippt.ingest.cmd_export_images", return_value=1)
+    @patch("aippt.ingest.cmd_export_images", return_value=0)
     def _upload_pptx(self, client, _mock_export, filename: str = "test_deck.pptx", num_slides: int = 1):
         """Helper: upload a PPTX and return the parsed response JSON."""
         buf = make_pptx(num_slides=num_slides)
@@ -296,7 +296,7 @@ class TestUploadStream:
             headers=_TEST_AUTH,
         )
 
-    @patch("aippt.ingest.cmd_export_images", return_value=1)
+    @patch("aippt.ingest.cmd_export_images", return_value=0)
     def test_stream_returns_sse_events(self, _mock_export, client):
         """Upload via SSE endpoint; verify content-type and presence of key events."""
         response = self._stream_upload(client)
@@ -321,7 +321,7 @@ class TestUploadStream:
         # Catalog step must also appear
         assert "catalog" in steps
 
-    @patch("aippt.ingest.cmd_export_images", return_value=1)
+    @patch("aippt.ingest.cmd_export_images", return_value=0)
     def test_stream_complete_has_deck_info(self, _mock_export, client):
         """The complete SSE event must carry deck_id, deck_name, and slide_count."""
         response = self._stream_upload(client, num_slides=4)

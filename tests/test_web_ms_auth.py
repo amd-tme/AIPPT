@@ -229,3 +229,147 @@ class TestUploadBearer:
         )
         assert resp.status_code == 200
         assert mock_ingest.call_args.kwargs["ms_token"] == "spaced-tok"
+
+
+# ---------------------------------------------------------------------------
+# R1: upload endpoints must fail loud on render failure (no silent 200)
+# ---------------------------------------------------------------------------
+
+
+class TestUploadFailLoudOnRenderFailure:
+    """When Graph render fails, the upload endpoint must NOT silently return
+    200 with a no-images deck. It must propagate a non-2xx status."""
+
+    @patch("aippt.web.routes.ingest_deck")
+    def test_upload_requires_images_on_linux(
+        self, mock_ingest, client, fake_pptx_bytes
+    ):
+        """The upload endpoint must call ingest_deck with require_images=True
+        on Linux so render failures surface."""
+        import sys
+        mock_ingest.return_value = {
+            "deck_id": 1, "deck_name": "d", "slide_count": 1,
+            "images_exported": True, "tags_generated": False,
+            "source_tracked": False,
+        }
+        resp = client.post(
+            "/api/decks/upload",
+            files={"file": ("deck.pptx", fake_pptx_bytes,
+                            "application/vnd.openxmlformats-officedocument.presentationml.presentation")},
+            headers={"Authorization": "Bearer tok"},
+        )
+        assert resp.status_code == 200, resp.text
+        if sys.platform.startswith("linux"):
+            assert mock_ingest.call_args.kwargs["require_images"] is True
+
+    @patch("aippt.web.routes.ingest_deck")
+    def test_upload_graph_401_maps_to_http_401(
+        self, mock_ingest, client, fake_pptx_bytes
+    ):
+        from aippt import graph
+        mock_ingest.side_effect = graph.GraphError(
+            401, "InvalidAuthenticationToken", "Token expired",
+        )
+        resp = client.post(
+            "/api/decks/upload",
+            files={"file": ("deck.pptx", fake_pptx_bytes,
+                            "application/vnd.openxmlformats-officedocument.presentationml.presentation")},
+            headers={"Authorization": "Bearer tok"},
+        )
+        assert resp.status_code == 401, resp.text
+        assert "token" in resp.json()["error"].lower()
+
+    @patch("aippt.web.routes.ingest_deck")
+    def test_upload_graph_403_maps_to_http_403(
+        self, mock_ingest, client, fake_pptx_bytes
+    ):
+        from aippt import graph
+        mock_ingest.side_effect = graph.GraphError(
+            403, "accessDenied", "No SP access",
+        )
+        resp = client.post(
+            "/api/decks/upload",
+            files={"file": ("deck.pptx", fake_pptx_bytes,
+                            "application/vnd.openxmlformats-officedocument.presentationml.presentation")},
+            headers={"Authorization": "Bearer tok"},
+        )
+        assert resp.status_code == 403, resp.text
+
+    @patch("aippt.web.routes.ingest_deck")
+    def test_upload_graph_5xx_maps_to_http_502(
+        self, mock_ingest, client, fake_pptx_bytes
+    ):
+        from aippt import graph
+        mock_ingest.side_effect = graph.GraphError(
+            503, "serviceUnavailable", "SP down",
+        )
+        resp = client.post(
+            "/api/decks/upload",
+            files={"file": ("deck.pptx", fake_pptx_bytes,
+                            "application/vnd.openxmlformats-officedocument.presentationml.presentation")},
+            headers={"Authorization": "Bearer tok"},
+        )
+        assert resp.status_code == 502, resp.text
+
+    @patch("aippt.web.routes.ingest_deck")
+    def test_upload_runtime_error_maps_to_http_502(
+        self, mock_ingest, client, fake_pptx_bytes
+    ):
+        """Ingest raises RuntimeError when require_images=True and the export
+        path failed for a non-Graph reason (subprocess, FileNotFoundError)."""
+        mock_ingest.side_effect = RuntimeError("Image export failed: pdftoppm not found")
+        resp = client.post(
+            "/api/decks/upload",
+            files={"file": ("deck.pptx", fake_pptx_bytes,
+                            "application/vnd.openxmlformats-officedocument.presentationml.presentation")},
+            headers={"Authorization": "Bearer tok"},
+        )
+        assert resp.status_code == 502, resp.text
+        assert "pdftoppm" in resp.json()["error"]
+
+
+class TestUploadStreamFailLoudOnRenderFailure:
+    """Same gates apply to the SSE upload endpoint. Errors land as an SSE
+    'error' event, not as a silent 'complete' with no images."""
+
+    @patch("aippt.web.routes.ingest_deck")
+    def test_upload_stream_requires_images_on_linux(
+        self, mock_ingest, client, fake_pptx_bytes
+    ):
+        import sys
+        mock_ingest.return_value = {
+            "deck_id": 1, "deck_name": "d", "slide_count": 1,
+            "images_exported": True, "tags_generated": False,
+            "source_tracked": False,
+        }
+        resp = client.post(
+            "/api/decks/upload-stream",
+            files={"file": ("deck.pptx", fake_pptx_bytes,
+                            "application/vnd.openxmlformats-officedocument.presentationml.presentation")},
+            headers={"Authorization": "Bearer tok"},
+        )
+        assert resp.status_code == 200
+        # Drain the body so the executor finishes
+        _ = resp.text
+        if sys.platform.startswith("linux"):
+            assert mock_ingest.call_args.kwargs["require_images"] is True
+
+    @patch("aippt.web.routes.ingest_deck")
+    def test_upload_stream_graph_error_emits_error_event(
+        self, mock_ingest, client, fake_pptx_bytes
+    ):
+        from aippt import graph
+        mock_ingest.side_effect = graph.GraphError(
+            401, "InvalidAuthenticationToken", "Token expired",
+        )
+        resp = client.post(
+            "/api/decks/upload-stream",
+            files={"file": ("deck.pptx", fake_pptx_bytes,
+                            "application/vnd.openxmlformats-officedocument.presentationml.presentation")},
+            headers={"Authorization": "Bearer tok"},
+        )
+        assert resp.status_code == 200  # SSE always 200
+        body = resp.text
+        assert "event: error" in body
+        assert "Token expired" in body
+        assert "event: complete" not in body

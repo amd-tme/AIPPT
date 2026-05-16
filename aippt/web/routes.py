@@ -2,6 +2,7 @@
 import logging
 import os
 import re
+import sys
 import tempfile
 import uuid
 from pathlib import Path
@@ -678,6 +679,29 @@ async def serve_slide_image(slide_id: int, request: Request):
 # ---------------------------------------------------------------------------
 
 
+def _require_images_for_render() -> bool:
+    """Whether the render pipeline must succeed for the upload to succeed.
+
+    On Linux the only image path is Microsoft Graph; a render failure means
+    no images at all, which makes the catalog useless. Surface it as an
+    HTTP error instead of silently completing.
+    """
+    return sys.platform.startswith("linux")
+
+
+def _graph_error_status(exc) -> int:
+    """Map a graph.GraphError status_code → an HTTP response status.
+
+    4xx Graph errors pass through (the caller's token or permissions are at
+    fault). 5xx and anything weird become 502 Bad Gateway — we couldn't
+    complete the request because the upstream service couldn't.
+    """
+    code = getattr(exc, "status_code", 0) or 0
+    if 400 <= code < 500:
+        return code
+    return 502
+
+
 def _extract_bearer_token(request: Request) -> str:
     """Return the bearer token from the Authorization header, or '' if absent.
 
@@ -804,8 +828,20 @@ async def upload_deck(
             db_path=db_path,
             generate_tags=generate_tags,
             gateway_config=gateway_config,
-            require_images=False,
+            require_images=_require_images_for_render(),
             ms_token=ms_token,
+        )
+    except graph.GraphError as exc:
+        return JSONResponse(
+            {'error': f'Microsoft Graph error: {exc.message}',
+             'code': exc.error_code},
+            status_code=_graph_error_status(exc),
+        )
+    except RuntimeError as exc:
+        # ingest_deck raises RuntimeError when require_images=True and the
+        # render path failed for a non-Graph reason (pdftoppm missing, etc.)
+        return JSONResponse(
+            {'error': str(exc)}, status_code=502,
         )
     except Exception as exc:
         return JSONResponse({'error': f'Failed to ingest deck: {exc}'}, status_code=500)
@@ -1040,7 +1076,9 @@ async def upload_deck_stream(
     import json
     import queue as _queue
 
-    from aippt.ingest import ingest_deck
+    # NOTE: ingest_deck is imported at module top; do NOT re-import locally,
+    # or test patches on `aippt.web.routes.ingest_deck` won't take effect for
+    # the SSE handler.
 
     # Validate file extension before entering SSE mode so we can return a
     # plain JSON 400 response (SSE has already started once we yield the first
@@ -1113,7 +1151,7 @@ async def upload_deck_stream(
                 db_path=db_path,
                 generate_tags=generate_tags,
                 gateway_config=gateway_config,
-                require_images=False,
+                require_images=_require_images_for_render(),
                 progress_callback=progress_callback,
                 ms_token=ms_token,
             ),
@@ -1144,6 +1182,13 @@ async def upload_deck_stream(
         # Retrieve the result (or propagate the exception).
         try:
             result = await future
+        except graph.GraphError as exc:
+            yield _format_sse('error', {
+                'detail': f'Microsoft Graph error: {exc.message}',
+                'code': exc.error_code,
+                'status': _graph_error_status(exc),
+            })
+            return
         except Exception as exc:  # noqa: BLE001
             yield _format_sse('error', {'detail': str(exc)})
             return
