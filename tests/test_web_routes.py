@@ -582,3 +582,22 @@ class TestCreateDeckHardening:
         assert "event: error" in body
         assert "Token expired" in body
         assert "event: complete" not in body
+        # The JS sign-out hook (handleCreateEvent) keys off data.status === 401
+        # to detect in-band auth failures. If this assertion fails the client
+        # silently keeps a dead token in localStorage.
+        import json as _json
+        error_payload = None
+        for block in body.split("\n\n"):
+            if "event: error" not in block:
+                continue
+            for line in block.splitlines():
+                if line.startswith("data: "):
+                    error_payload = _json.loads(line[len("data: "):])
+                    break
+            if error_payload is not None:
+                break
+        assert error_payload is not None, "no SSE error block found"
+        assert error_payload.get("status") == 401, (
+            "SSE error event missing status: 401 — the JS 401 hook in "
+            f"handleCreateEvent won't fire. Got: {error_payload!r}"
+        )

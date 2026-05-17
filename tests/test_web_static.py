@@ -76,3 +76,54 @@ def test_endpoint_is_called_via_fetch_with_auth(html_source: str, endpoint: str)
             "use msAuth.fetchWithAuth so the Bearer token and X-AIPPT-NTID "
             "header are attached."
         )
+
+
+def _extract_function_body(source: str, name: str) -> str:
+    """Return the body of ``function name(...) { ... }`` (best-effort braces)."""
+    pattern = re.compile(
+        r"function\s+" + re.escape(name) + r"\s*\([^)]*\)\s*\{",
+    )
+    match = pattern.search(source)
+    assert match, f"function {name!r} not found in index.html"
+    start = match.end()
+    depth = 1
+    i = start
+    while i < len(source) and depth > 0:
+        ch = source[i]
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+        i += 1
+    return source[start:i - 1]
+
+
+# SSE error events tunnel server-side errors over a 200 response. When the
+# server emits ``event: error\ndata: {"status": 401, ...}`` it means the
+# bearer token has been rejected mid-stream. fetchWithAuth's HTTP-level
+# refresh-on-401 doesn't fire (the response was already 200), so the
+# handlers must explicitly notice the in-band 401 and sign the user out —
+# otherwise the UI keeps the stale token in localStorage and just toasts
+# every subsequent retry.
+SSE_HANDLERS_REQUIRING_401_HOOK = [
+    "handleUploadEvent",
+    "handleCreateEvent",
+]
+
+
+@pytest.mark.parametrize("handler", SSE_HANDLERS_REQUIRING_401_HOOK)
+def test_sse_handler_signs_out_on_401(html_source: str, handler: str):
+    """SSE error events with status 401 must trigger msAuth.signOut()."""
+    body = _extract_function_body(html_source, handler)
+    # Must read the status field from the error event.
+    assert re.search(r"data\.status\s*===?\s*401", body), (
+        f"{handler} does not check data.status === 401 on SSE error events. "
+        "Without it, expired-token errors during streaming are silently "
+        "toasted while the stale token stays in localStorage."
+    )
+    # Must actually sign the user out so the UI reverts to the signed-out
+    # nav state and the next privileged action triggers re-auth.
+    assert "msAuth.signOut" in body, (
+        f"{handler} sees the 401 but doesn't call msAuth.signOut() — the "
+        "UI will keep claiming the user is signed in with a dead token."
+    )

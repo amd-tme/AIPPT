@@ -1429,7 +1429,18 @@
                 if (data.tags_generated) parts.push('tags generated');
                 toast(parts.join(', '));
             } else if (eventType === 'error') {
-                toast(`Upload failed: ${data.detail}`);
+                // SSE responses are HTTP 200, so fetchWithAuth's 401-refresh
+                // path never fires for in-band auth failures. The server
+                // surfaces an expired/invalid token here via data.status===401
+                // (see _format_sse('error', {..., status: 401, ...})); when
+                // we see it, drop the dead token so the nav reverts to
+                // signed-out and the next privileged action prompts re-auth.
+                if (data && data.status === 401) {
+                    msAuth.signOut();
+                    toast('Upload failed: Microsoft sign-in expired — please sign in again');
+                } else {
+                    toast(`Upload failed: ${data.detail}`);
+                }
             }
         }
 
@@ -1883,7 +1894,16 @@
             } else if (eventType === 'complete') {
                 toast(`Created "${data.display_name || data.deck_name}" — ${data.slide_count} slide${data.slide_count !== 1 ? 's' : ''}`);
             } else if (eventType === 'error') {
-                toast('Create failed: ' + data.detail);
+                // See note in handleUploadEvent — SSE error events with
+                // data.status === 401 are in-band auth failures; sign out
+                // so the dead token leaves localStorage and the user is
+                // prompted to re-auth.
+                if (data && data.status === 401) {
+                    msAuth.signOut();
+                    toast('Create failed: Microsoft sign-in expired — please sign in again');
+                } else {
+                    toast('Create failed: ' + data.detail);
+                }
             }
         }
 
