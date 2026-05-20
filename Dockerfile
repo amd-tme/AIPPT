@@ -18,6 +18,7 @@ COPY aippt.py .
 COPY pyproject.toml .
 COPY dirs.yaml .
 COPY gateway.yaml gateway.yaml
+COPY models.yaml models.yaml
 
 # Create data directory for SQLite, uploads, and images (writable via fsGroup)
 RUN mkdir -p /app/data/uploads /app/data/images /app/data/backups && \

@@ -11,3 +11,8 @@ providers:
     path: "/OpenAI"
   google:
     path: "/VertexAI"
+
+sharepoint:
+  render_site_id: "amdcloud.sharepoint.com,8018d316-7485-4324-8c34-7b21e99987a6,a3fda584-cb3a-4af7-b72d-9c2650ca29fd"
+  render_drive_id: "b!FtMYgIV0JEOMNHsh6ZmHpoSl_aM6y_dKty2cJlDKKf2QUWH55IV8SodoYM9Iup0F"
+  render_root_path: "AIPPT/render-staging"

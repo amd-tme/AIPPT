@@ -87,6 +87,33 @@ def content_hash(title: str, text: str) -> str:
     return hashlib.sha256(normalized.encode()).hexdigest()
 
 
+def _resolve_slide_title(slide):
+    """Return ``(title, fallback_shape)`` for a slide.
+
+    Standard title placeholders win. When that's empty -- common for decks
+    produced by PptxGenJS, which lays the title out as a regular text box
+    rather than the title placeholder -- fall back to the first short
+    (<=80 char) text shape's first line. The returned ``fallback_shape`` is
+    the shape the title came from (or ``None`` if the title placeholder was
+    used), so the caller can skip it when building ``content_text`` and
+    avoid duplicating the title into the body.
+    """
+    if slide.shapes.title and slide.shapes.title.text.strip():
+        return slide.shapes.title.text.strip(), None
+
+    for shape in slide.shapes:
+        if not shape.has_text_frame:
+            continue
+        text = shape.text_frame.text.strip()
+        if not text:
+            continue
+        first_line = shape.text_frame.paragraphs[0].text.strip()
+        if first_line and len(first_line) <= 80:
+            return first_line, shape
+
+    return "", None
+
+
 def file_hash(file_path: str) -> str:
     """SHA-256 hash of file contents."""
     h = hashlib.sha256()
@@ -263,14 +290,15 @@ def catalog_deck(
 
     # Catalog each slide
     for i, slide in enumerate(prs.slides, 1):
-        title = ""
-        if slide.shapes.title and slide.shapes.title.text:
-            title = slide.shapes.title.text.strip()
+        title, title_fallback_shape = _resolve_slide_title(slide)
 
-        # Extract text from all non-title shapes
+        # Extract text from all non-title shapes. Skip the fallback shape
+        # too (when used) so the title isn't duplicated into content_text.
         texts = []
         for shape in slide.shapes:
             if shape == slide.shapes.title:
+                continue
+            if title_fallback_shape is not None and shape == title_fallback_shape:
                 continue
             text = extract_text_from_shape(shape)
             if text:

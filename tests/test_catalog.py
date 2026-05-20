@@ -164,6 +164,33 @@ class TestCatalogDeck:
         assert slides[0]["title"] == "Introduction"
         assert slides[1]["title"] == "Security Overview"
 
+    def test_title_fallback_for_pptxgenjs_layout(self, tmp_path):
+        """PptxGenJS decks lay titles out as plain text boxes rather than the
+        title placeholder. Catalog must fall back to the first short text
+        shape so slides don't all show 'Untitled' in the UI.
+        """
+        from pptx import Presentation
+        from pptx.util import Inches
+
+        prs = Presentation()
+        # Blank layout has no title placeholder -- mimics PptxGenJS output.
+        slide = prs.slides.add_slide(prs.slide_layouts[6])
+        tb = slide.shapes.add_textbox(Inches(1), Inches(0.5), Inches(8), Inches(1))
+        tb.text_frame.text = "The Art of the Meme"
+        body = slide.shapes.add_textbox(Inches(1), Inches(2), Inches(8), Inches(4))
+        body.text_frame.text = "A comprehensive guide to internet culture"
+
+        path = tmp_path / "pptxgenjs-like.pptx"
+        prs.save(str(path))
+
+        db_path = str(tmp_path / "test.db")
+        deck_id = catalog_deck(str(path), db_path=db_path)
+        slides = get_deck_slides(deck_id, db_path)
+        assert slides[0]["title"] == "The Art of the Meme"
+        # And the title text must NOT be duplicated into content_text.
+        assert "The Art of the Meme" not in slides[0]["content_text"]
+        assert "internet culture" in slides[0]["content_text"]
+
     def test_skips_duplicate_catalog(self, tmp_path, sample_pptx):
         db_path = str(tmp_path / "test.db")
         deck_id1 = catalog_deck(sample_pptx, db_path=db_path)
