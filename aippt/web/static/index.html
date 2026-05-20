@@ -12,49 +12,49 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>AIPPT</title>
-    <link rel="stylesheet" href="/static/vendor/pico.min.css">
-    <link rel="stylesheet" href="/static/tokens.css">
-    <link rel="stylesheet" href="/static/pico-overrides.css">
+    <link rel="stylesheet" href="static/vendor/pico.min.css">
+    <link rel="stylesheet" href="static/tokens.css">
+    <link rel="stylesheet" href="static/pico-overrides.css">
     <style>
         /* ── Vendored fonts ─────────────────────────────────── */
         @font-face {
             font-family: 'Klavika';
-            src: url('/static/fonts/Klavika-Light.woff2') format('woff2');
+            src: url('static/fonts/Klavika-Light.woff2') format('woff2');
             font-weight: 300;
             font-style: normal;
             font-display: swap;
         }
         @font-face {
             font-family: 'Klavika';
-            src: url('/static/fonts/Klavika-Regular.woff2') format('woff2');
+            src: url('static/fonts/Klavika-Regular.woff2') format('woff2');
             font-weight: 400;
             font-style: normal;
             font-display: swap;
         }
         @font-face {
             font-family: 'Klavika';
-            src: url('/static/fonts/Klavika-Medium.woff2') format('woff2');
+            src: url('static/fonts/Klavika-Medium.woff2') format('woff2');
             font-weight: 500;
             font-style: normal;
             font-display: swap;
         }
         @font-face {
             font-family: 'Klavika';
-            src: url('/static/fonts/Klavika-Bold.woff2') format('woff2');
+            src: url('static/fonts/Klavika-Bold.woff2') format('woff2');
             font-weight: 700;
             font-style: normal;
             font-display: swap;
         }
         @font-face {
             font-family: 'DM Sans';
-            src: url('/static/fonts/DMSans-Regular.woff2') format('woff2');
+            src: url('static/fonts/DMSans-Regular.woff2') format('woff2');
             font-weight: 400;
             font-style: normal;
             font-display: swap;
         }
         @font-face {
             font-family: 'DM Sans';
-            src: url('/static/fonts/DMSans-Medium.woff2') format('woff2');
+            src: url('static/fonts/DMSans-Medium.woff2') format('woff2');
             font-weight: 500;
             font-style: normal;
             font-display: swap;
@@ -559,8 +559,8 @@
             <li><a href="#" onclick="showDecks(); return false;">Decks</a></li>
             <li><a href="#" onclick="showSearch(); return false;">Search</a></li>
             <li><a href="#" onclick="showSettings(); return false;">Settings</a></li>
-            <li><a href="/docs/index.html" target="_blank">Docs</a></li>
-            <li><a href="/api/export" target="_blank" role="button" class="outline">Export CSV</a></li>
+            <li><a href="docs/index.html" target="_blank">Docs</a></li>
+            <li><a href="api/export" target="_blank" role="button" class="outline">Export CSV</a></li>
             <li id="ms-signin-nav-item" style="display:none;">
                 <button id="ms-signin-btn" type="button" class="outline" onclick="onMsSignInClick()" title="Sign in to Microsoft to enable deck ingest">Sign in to Microsoft</button>
             </li>
@@ -764,7 +764,7 @@
                 <div>
                     <label for="taxonomy-import-file" class="outline" role="button" style="display:inline-block; cursor:pointer; margin-right:0.5rem;">Import CSV</label>
                     <input type="file" id="taxonomy-import-file" accept=".csv" style="display:none;" onchange="importTaxonomy(this)">
-                    <a href="/api/taxonomy/export" role="button" class="outline" style="display:inline-block;">Export CSV</a>
+                    <a href="api/taxonomy/export" role="button" class="outline" style="display:inline-block;">Export CSV</a>
                 </div>
             </div>
 
@@ -860,7 +860,7 @@
         <div id="toast"></div>
     </main>
 
-    <script src="/static/js/ms-auth.js"></script>
+    <script src="static/js/ms-auth.js"></script>
     <script>
         let currentSlideId = null;
         let savedNotesValue = '';
@@ -890,7 +890,7 @@
 
         async function fetchConfig() {
             try {
-                const resp = await fetch('/api/config');
+                const resp = await fetch('api/config');
                 if (resp.ok) {
                     const config = await resp.json();
                     viewOnly = config.view_only || false;
@@ -959,7 +959,7 @@
             document.getElementById('tag-filter-info').classList.remove('active');
             show('deck-list');
             loadCreateModels();
-            const resp = await fetch('/api/decks');
+            const resp = await fetch('api/decks');
             if (!resp.ok) { toast('Error loading decks'); return; }
             const decks = await resp.json();
             const tbody = document.getElementById('deck-tbody');
@@ -985,7 +985,7 @@
             hide('tag-results');
             show('slide-browser');
             document.getElementById('browser-title').textContent = name;
-            const resp = await fetch(`/api/decks/${deckId}/slides`);
+            const resp = await fetch(`api/decks/${deckId}/slides`);
             if (!resp.ok) { toast('Error loading slides'); return; }
             const slides = await resp.json();
             renderSlideGrid('slide-grid', slides);
@@ -1006,7 +1006,7 @@
             const params = new URLSearchParams();
             if (title) params.set('title', title);
             if (tags) params.set('tags', tags);
-            const resp = await fetch(`/api/search?${params}`);
+            const resp = await fetch(`api/search?${params}`);
             if (!resp.ok) { toast('Search failed'); return; }
             const results = await resp.json();
             renderSlideGrid('search-results', results);
@@ -1021,7 +1021,7 @@
             const container = document.getElementById(containerId);
             container.innerHTML = slides.map((s, idx) => {
                 const imgHtml = s.image_path
-                    ? `<img src="/slide-image/${s.id}" alt="Slide ${s.position}" loading="lazy">`
+                    ? `<img src="slide-image/${s.id}" alt="Slide ${s.position}" loading="lazy">`
                     : `<div class="no-image">No image</div>`;
                 const tags = (s.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join(' ');
                 return `
@@ -1046,7 +1046,7 @@
         async function showSlideDetail(slideId) {
             currentSlideId = slideId;
             resetAiPanel();
-            const resp = await fetch(`/api/slides/${slideId}`);
+            const resp = await fetch(`api/slides/${slideId}`);
             if (!resp.ok) { toast('Slide not found'); return; }
             const slide = await resp.json();
 
@@ -1055,7 +1055,7 @@
 
             const imgDiv = document.getElementById('detail-image');
             imgDiv.innerHTML = slide.image_path
-                ? `<img src="/slide-image/${slideId}" alt="Slide">`
+                ? `<img src="slide-image/${slideId}" alt="Slide">`
                 : '<p>No image available</p>';
 
             // Metadata row
@@ -1081,7 +1081,7 @@
         }
 
         async function refreshTags(slideId) {
-            const resp = await fetch(`/api/slides/${slideId}/tags`).catch(() => null);
+            const resp = await fetch(`api/slides/${slideId}/tags`).catch(() => null);
             if (resp && resp.ok) {
                 const data = await resp.json();
                 renderDetailTags(data.tags, slideId);
@@ -1102,7 +1102,7 @@
         }
 
         async function removeTag(slideId, tagName) {
-            const resp = await fetch(`/api/slides/${slideId}/tags/${encodeURIComponent(tagName)}`, {method: 'DELETE'});
+            const resp = await fetch(`api/slides/${slideId}/tags/${encodeURIComponent(tagName)}`, {method: 'DELETE'});
             if (resp.ok) {
                 const data = await resp.json();
                 renderDetailTags(data.tags, slideId);
@@ -1118,7 +1118,7 @@
             const tagName = input.value.trim();
             if (!tagName) return;
 
-            const resp = await fetch(`/api/slides/${currentSlideId}/tags`, {
+            const resp = await fetch(`api/slides/${currentSlideId}/tags`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({tags: [tagName], source: 'manual'}),
@@ -1136,7 +1136,7 @@
 
         async function loadTaxonomyTags() {
             try {
-                const resp = await fetch('/api/taxonomy');
+                const resp = await fetch('api/taxonomy');
                 const data = await resp.json();
                 taxonomyTags = data.tags.map(t => t.name);
             } catch (e) {
@@ -1189,8 +1189,8 @@
 
         async function loadSettings() {
             const [configResp, modelsResp] = await Promise.all([
-                fetch('/api/models'),
-                fetch('/api/models/available'),
+                fetch('api/models'),
+                fetch('api/models/available'),
             ]);
             if (!configResp.ok || !modelsResp.ok) { toast('Error loading settings'); return; }
             const config = await configResp.json();
@@ -1236,7 +1236,7 @@
         async function saveModel(operation) {
             const select = document.getElementById(`model-select-${operation}`);
             const model = select.value;
-            const resp = await fetch('/api/models', {
+            const resp = await fetch('api/models', {
                 method: 'PUT',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({defaults: {[operation]: model}}),
@@ -1250,7 +1250,7 @@
         }
 
         async function resetModels() {
-            const resp = await fetch('/api/models/reset', {method: 'POST'});
+            const resp = await fetch('api/models/reset', {method: 'POST'});
             if (resp.ok) {
                 toast('Reset to built-in defaults');
                 await loadSettings();
@@ -1262,7 +1262,7 @@
         // --- Taxonomy management ---
 
         async function loadTaxonomyView() {
-            const resp = await fetch('/api/taxonomy');
+            const resp = await fetch('api/taxonomy');
             if (!resp.ok) { toast('Error loading taxonomy'); return; }
             const data = await resp.json();
             taxonomyTags = data.tags.map(t => t.name);  // refresh autocomplete cache
@@ -1288,7 +1288,7 @@
             const catInput = document.getElementById('taxonomy-add-category');
             const name = nameInput.value.trim();
             if (!name) return;
-            const resp = await fetch('/api/taxonomy', {
+            const resp = await fetch('api/taxonomy', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({name: name, category: catInput.value.trim()}),
@@ -1304,7 +1304,7 @@
         }
 
         async function removeTaxonomyTag(name) {
-            const resp = await fetch(`/api/taxonomy/${encodeURIComponent(name)}`, {method: 'DELETE'});
+            const resp = await fetch(`api/taxonomy/${encodeURIComponent(name)}`, {method: 'DELETE'});
             if (resp.ok) {
                 toast(`Removed: ${name}`);
                 await loadTaxonomyView();
@@ -1317,7 +1317,7 @@
             if (!input.files.length) return;
             const formData = new FormData();
             formData.append('file', input.files[0]);
-            const resp = await fetch('/api/taxonomy/import', {method: 'POST', body: formData});
+            const resp = await fetch('api/taxonomy/import', {method: 'POST', body: formData});
             if (resp.ok) {
                 const data = await resp.json();
                 toast(`Imported ${data.total} tags (${data.new} new, ${data.updated} updated)`);
@@ -1358,7 +1358,7 @@
             if (generateTags) formData.append('generate_tags', 'true');
 
             try {
-                const resp = await msAuth.fetchWithAuth('/api/decks/upload-stream', {method: 'POST', body: formData});
+                const resp = await msAuth.fetchWithAuth('api/decks/upload-stream', {method: 'POST', body: formData});
 
                 if (!resp.ok) {
                     const data = await resp.json();
@@ -1445,13 +1445,13 @@
         }
 
         function downloadDeck(deckId) {
-            window.location.href = `/api/decks/${deckId}/download`;
+            window.location.href = `api/decks/${deckId}/download`;
         }
 
         async function writeNotesToDeck(deckId) {
             if (!confirm('Write DB notes back to the PPTX file? A backup will be created.')) return;
             try {
-                const resp = await fetch(`/api/decks/${deckId}/write-notes`, { method: 'POST' });
+                const resp = await fetch(`api/decks/${deckId}/write-notes`, { method: 'POST' });
                 const data = await resp.json();
                 if (!resp.ok) {
                     toast('Error: ' + (data.error || 'Unknown error'));
@@ -1540,7 +1540,7 @@
             document.getElementById('ai-spinner-label').textContent = AI_ACTION_LABELS[action] || 'Working...';
             spinner.classList.add('active');
 
-            const endpoint = `/api/slides/${currentSlideId}/${action}`;
+            const endpoint = `api/slides/${currentSlideId}/${action}`;
             let data;
             try {
                 const reqBody = {};
@@ -1600,7 +1600,7 @@
             const notes = document.getElementById('detail-notes').value.trim();
             if (!notes) { toast('Notes cannot be empty'); return; }
 
-            const resp = await fetch(`/api/slides/${currentSlideId}/notes/save`, {
+            const resp = await fetch(`api/slides/${currentSlideId}/notes/save`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({notes: notes, source: 'web'}),
@@ -1626,7 +1626,7 @@
             panel.innerHTML = '<em>Loading...</em>';
             panel.classList.remove('hidden');
 
-            const resp = await fetch(`/api/slides/${currentSlideId}/notes/history`);
+            const resp = await fetch(`api/slides/${currentSlideId}/notes/history`);
             if (!resp.ok) {
                 panel.innerHTML = '<em>Error loading history</em>';
                 return;
@@ -1651,7 +1651,7 @@
 
         async function saveNotes() {
             if (!currentSlideId || !lastNotesText) return;
-            const resp = await fetch(`/api/slides/${currentSlideId}/notes/save`, {
+            const resp = await fetch(`api/slides/${currentSlideId}/notes/save`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({notes: lastNotesText, source: 'ai'}),
@@ -1757,13 +1757,13 @@
 
         async function loadCreateModels() {
             try {
-                const resp = await fetch('/api/models/available');
+                const resp = await fetch('api/models/available');
                 if (!resp.ok) return;
                 const models = await resp.json();
                 const select = document.getElementById('create-model-select');
                 let defaultModel = '';
                 try {
-                    const configResp = await fetch('/api/models');
+                    const configResp = await fetch('api/models');
                     if (configResp.ok) {
                         const config = await configResp.json();
                         defaultModel = config.defaults?.enhance || '';
@@ -1829,7 +1829,7 @@
             }
 
             try {
-                const resp = await msAuth.fetchWithAuth('/api/decks/create', {method: 'POST', body: formData});
+                const resp = await msAuth.fetchWithAuth('api/decks/create', {method: 'POST', body: formData});
 
                 if (!resp.ok) {
                     let msg = resp.statusText;
@@ -1911,7 +1911,7 @@
 
         async function loadTemplateSettings() {
             try {
-                const resp = await fetch('/api/templates');
+                const resp = await fetch('api/templates');
                 if (resp.ok) {
                     const data = await resp.json();
                     document.getElementById('template-path-input').value = data.default_template || '';
@@ -1928,7 +1928,7 @@
         async function saveTemplatePath() {
             const path = document.getElementById('template-path-input').value.trim();
             if (!path) { toast('Template path cannot be empty'); return; }
-            const resp = await fetch('/api/templates', {
+            const resp = await fetch('api/templates', {
                 method: 'PUT',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({default_template: path}),
@@ -1972,7 +1972,7 @@
 
         async function loadSidebarTags() {
             try {
-                const resp = await fetch('/api/tags');
+                const resp = await fetch('api/tags');
                 if (!resp.ok) return;
                 const data = await resp.json();
                 sidebarTags = data.tags || [];
@@ -2056,7 +2056,7 @@
             // Fetch filtered slides
             const params = new URLSearchParams();
             params.set('tags', tagNames.join(','));
-            const resp = await fetch(`/api/search?${params}`);
+            const resp = await fetch(`api/search?${params}`);
             if (!resp.ok) { toast('Filter failed'); return; }
             const results = await resp.json();
 

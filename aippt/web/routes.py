@@ -48,8 +48,20 @@ async def healthz():
 
 @router.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
-    """Main dashboard -- serves the single-page app."""
-    return (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+    """Main dashboard -- serves the single-page app.
+
+    Injects ``<base href="${BASE_PATH}">`` so the SPA works whether it is
+    served at the apex (``/``) or under a path prefix (``/aippt/`` when the
+    slai-app-platform ingress routes by path under the apex). All asset and
+    fetch references inside index.html use *relative* URLs so the document
+    base resolves them correctly under either mount point.
+    """
+    html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+    base_path = os.environ.get("BASE_PATH", "/")
+    if not base_path.endswith("/"):
+        base_path += "/"
+    base_tag = f'<base href="{base_path}">'
+    return html.replace("<head>", f"<head>\n    {base_tag}", 1)
 
 
 @router.get("/api/config")

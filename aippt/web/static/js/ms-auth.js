@@ -73,7 +73,7 @@
     function _refresh() {
         var refresh = localStorage.getItem(STORAGE_KEYS.refreshToken);
         if (!refresh) return Promise.resolve(null);
-        return fetch('/api/auth/microsoft/refresh', {
+        return fetch('api/auth/microsoft/refresh', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({refresh_token: refresh}),
@@ -242,7 +242,7 @@
             modal.removeEventListener('close', onClose);
         });
 
-        return fetch('/api/auth/microsoft/start', {method: 'POST'})
+        return fetch('api/auth/microsoft/start', {method: 'POST'})
             .then(function (resp) {
                 if (!resp.ok) {
                     return resp.json().catch(function () { return {}; }).then(function (data) {
@@ -279,7 +279,7 @@
                     _setStatus(modal, 'Sign-in code expired. Please try again.');
                     return resolve(null);
                 }
-                fetch('/api/auth/microsoft/poll', {
+                fetch('api/auth/microsoft/poll', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({device_code: deviceCode}),

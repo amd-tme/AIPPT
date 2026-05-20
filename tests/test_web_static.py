@@ -48,11 +48,14 @@ def test_endpoint_is_called_via_fetch_with_auth(html_source: str, endpoint: str)
     """
     # Find every fetch-style call that mentions the endpoint, in either
     # plain or auth-wrapped form. The regex is intentionally generous
-    # (handles single and double quotes, optional whitespace).
+    # (handles single and double quotes, optional whitespace, and the
+    # optional leading "/" -- the SPA now emits relative paths so a
+    # <base href> can mount it under /aippt/ on slai-app-platform without
+    # rewriting every call site).
     pattern = re.compile(
         r"(?P<wrapper>\w+(?:\.\w+)?)?\s*"
         r"(?P<fn>fetch|fetchWithAuth)\s*"
-        r"\(\s*['\"]" + re.escape(endpoint) + r"['\"]"
+        r"\(\s*['\"]/?" + re.escape(endpoint.lstrip("/")) + r"['\"]"
     )
     matches = list(pattern.finditer(html_source))
     assert matches, (
