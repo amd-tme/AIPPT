@@ -71,8 +71,8 @@ spec:
             initialDelaySeconds: 15
       volumes:
         - name: data
-          persistentVolumeClaim:
-            claimName: aippt-data
+          emptyDir:
+            sizeLimit: 5Gi
         - name: tmp
           emptyDir:
             medium: Memory
