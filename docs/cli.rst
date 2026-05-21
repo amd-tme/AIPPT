@@ -340,17 +340,24 @@ Launch the web UI (FastAPI + htmx).
 
 Options:
 
+- ``--host HOST`` -- Bind address (default: ``127.0.0.1``)
 - ``--port N`` -- Port number (default: ``8000``)
 - ``--db PATH`` -- Database path (default: ``slides.db``)
 - ``--gateway-config PATH`` -- Gateway config for LLM access (default: ``gateway.yaml``)
 - ``--uploads-dir DIR`` -- Directory for uploaded files (default: ``uploads``)
-- ``--view-only`` -- Disable LLM features (auto-detected when no gateway/API keys)
+- ``--images-dir DIR`` -- Parent directory for rendered slide images (default:
+  value from ``dirs.yaml`` or ``images``). Set this to a persistent volume in
+  container deployments -- otherwise PNGs land in cwd and are lost on pod
+  restart.
+- ``--view-only`` -- Disable LLM features (also settable via the
+  ``AIPPT_VIEW_ONLY`` env var; auto-detected when no gateway/API keys)
 
 Examples::
 
     python aippt.py serve --port 8000
     python aippt.py serve --port 8000 --gateway-config gateway.yaml
     python aippt.py serve --view-only
+    python aippt.py serve --host 0.0.0.0 --port 8000 --images-dir /app/data/images
 
 models
 ------
@@ -607,3 +614,73 @@ Examples::
 
     python aippt.py db-info
     python aippt.py db-info --json --output dbinfo.json
+
+decks
+-----
+
+Manage cataloged decks: list, inspect, rename, delete, and view the source
+script that produced a generated deck.
+
+.. code-block:: text
+
+   aippt.py decks [subcommand] [options]
+
+Subcommands:
+
+- ``list`` -- List all cataloged decks
+- ``info <deck>`` -- Show detailed information for a deck
+- ``rename <deck> <new_name>`` -- Set a deck's display name
+- ``delete <deck>`` -- Delete a deck and all associated catalog data
+- ``source <deck>`` -- Show the source script path for a generated deck
+
+``<deck>`` accepts a deck ID (integer) or a substring of the deck name.
+
+Common options:
+
+- ``--db PATH`` -- Database path (default: ``slides.db``)
+- ``--json`` -- (``list``, ``info``) Output as JSON
+
+``delete`` options:
+
+- ``--force`` -- Skip the confirmation prompt
+- ``--purge-images`` -- Also delete the rendered image directory
+
+``source`` options:
+
+- ``--cat`` -- Print the script contents to stdout
+
+Examples::
+
+    python aippt.py decks list
+    python aippt.py decks list --json
+    python aippt.py decks info "Zero Trust"
+    python aippt.py decks rename 42 "Zero Trust Architecture v3"
+    python aippt.py decks delete 42 --force --purge-images
+    python aippt.py decks source 42 --cat
+
+mcp
+---
+
+Manage MCP (Model Context Protocol) server configuration.
+
+.. code-block:: text
+
+   aippt.py mcp [subcommand] [options]
+
+Subcommands:
+
+- ``list`` -- List configured MCP servers and their tools
+
+Common options:
+
+- ``--config PATH`` -- MCP servers config file (default: ``mcp_servers.json``)
+
+``list`` options:
+
+- ``--json`` -- Output as JSON
+
+Examples::
+
+    python aippt.py mcp list
+    python aippt.py mcp list --json
+    python aippt.py mcp list --config path/to/mcp_servers.json
