@@ -31,3 +31,10 @@ sharepoint:
   # Per-user subfolders (NTID) and per-job filenames (UUID) are appended
   # automatically.
   render_root_path: "AIPPT/render-staging"
+
+# Upload size limit for the web UI. The middleware rejects oversized
+# requests before multipart parsing begins; the SPA pre-checks `file.size`
+# so the user sees a useful error instead of an opaque HTTP/2 protocol
+# error. Default 50. Override per-instance with `aippt serve --max-upload-mb N`.
+upload:
+  max_size_mb: 50

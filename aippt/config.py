@@ -474,6 +474,59 @@ def resolve_path(relative_path: str, base_dir: Optional[str] = None) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Upload configuration (gateway.yaml `upload` block)
+# ---------------------------------------------------------------------------
+
+DEFAULT_MAX_UPLOAD_MB = 50
+
+
+def load_upload_config(config_path: Optional[str] = None) -> int:
+    """Return the configured upload size limit in bytes.
+
+    Looks for an ``upload:`` block in ``gateway.yaml``:
+
+        upload:
+          max_size_mb: 50
+
+    Returns the value times 1024**2. Defaults to ``DEFAULT_MAX_UPLOAD_MB`` if
+    the file is missing, the block is absent, the key is missing, or the
+    value is non-numeric. Negative or zero values are coerced to the default
+    (a server that won't accept any upload is a misconfiguration, not a
+    feature).
+    """
+    default_bytes = DEFAULT_MAX_UPLOAD_MB * 1024 * 1024
+
+    if not config_path or not HAS_YAML:
+        return default_bytes
+
+    p = Path(config_path)
+    if not p.exists():
+        return default_bytes
+
+    try:
+        with p.open(encoding="utf-8") as fh:
+            data = yaml.safe_load(fh)
+    except Exception:
+        return default_bytes
+
+    if not isinstance(data, dict):
+        return default_bytes
+
+    block = data.get("upload")
+    if not isinstance(block, dict):
+        return default_bytes
+
+    raw = block.get("max_size_mb", DEFAULT_MAX_UPLOAD_MB)
+    try:
+        mb = int(raw)
+    except (TypeError, ValueError):
+        return default_bytes
+    if mb <= 0:
+        return default_bytes
+    return mb * 1024 * 1024
+
+
+# ---------------------------------------------------------------------------
 # SharePoint configuration (gateway.yaml `sharepoint` block)
 # ---------------------------------------------------------------------------
 

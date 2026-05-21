@@ -7,9 +7,10 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
-from aippt.config import load_sharepoint_config
+from aippt.config import load_sharepoint_config, load_upload_config, DEFAULT_MAX_UPLOAD_MB
 from aippt.web.log_buffer import install_ring_buffer
 from aippt.web.logging_filter import install_authorization_scrub
+from aippt.web.middleware import UploadSizeLimitMiddleware
 from aippt.web.routes import router
 
 logger = logging.getLogger(__name__)
@@ -35,7 +36,7 @@ def detect_view_only(gateway_config: str) -> bool:
     return True
 
 
-def create_app(db_path: str = "slides.db", gateway_config: str = None, uploads_dir: str = "uploads", images_dir: str = "images", project_root: str = None, view_only: bool = None) -> FastAPI:
+def create_app(db_path: str = "slides.db", gateway_config: str = None, uploads_dir: str = "uploads", images_dir: str = "images", project_root: str = None, view_only: bool = None, max_upload_mb: int = None) -> FastAPI:
     """Create and configure the FastAPI application.
 
     Args:
@@ -49,6 +50,9 @@ def create_app(db_path: str = "slides.db", gateway_config: str = None, uploads_d
             cwd is not the data volume.
         project_root: Base directory for resolving relative DB paths (default: cwd)
         view_only: Force view-only mode (True), or auto-detect (None)
+        max_upload_mb: Hard cap on inbound upload size in MB. Overrides the
+            ``upload.max_size_mb`` key in ``gateway.yaml``; defaults to
+            ``DEFAULT_MAX_UPLOAD_MB`` when neither is set.
 
     Returns:
         Configured FastAPI app
@@ -93,6 +97,14 @@ def create_app(db_path: str = "slides.db", gateway_config: str = None, uploads_d
     except (ValueError, RuntimeError) as exc:
         logger.warning("SharePoint config invalid in %s: %s", gateway_config, exc)
     app.state.sharepoint_config = sp_config
+
+    # Upload size limit. CLI flag wins; otherwise gateway.yaml; otherwise default.
+    if max_upload_mb is not None and max_upload_mb > 0:
+        app.state.max_upload_bytes = max_upload_mb * 1024 * 1024
+    else:
+        app.state.max_upload_bytes = load_upload_config(gateway_config)
+
+    app.add_middleware(UploadSizeLimitMiddleware)
 
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 

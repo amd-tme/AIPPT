@@ -50,17 +50,23 @@ def full_client(tmp_path, deck_path):
 # ---------------------------------------------------------------------------
 
 class TestConfigEndpoint:
-    """GET /api/config returns view_only flag."""
+    """GET /api/config returns view_only flag + upload size cap."""
 
     def test_config_endpoint_full_mode(self, full_client):
         resp = full_client.get("/api/config")
         assert resp.status_code == 200
-        assert resp.json() == {"view_only": False}
+        body = resp.json()
+        assert body["view_only"] is False
+        assert isinstance(body["max_upload_bytes"], int)
+        assert body["max_upload_bytes"] > 0
 
     def test_config_endpoint_view_only(self, view_only_client):
         resp = view_only_client.get("/api/config")
         assert resp.status_code == 200
-        assert resp.json() == {"view_only": True}
+        body = resp.json()
+        assert body["view_only"] is True
+        assert isinstance(body["max_upload_bytes"], int)
+        assert body["max_upload_bytes"] > 0
 
 
 # ---------------------------------------------------------------------------

@@ -17,6 +17,7 @@ from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, Streamin
 from aippt.catalog import (
     get_db,
     display_name,
+    get_deck_by_file_hash,
     search_slides,
     add_tags,
     get_slide_tags,
@@ -67,8 +68,51 @@ async def dashboard(request: Request):
 
 @router.get("/api/config")
 async def get_config(request: Request):
-    """API: Return frontend configuration flags."""
-    return {"view_only": getattr(request.app.state, "view_only", False)}
+    """API: Return frontend configuration flags.
+
+    Public, unauthenticated. The SPA reads this once at boot to learn the
+    upload size cap so it can pre-check ``file.size`` before the multipart
+    POST, and to pick up the ``view_only`` toggle. Keep the payload to
+    deployment-public values only (no secrets, no per-user state).
+    """
+    return {
+        "view_only": getattr(request.app.state, "view_only", False),
+        "max_upload_bytes": getattr(request.app.state, "max_upload_bytes", 0),
+    }
+
+
+_FILE_HASH_RE = re.compile(r"^[a-f0-9]{64}$")
+
+
+@router.get("/api/decks/by-hash/{sha256}")
+async def get_deck_by_hash_route(request: Request, sha256: str):
+    """API: Return existing deck metadata for the given file SHA-256, or 404.
+
+    Lets the SPA detect duplicate uploads *before* any bytes leave the
+    browser. The hash matches ``catalog.file_hash`` (SHA-256 of the raw PPTX
+    bytes). Returns 400 for malformed input so spurious DB lookups don't
+    accumulate.
+    """
+    if not _FILE_HASH_RE.match(sha256):
+        return JSONResponse(
+            {"error": "Hash must be 64 lowercase hex chars (SHA-256)."},
+            status_code=400,
+        )
+    db_path = request.app.state.db_path
+    deck = get_deck_by_file_hash(sha256, db_path=db_path)
+    if not deck:
+        return JSONResponse(
+            {"error": "No deck with that file hash."}, status_code=404,
+        )
+    return {
+        "id": deck["id"],
+        "name": deck["name"],
+        "display_name": display_name(deck["name"]),
+        "slide_count": deck["slide_count"],
+        "file_hash": deck["file_hash"],
+        "cataloged_at": deck["cataloged_at"],
+        "updated_at": deck["updated_at"],
+    }
 
 
 @router.get("/api/decks")
@@ -947,6 +991,16 @@ async def upload_deck(
     dest_path = os.path.join(uploads_dir, safe_name)
 
     content = await file.read()
+    max_bytes = getattr(request.app.state, "max_upload_bytes", 0) or 0
+    if max_bytes > 0 and len(content) > max_bytes:
+        # Backstop for chunked uploads that bypass the Content-Length middleware.
+        return JSONResponse(
+            {"error": f"Upload exceeds maximum size of {max_bytes} bytes "
+                      f"({max_bytes // (1024 * 1024)} MB).",
+             "max_bytes": max_bytes,
+             "observed_bytes": len(content)},
+            status_code=413,
+        )
     with open(dest_path, 'wb') as fh:
         fh.write(content)
 
@@ -1267,6 +1321,16 @@ async def upload_deck_stream(
     dest_path = os.path.join(uploads_dir, safe_name)
 
     content = await file.read()
+    max_bytes = getattr(request.app.state, "max_upload_bytes", 0) or 0
+    if max_bytes > 0 and len(content) > max_bytes:
+        # Backstop for chunked uploads that bypass the Content-Length middleware.
+        return JSONResponse(
+            {"error": f"Upload exceeds maximum size of {max_bytes} bytes "
+                      f"({max_bytes // (1024 * 1024)} MB).",
+             "max_bytes": max_bytes,
+             "observed_bytes": len(content)},
+            status_code=413,
+        )
     with open(dest_path, 'wb') as fh:
         fh.write(content)
 

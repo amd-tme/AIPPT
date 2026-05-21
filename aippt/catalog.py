@@ -625,6 +625,33 @@ def get_deck_by_id(deck_id: int, db_path: str = "slides.db") -> Optional[Dict]:
     return dict(row) if row else None
 
 
+def get_deck_by_file_hash(sha256: str, db_path: str = "slides.db") -> Optional[Dict]:
+    """Return deck metadata for the deck whose ``file_hash`` matches ``sha256``.
+
+    Used by the SPA upload-pre-check endpoint to detect duplicates *before*
+    the user re-uploads a deck that's already cataloged. ``decks.file_hash``
+    has an index (see ``schema.sql``) so this is O(log n).
+
+    Args:
+        sha256: Lowercase 64-character hex SHA-256 of the file's raw bytes.
+        db_path: Path to the SQLite database.
+
+    Returns:
+        A dict of deck metadata, or None if no deck has that hash. The
+        returned shape mirrors ``get_deck_by_id``.
+    """
+    conn = get_db(db_path)
+    row = conn.execute(
+        "SELECT id, name, file_path, file_hash, slide_count, author, "
+        "cataloged_at, updated_at, subject, description, source_script_path, "
+        "source_engine, source_theme, outline_path, source_generated_at "
+        "FROM decks WHERE file_hash = ? LIMIT 1",
+        (sha256,),
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
 def resolve_deck(identifier: str, db_path: str = "slides.db"):
     """Look up a deck by ID (integer) or name (case-insensitive partial match).
 
