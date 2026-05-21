@@ -162,6 +162,9 @@ def deck_path(tmp_path):
     return p
 
 
+ADMIN_HEADERS = {"Authorization": "Bearer tok", "X-AIPPT-NTID": "admin"}
+
+
 @pytest.fixture
 def client(tmp_path, deck_path):
     db_path = str(tmp_path / "logs.db")
@@ -170,6 +173,9 @@ def client(tmp_path, deck_path):
         db_path=db_path, uploads_dir=str(tmp_path / "u"),
         images_dir=str(tmp_path / "img"),
     )
+    # /api/logs is admin-gated under v1; configure a synthetic admin NTID
+    # so the existing log-buffer assertions remain meaningful.
+    app.state.admin_ntids = {"admin"}
     return TestClient(app)
 
 
@@ -188,7 +194,7 @@ class TestLogsRoute:
 
         resp = client.get(
             "/api/logs?logger_prefix=aippt.test.routes",
-            headers={"Authorization": "Bearer tok"},
+            headers=ADMIN_HEADERS,
         )
         assert resp.status_code == 200
         body = resp.json()
@@ -200,7 +206,7 @@ class TestLogsRoute:
         poll = client.get(
             f"/api/logs?since={body['next_cursor']}"
             f"&logger_prefix=aippt.test.routes",
-            headers={"Authorization": "Bearer tok"},
+            headers=ADMIN_HEADERS,
         ).json()
         assert poll["count"] == 0
 
@@ -209,7 +215,7 @@ class TestLogsRoute:
         poll2 = client.get(
             f"/api/logs?since={body['next_cursor']}"
             f"&logger_prefix=aippt.test.routes",
-            headers={"Authorization": "Bearer tok"},
+            headers=ADMIN_HEADERS,
         ).json()
         assert [r["message"] for r in poll2["records"]] == ["test-marker-CCC"]
 
@@ -218,7 +224,7 @@ class TestLogsRoute:
         logging.getLogger("aippt.test.level").error("HIGH")
         resp = client.get(
             "/api/logs?level=ERROR&logger_prefix=aippt.test.level",
-            headers={"Authorization": "Bearer tok"},
+            headers=ADMIN_HEADERS,
         )
         msgs = [r["message"] for r in resp.json()["records"]]
         assert "HIGH" in msgs
@@ -227,7 +233,7 @@ class TestLogsRoute:
     def test_limit_clamped_to_capacity(self, client):
         resp = client.get(
             "/api/logs?limit=999999",
-            headers={"Authorization": "Bearer tok"},
+            headers=ADMIN_HEADERS,
         )
         body = resp.json()
         # Limit clamped to handler capacity; never errors.
@@ -243,7 +249,7 @@ class TestLogsRoute:
         )
         resp = client.get(
             "/api/logs?logger_prefix=aippt.test.scrub",
-            headers={"Authorization": "Bearer tok"},
+            headers=ADMIN_HEADERS,
         )
         all_text = " ".join(r["message"] for r in resp.json()["records"])
         assert "ey-very-real-token-xxx" not in all_text, (
@@ -260,9 +266,10 @@ class TestLogsRoute:
             db_path=db_path, uploads_dir=str(tmp_path / "u"),
             images_dir=str(tmp_path / "img"), view_only=True,
         )
+        app.state.admin_ntids = {"admin"}
         vo_client = TestClient(app)
         resp = vo_client.get(
             "/api/logs",
-            headers={"Authorization": "Bearer tok"},
+            headers=ADMIN_HEADERS,
         )
         assert resp.status_code == 200

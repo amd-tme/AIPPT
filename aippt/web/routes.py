@@ -843,6 +843,98 @@ def _ntid_or_400(request: Request):
         return "", JSONResponse({"error": str(exc)}, status_code=400)
 
 
+def _bearer_identity_unverified(request: Request) -> str:
+    """Best-effort identity extraction from the Bearer JWT, **without**
+    signature verification. For audit logging only — never use to gate.
+
+    Returns a short string like ``"upn:melliott@amd.com"`` or
+    ``"oid:1234-..."`` for the audit log when an admin action fires. Returns
+    ``"unparseable"`` if the Bearer isn't a JWT (some Graph tokens aren't),
+    or ``"absent"`` if no Bearer is present at all.
+
+    The point of logging this alongside the (trusted) X-AIPPT-NTID is
+    impersonation detection: if a user with Bearer token for ``jdoe`` calls
+    a DELETE with ``X-AIPPT-NTID: melliott``, we get a paper trail to
+    investigate from. We do not block on the discrepancy because in v1 the
+    NTID header is the gate (per design), but the audit log makes the
+    weakness recoverable.
+    """
+    import base64
+    import json as _json
+
+    token = _extract_bearer_token(request)
+    if not token:
+        return "absent"
+
+    parts = token.split(".")
+    if len(parts) != 3:
+        return "unparseable"
+
+    try:
+        padded = parts[1] + "=" * (-len(parts[1]) % 4)
+        payload = _json.loads(base64.urlsafe_b64decode(padded))
+    except Exception:
+        return "unparseable"
+
+    if not isinstance(payload, dict):
+        return "unparseable"
+
+    for key in ("upn", "preferred_username", "unique_name", "oid", "sub"):
+        val = payload.get(key)
+        if isinstance(val, str) and val:
+            return f"{key}:{val}"
+    return "unparseable"
+
+
+def _is_admin(request: Request) -> bool:
+    """Admin-tier v1 gate. True iff: Bearer present, X-AIPPT-NTID is well-
+    formed, and the NTID is in ``app.state.admin_ntids`` (sourced from
+    gateway.yaml ``admin_ntids:``).
+
+    This is the v1 design — see ``aippt.config.load_admin_ntids`` for the
+    threat model. Callers should also short-circuit on view-only mode before
+    asking; admin actions all mutate state, so view-only deployments have
+    no admins by definition.
+    """
+    if not _extract_bearer_token(request):
+        return False
+    try:
+        ntid = _extract_ntid_header(request)
+    except InvalidNtid:
+        return False
+    if not ntid:
+        return False
+    admins = getattr(request.app.state, "admin_ntids", set()) or set()
+    return ntid in admins
+
+
+def _require_admin(request: Request, action: str):
+    """Convert ``_is_admin`` into a 403 JSONResponse on failure and emit an
+    audit log line on success or denial. Returns ``None`` on success (caller
+    may proceed) or a ``JSONResponse`` on failure (caller must return it).
+
+    The audit line records ``X-AIPPT-NTID`` (claimed) and the Bearer-derived
+    identity (unverified) so impersonation attempts are recoverable from
+    ``/api/logs`` even though the gate itself trusts the header.
+    """
+    claimed_ntid = request.headers.get("X-AIPPT-NTID", "").strip() or "<absent>"
+    bearer_id = _bearer_identity_unverified(request)
+    if _is_admin(request):
+        logger.info(
+            "admin_action action=%s ntid=%s bearer_identity_unverified=%s",
+            action, claimed_ntid, bearer_id,
+        )
+        return None
+    logger.warning(
+        "admin_denied action=%s ntid=%s bearer_identity_unverified=%s",
+        action, claimed_ntid, bearer_id,
+    )
+    return JSONResponse(
+        {"error": "Admin access required for this endpoint."},
+        status_code=403,
+    )
+
+
 async def _read_json_body_or_400(request: Request):
     """Parse the request body as JSON; return ({}, None) when empty,
     (body, None) on success, or ({}, JSONResponse(400)) for malformed input.
@@ -919,6 +1011,31 @@ async def auth_microsoft_poll(request: Request):
             {"error": exc.message, "code": exc.error_code},
             status_code=_user_auth_error_status(exc),
         )
+
+
+@router.get('/api/auth/whoami')
+async def auth_whoami(request: Request):
+    """API: Identity + capabilities the SPA can use to gate admin UI.
+
+    Returns the caller's signed-in state (Bearer present), the claimed
+    NTID from ``X-AIPPT-NTID`` (whatever the SPA sent, validated against
+    the allowlist regex; empty if absent or malformed), and whether the
+    caller is recognized as an admin under the v1 NTID-allowlist rules.
+
+    This is the SPA's hint endpoint for showing/hiding admin controls.
+    The actual gate runs server-side on each admin endpoint -- a malicious
+    client that hides whoami's response and still calls DELETE gets 403.
+    """
+    signed_in = bool(_extract_bearer_token(request))
+    try:
+        ntid = _extract_ntid_header(request)
+    except InvalidNtid:
+        ntid = ""
+    return {
+        "signed_in": signed_in,
+        "ntid": ntid,
+        "is_admin": _is_admin(request),
+    }
 
 
 @router.post('/api/auth/microsoft/refresh')
@@ -1471,9 +1588,10 @@ async def get_logs(request: Request):
     """API: return recent in-memory application log records.
 
     Captures land in the ring buffer attached during ``create_app``; this
-    endpoint is read-only triage, so it works in view-only deployments and
-    requires a Bearer token only to keep the unauthenticated surface area
-    small. Bearer tokens themselves are scrubbed by
+    endpoint is read-only triage that surfaces server-internal state
+    (including admin-action audit lines), so it is admin-gated as well as
+    Bearer-gated. Allowed in view-only deployments because it has no
+    mutating side effects. Bearer tokens themselves are scrubbed by
     ``install_authorization_scrub`` before they reach the buffer.
 
     Query params: ``limit`` (1-2000, default 200), ``level`` (DEBUG/INFO/
@@ -1485,6 +1603,9 @@ async def get_logs(request: Request):
             {"error": "Microsoft sign-in required to view logs."},
             status_code=401,
         )
+    denied = _require_admin(request, action="get_logs")
+    if denied is not None:
+        return denied
 
     buffer = getattr(request.app.state, "log_buffer", None)
     if buffer is None:
@@ -1526,8 +1647,9 @@ async def get_logs(request: Request):
 async def remove_deck(deck_id: int, request: Request):
     """API: Delete a deck (cascade) and purge its rendered images.
 
-    Bearer-token gated to match upload. ``view_only`` deployments reject
-    with 403. ``purge_images=false`` keeps the PNG dir; default purges.
+    Admin-gated (NTID allowlist in ``gateway.yaml`` ``admin_ntids:``) on top
+    of the Bearer requirement. ``view_only`` deployments reject with 403.
+    ``purge_images=false`` keeps the PNG dir; default purges.
     """
     if getattr(request.app.state, "view_only", False):
         return JSONResponse(
@@ -1539,6 +1661,9 @@ async def remove_deck(deck_id: int, request: Request):
             {"error": "Microsoft sign-in required to delete decks."},
             status_code=401,
         )
+    denied = _require_admin(request, action=f"delete_deck:{deck_id}")
+    if denied is not None:
+        return denied
 
     db_path = request.app.state.db_path
     images_base = request.app.state.images_dir

@@ -474,6 +474,67 @@ def resolve_path(relative_path: str, base_dir: Optional[str] = None) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Admin tier (gateway.yaml `admin_ntids` list)
+# ---------------------------------------------------------------------------
+
+
+def load_admin_ntids(config_path: Optional[str] = None) -> set:
+    """Return the set of NTIDs treated as admins for this deployment.
+
+    Looks for a top-level ``admin_ntids`` list in ``gateway.yaml``::
+
+        admin_ntids:
+          - melliott
+          - jdoe
+
+    Returns an empty set when the file is missing, the key is absent, or
+    the value is not a list. Each entry is stripped; entries that don't
+    match the same ``[A-Za-z0-9._-]+`` allowlist used for the
+    ``X-AIPPT-NTID`` header are silently dropped (a malformed entry in
+    config shouldn't crash the server).
+
+    This is the v1 admin tier: an allowlist that the server trusts in
+    combination with a valid Microsoft Bearer token. Audit logs record
+    both the X-AIPPT-NTID and a Bearer-derived identity claim so
+    impersonation attempts (claiming someone else's NTID via a
+    localStorage edit) are recoverable from logs even though the gate
+    itself trusts the client-supplied header. Upgrade path to AAD-groups-
+    based roles is the original M2 admin-tier PRD.
+    """
+    import re as _re
+
+    if not config_path or not HAS_YAML:
+        return set()
+
+    p = Path(config_path)
+    if not p.exists():
+        return set()
+
+    try:
+        with p.open(encoding="utf-8") as fh:
+            data = yaml.safe_load(fh)
+    except Exception:
+        return set()
+
+    if not isinstance(data, dict):
+        return set()
+
+    raw = data.get("admin_ntids")
+    if not isinstance(raw, list):
+        return set()
+
+    pattern = _re.compile(r"^[A-Za-z0-9._-]+$")
+    out: set = set()
+    for entry in raw:
+        if not isinstance(entry, str):
+            continue
+        v = entry.strip()
+        if pattern.match(v):
+            out.add(v)
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Upload configuration (gateway.yaml `upload` block)
 # ---------------------------------------------------------------------------
 

@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
-from aippt.config import load_sharepoint_config, load_upload_config, DEFAULT_MAX_UPLOAD_MB
+from aippt.config import load_sharepoint_config, load_upload_config, load_admin_ntids, DEFAULT_MAX_UPLOAD_MB
 from aippt.web.log_buffer import install_ring_buffer
 from aippt.web.logging_filter import install_authorization_scrub
 from aippt.web.middleware import UploadSizeLimitMiddleware
@@ -103,6 +103,11 @@ def create_app(db_path: str = "slides.db", gateway_config: str = None, uploads_d
         app.state.max_upload_bytes = max_upload_mb * 1024 * 1024
     else:
         app.state.max_upload_bytes = load_upload_config(gateway_config)
+
+    # Admin tier v1: NTID allowlist from gateway.yaml. Empty set means no
+    # admins are configured; admin-gated endpoints reject everyone. See
+    # aippt.config.load_admin_ntids for the threat model.
+    app.state.admin_ntids = load_admin_ntids(gateway_config)
 
     app.add_middleware(UploadSizeLimitMiddleware)
 

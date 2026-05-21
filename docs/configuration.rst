@@ -186,6 +186,39 @@ Override per-instance with ``aippt serve --max-upload-mb N``. For
 container deployments, raise the matching ingress annotation (e.g.
 ``nginx.ingress.kubernetes.io/proxy-body-size: 50m``) to the same value.
 
+Admin Tier (v1)
+^^^^^^^^^^^^^^^
+
+A top-level ``admin_ntids`` list in ``gateway.yaml`` controls who can
+hit admin-gated endpoints (``DELETE /api/decks/{id}``,
+``GET /api/logs``) on top of the usual Bearer-token requirement:
+
+.. code-block:: yaml
+
+    admin_ntids:
+      - melliott
+      - jdoe
+
+Entries must match the same ``[A-Za-z0-9._-]+`` allowlist enforced on
+the ``X-AIPPT-NTID`` header; malformed entries are silently dropped at
+load time. An empty list (or omitted block) denies everyone -- useful
+for fully view-only deployments.
+
+**Threat model.** The gate trusts the ``X-AIPPT-NTID`` header for
+membership checks, which a signed-in user could edit via
+``localStorage.aippt_ntid``. Every admin action (allowed or denied)
+emits an audit log line that records both the claimed NTID and a
+best-effort identity claim parsed (unverified) from the Bearer JWT, so
+impersonation attempts surface in ``GET /api/logs``:
+
+.. code-block:: text
+
+    admin_action  action=delete_deck:42  ntid=melliott  bearer_identity_unverified=upn:jdoe@amd.com
+
+This v1 ships ahead of the original group-based admin design (which
+requires the AAD ``groups`` claim in AIPPT's App Registration -- a
+pending external dependency). Upgrade when that lands.
+
 Environment Variables
 ---------------------
 

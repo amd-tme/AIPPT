@@ -24,13 +24,22 @@ def deck_path(tmp_path):
     return path
 
 
+ADMIN_HEADERS = {"Authorization": "Bearer tok", "X-AIPPT-NTID": "admin"}
+
+
 @pytest.fixture
 def client(tmp_path, deck_path):
-    """Create a TestClient with a cataloged deck."""
+    """Create a TestClient with a cataloged deck.
+
+    The app pre-loads ``admin_ntids = {"admin"}`` so admin-gated endpoints
+    (DELETE /api/decks/{id}, GET /api/logs) accept requests carrying
+    ``ADMIN_HEADERS``. Non-admin endpoints are unaffected.
+    """
     db_path = str(tmp_path / "test.db")
     uploads_dir = str(tmp_path / "uploads")
     catalog_deck(deck_path, db_path=db_path)
     app = create_app(db_path=db_path, uploads_dir=uploads_dir)
+    app.state.admin_ntids = {"admin"}
     return TestClient(app)
 
 
@@ -763,7 +772,7 @@ class TestDeleteDeckRoute:
         # Fixture cataloged a 1-slide deck as id=1.
         resp = client.delete(
             "/api/decks/1",
-            headers={"Authorization": "Bearer tok"},
+            headers=ADMIN_HEADERS,
         )
         assert resp.status_code == 200
         body = resp.json()
@@ -783,7 +792,7 @@ class TestDeleteDeckRoute:
     def test_delete_missing_returns_404(self, client):
         resp = client.delete(
             "/api/decks/999",
-            headers={"Authorization": "Bearer tok"},
+            headers=ADMIN_HEADERS,
         )
         assert resp.status_code == 404
 
@@ -825,10 +834,11 @@ class TestDeleteDeckRoute:
             uploads_dir=str(tmp_path / "u"),
             images_dir=images_dir,
         )
+        app.state.admin_ntids = {"admin"}
         purge_client = TestClient(app)
         resp = purge_client.delete(
             "/api/decks/1",
-            headers={"Authorization": "Bearer tok"},
+            headers=ADMIN_HEADERS,
         )
         assert resp.status_code == 200
         assert resp.json()["images_purged"] is True
@@ -858,10 +868,11 @@ class TestDeleteDeckRoute:
             uploads_dir=str(tmp_path / "u"),
             images_dir=images_dir,
         )
+        app.state.admin_ntids = {"admin"}
         keep_client = TestClient(app)
         resp = keep_client.delete(
             "/api/decks/1?purge_images=false",
-            headers={"Authorization": "Bearer tok"},
+            headers=ADMIN_HEADERS,
         )
         assert resp.status_code == 200
         assert resp.json()["images_purged"] is False

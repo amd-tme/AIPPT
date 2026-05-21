@@ -326,11 +326,23 @@ A few endpoints exist for ops triage and have no UI surface yet:
 - ``GET /api/decks/by-hash/{sha256}`` -- public. Returns existing deck
   metadata for a given SHA-256 file hash, or 404. Used by the
   duplicate-upload pre-check; safe to call directly when scripting.
+- ``GET /api/auth/whoami`` -- returns
+  ``{signed_in, ntid, is_admin}``. The SPA will use this to gate
+  admin-only UI controls (delete button, log panel) when those land.
+  The actual admin gate runs server-side on each admin endpoint --
+  ``is_admin: true`` in the response is a hint, not a permission.
 - ``GET /api/logs`` -- in-memory ring buffer (capacity 2000) of recent log
-  records. Bearer-gated, allowed in view-only mode. Supports ``limit``,
-  ``level``, ``since`` (cursor polling), and ``logger_prefix`` query
-  parameters. Useful on the SLAI platform where ``kubectl logs`` is not
-  exposed to deck authors.
-- ``DELETE /api/decks/{id}?purge_images=true|false`` -- bearer-gated deck
-  removal. Rejected in view-only mode. Not yet surfaced as a UI control
-  -- use ``aippt decks delete`` from the CLI for now.
+  records. **Admin-gated** (in addition to the Bearer requirement);
+  allowed in view-only mode because it has no mutating side effects.
+  Supports ``limit``, ``level``, ``since`` (cursor polling), and
+  ``logger_prefix`` query parameters. Useful on the SLAI platform where
+  ``kubectl logs`` is not exposed to deck authors. See
+  :doc:`configuration` for the ``admin_ntids`` list.
+- ``DELETE /api/decks/{id}?purge_images=true|false`` -- **admin-gated**
+  deck removal. Rejected in view-only mode. Not yet surfaced as a UI
+  control -- use ``aippt decks delete`` from the CLI for now.
+
+Admin actions emit an audit log line that records both the claimed
+``X-AIPPT-NTID`` and a best-effort identity parsed from the Bearer JWT
+(unverified -- audit only). See :doc:`configuration` for the threat
+model.

@@ -19,11 +19,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `aippt serve --max-upload-mb N` flag and `upload.max_size_mb` key in `gateway.yaml` for runtime override of the size cap. CLI flag wins; default is 50.
 - SPA upload modal pre-checks `file.size` against the configured cap and shows a toast when oversized, instead of letting the request fail with `ERR_HTTP2_PROTOCOL_ERROR` deep in the console.
 - SPA computes the SHA-256 of the chosen deck (`crypto.subtle.digest`) and queries `/api/decks/by-hash` before initiating the multipart POST; if the deck is already cataloged, an **Already in catalog** dialog appears with a **View existing** action and the upload never starts.
+- Admin tier v1: `admin_ntids:` list in `gateway.yaml` controls who can hit admin-gated endpoints. The server gate trusts the `X-AIPPT-NTID` header for membership checks; every admin action (allowed or denied) emits an `admin_action` / `admin_denied` audit log line recording both the claimed NTID and a best-effort identity claim parsed (unverified) from the Bearer JWT, so impersonation attempts are recoverable from `/api/logs`. Ships ahead of the original group-based design (which is gated on the AAD `groups` claim in AIPPT's App Registration — pending external dependency). See `docs/configuration.rst` § "Admin Tier (v1)" for the full threat model.
+- `GET /api/auth/whoami` — returns `{signed_in, ntid, is_admin}`. The SPA will use this to gate admin-only UI controls (delete button, log panel) when those land; the actual admin gate runs server-side on each admin endpoint, so `is_admin: true` in the response is a hint not a permission.
 
 ### Changed
 
 - `deploy/slai-app-prod/aippt/z-ingress.yaml` carries `nginx.ingress.kubernetes.io/proxy-body-size: 50m` so the platform ingress no longer rejects production decks (most enterprise templates are 2-15 MB) at the 1 MB nginx default.
-
+- `DELETE /api/decks/{id}` now requires `X-AIPPT-NTID` to be in `admin_ntids` (was Bearer-only). Non-admin callers get 403; the view-only deployment check still runs first.
+- `GET /api/logs` now requires admin (was Bearer-only). Still allowed in view-only mode because the endpoint has no mutating side effects.
 - `signOut()` now also clears `localStorage.aippt_ntid` so the next sign-in re-prompts for an NTID.
 
 ### Removed

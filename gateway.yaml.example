@@ -38,3 +38,17 @@ sharepoint:
 # error. Default 50. Override per-instance with `aippt serve --max-upload-mb N`.
 upload:
   max_size_mb: 50
+
+# Admin tier v1: NTID allowlist. Users on this list get access to admin-
+# gated endpoints (DELETE /api/decks/{id}, GET /api/logs) on top of the
+# usual Bearer-token requirement. The server trusts the X-AIPPT-NTID
+# header for membership checks; audit logs record both the claimed NTID
+# and a Bearer-derived identity claim (best-effort, unverified) so
+# impersonation attempts are recoverable from /api/logs.
+#
+# Leave the list empty (or omit the block entirely) to deny everyone --
+# useful for fully view-only deployments where no admin actions ever fire.
+# Upgrade path to AAD-group-based roles is tracked under the original M2
+# PRD.
+admin_ntids:
+  - melliott
