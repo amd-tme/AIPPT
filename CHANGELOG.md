@@ -8,6 +8,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Web UI: Aurora theme** — a third theme mode (alongside Dark and Light)
+  that renders four animated background blobs (teal, purple, sky-blue, warm
+  magenta) with organic `border-radius` morphing and sinusoidal
+  `cubic-bezier(0.37, 0, 0.63, 1)` easing. Toggled via the theme switcher
+  in the nav bar; selection persists to `localStorage`.
+- **Web UI: AMD favicon** — multi-size `.ico` (16/32/48 px) using the white
+  AMD arrow symbol on a dark background, served from `static/favicon.ico`.
+- **Web UI: AMD nav bar** — AMD wordmark and teal glow-line divider in the
+  nav bar. Active nav item highlighted with teal underline.
+- **Web UI: destructive button feedback** — "Clear all" in the tag sidebar
+  now emits a quick red flash animation on click instead of the default
+  browser blue focus ring.
+
 - `AGENTS.md` at repo root as the vendor-neutral entry point for AI
   coding assistants (Claude Code, Cursor, OpenAI Codex, Aider, Goose,
   Gemini CLI). Points at `CONTRIBUTING.md` for process and `CLAUDE.md`
