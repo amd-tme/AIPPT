@@ -300,3 +300,32 @@ View-Only Mode
 
 When neither a gateway config nor direct API keys are detected, the web UI
 automatically enters view-only mode.
+
+Storage Backend
+^^^^^^^^^^^^^^^
+
+By default AIPPT stores library assets (uploaded/generated decks, rendered
+slide images, exported output) and the SQLite catalog on the local
+filesystem, rooted at the data directory. For container deployments where
+that directory is ephemeral, the ``s3`` backend persists everything to
+S3-compatible object storage (MinIO) instead.
+
+- ``AIPPT_STORAGE`` -- ``fs`` (default) or ``s3``. Selects the storage
+  backend. Equivalent to ``serve --storage``.
+
+When ``AIPPT_STORAGE=s3`` the following configure the MinIO client. The
+access/secret keys must arrive via a Kubernetes ``Secret`` (``secretKeyRef``)
+in production — never commit them to a repo file::
+
+    export AIPPT_STORAGE='s3'
+    export MINIO_ENDPOINT='s3minio.amd.com:21000'   # S3 API host:port (not the :21001 console)
+    export MINIO_BUCKET='ogmatic-zoo'
+    export MINIO_PREFIX='asic/aippt/'               # key namespace (default shown)
+    export MINIO_ACCESS_KEY='...'
+    export MINIO_SECRET_KEY='...'
+    export MINIO_CA_BUNDLE='/etc/ssl/aippt/ca-bundle.pem'  # optional CA bundle for TLS
+    export MINIO_SECURE='1'                          # set 0/false to disable TLS
+
+In ``s3`` mode the catalog is restored from the ``catalog/slides.db`` snapshot
+on startup and a debounced snapshot is pushed back after catalog writes; the
+``fs`` backend keeps the catalog on the local volume as before.

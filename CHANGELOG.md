@@ -8,6 +8,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Object-storage persistence backend (phase 1: abstraction + catalog
+  snapshot/restore).** New `aippt/storage.py` defines a `Storage` protocol with
+  two backends: `FsStorage` (local filesystem, the default, byte-for-byte
+  equivalent to historical behavior) and `S3Storage` (S3-compatible object
+  storage via `minio-py`, keys namespaced under `asic/aippt/`). Selected by the
+  `AIPPT_STORAGE=fs|s3` config switch (env var or `serve --storage`), wired
+  through `create_app` onto `app.state.storage`. The s3 backend reads MinIO
+  coordinates from `MINIO_ENDPOINT` / `MINIO_BUCKET` / `MINIO_PREFIX` /
+  `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY` / `MINIO_CA_BUNDLE` / `MINIO_SECURE`;
+  credentials never live in a repo file. Default `fs` requires no new
+  dependency (minio is imported lazily).
+- `catalog.snapshot_db()` / `catalog.restore_db()` persist the SQLite catalog
+  to/from object storage as a single consistent file using SQLite's online
+  backup API (WAL-safe). `SnapshotScheduler` debounces snapshots so a burst of
+  catalog writes coalesces into one push. In s3 mode the web app restores the
+  catalog from `catalog/slides.db` on startup (before any request opens the DB)
+  and installs the scheduler, which is flushed on shutdown; catalog commits
+  trigger a debounced snapshot via a `get_db` connection hook. In fs mode the
+  hook is inert and behavior is unchanged.
+- `serve --storage {fs,s3}` flag, overriding the `AIPPT_STORAGE` env var.
 - `AGENTS.md` at repo root as the vendor-neutral entry point for AI
   coding assistants (Claude Code, Cursor, OpenAI Codex, Aider, Goose,
   Gemini CLI). Points at `CONTRIBUTING.md` for process and `CLAUDE.md`
