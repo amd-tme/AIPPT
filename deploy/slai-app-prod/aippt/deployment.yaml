@@ -44,16 +44,18 @@ spec:
           ports:
             - containerPort: 8000
           # Requests/limits are mandatory on the platform (admission rejects
-          # pods without them). Sized above the minimal example for AIPPT's
-          # deck/image processing (python-pptx + pdftoppm/cairosvg render +
-          # MinIO streaming) — matches the known-admitted ssw-skills-catalog
-          # profile (1 cpu / 1Gi limit) to stay within the namespace LimitRange.
+          # pods without them). CPU limit held to 250m to fit the
+          # slai-app-prod namespace quota (limits.cpu 8 total, ~7250m already
+          # in use as of 2026-06-22 pending an increase to 16). Memory kept at
+          # 1Gi for AIPPT's deck/image processing (python-pptx + pdftoppm/
+          # cairosvg render + MinIO streaming). Revisit CPU once the quota
+          # bump lands if render latency suffers.
           resources:
             requests:
               cpu: 100m
               memory: 256Mi
             limits:
-              cpu: "1"
+              cpu: 250m
               memory: 1Gi
           env:
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
