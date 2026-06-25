@@ -27,6 +27,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     `force_render` support.
   - CLI: `aippt preview <script> [--once|--watch]` for terminal-level preview.
   - 34 unit + integration tests covering all new code paths.
+- **Live Preview panel** in the web UI: pick a slides-as-code script
+  (`.js`/`.mjs`/`.py`) from the script picker and watch its rendered thumbnails
+  update live as you edit in your IDE. Per-slide hash diffing means only changed
+  slides reload. Status badge tracks `Idle → Watching → Rendering → Updated`.
+  Error overlay shows `stage`, exit code, and `stderr_tail` when a render fails;
+  last-good thumbnails stay visible (dimmed). Auto-reconnects on WebSocket drop
+  with exponential backoff. Hidden entirely in view-only mode.
 
 ### Fixed
 

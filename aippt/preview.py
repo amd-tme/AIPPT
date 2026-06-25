@@ -91,7 +91,7 @@ class Renderer:
         """
         t0 = time.monotonic()
         script = Path(script_path).resolve()
-        out = Path(out_dir)
+        out = Path(out_dir).resolve()
         out.mkdir(parents=True, exist_ok=True)
 
         # --- Step 1: run the script ---
@@ -118,12 +118,15 @@ class Renderer:
             )
 
         # --- Step 3: soffice PPTX → PDF ---
+        # Use --outdir . (relative) because WSL2 LibreOffice misinterprets
+        # absolute paths passed to --outdir and nests them inside cwd.
+        # cwd=out means "." resolves to the correct output directory.
         pdf_result = self._run(
             [
                 "libreoffice", "--headless",
                 "--convert-to", "pdf",
                 str(pptx),
-                "--outdir", str(out),
+                "--outdir", ".",
             ],
             cwd=str(out),
             env={**os.environ, "HOME": "/tmp"},
