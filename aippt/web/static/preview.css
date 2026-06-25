@@ -1,0 +1,233 @@
+/* Live Preview panel styles */
+
+/* ── Toolbar ─────────────────────────────────────────────────────────── */
+.preview-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.preview-toolbar select,
+.preview-toolbar input[type="text"] {
+    flex: 1 1 200px;
+    min-width: 0;
+    margin: 0;
+    padding: 0.4rem 0.6rem;
+    font-size: 0.875rem;
+}
+
+.preview-toolbar button {
+    margin: 0;
+    padding: 0.4rem 0.9rem;
+    font-size: 0.875rem;
+    width: auto;
+}
+
+/* ── Status badge ────────────────────────────────────────────────────── */
+.preview-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.65rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    white-space: nowrap;
+    border: 1px solid transparent;
+}
+
+.preview-status::before {
+    content: '';
+    display: inline-block;
+    width: 0.55rem;
+    height: 0.55rem;
+    border-radius: 50%;
+    background: currentColor;
+    flex-shrink: 0;
+}
+
+.preview-status--idle {
+    color: var(--pico-muted-color, #888);
+    border-color: var(--pico-muted-border-color, #555);
+}
+
+.preview-status--watching {
+    color: var(--pico-primary, #6c8ebf);
+    border-color: var(--pico-primary, #6c8ebf);
+}
+
+.preview-status--rendering {
+    color: #d4a017;
+    border-color: #d4a017;
+    animation: preview-pulse-badge 1.2s ease-in-out infinite;
+}
+
+.preview-status--updated {
+    color: #4caf74;
+    border-color: #4caf74;
+}
+
+.preview-status--error {
+    color: #e05252;
+    border-color: #e05252;
+}
+
+.preview-status--disconnected {
+    color: #e05252;
+    border-color: #e05252;
+    animation: preview-pulse-badge 1.5s ease-in-out infinite;
+}
+
+@keyframes preview-pulse-badge {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.5; }
+}
+
+/* ── Disclaimer ──────────────────────────────────────────────────────── */
+.preview-disclaimer {
+    font-size: 0.8rem;
+    color: var(--pico-muted-color, #888);
+    margin: 0 0 0.75rem 0;
+}
+
+/* ── Reconnect banner ────────────────────────────────────────────────── */
+#preview-reconnect-banner {
+    background: color-mix(in srgb, #e05252 15%, transparent);
+    border: 1px solid #e05252;
+    border-radius: var(--pico-border-radius, 4px);
+    padding: 0.4rem 0.75rem;
+    font-size: 0.85rem;
+    margin-bottom: 0.75rem;
+    color: #e05252;
+}
+
+/* ── Error overlay ───────────────────────────────────────────────────── */
+.preview-error {
+    border-left: 3px solid #e05252;
+    background: color-mix(in srgb, #e05252 10%, transparent);
+    border-radius: 0 var(--pico-border-radius, 4px) var(--pico-border-radius, 4px) 0;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    font-size: 0.875rem;
+}
+
+.preview-error-title {
+    font-weight: 700;
+    color: #e05252;
+    margin-bottom: 0.4rem;
+}
+
+.preview-error-stderr {
+    font-family: monospace;
+    font-size: 0.8rem;
+    white-space: pre-wrap;
+    word-break: break-all;
+    margin: 0;
+    max-height: 8rem;
+    overflow-y: auto;
+    opacity: 0.85;
+}
+
+/* ── Thumbnail grid ──────────────────────────────────────────────────── */
+.preview-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+}
+
+@media (max-width: 1199px) {
+    .preview-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 767px) {
+    .preview-grid { grid-template-columns: 1fr; }
+}
+
+/* ── Individual thumbnail card ───────────────────────────────────────── */
+.preview-thumb {
+    position: relative;
+    cursor: pointer;
+}
+
+.preview-thumb figure {
+    margin: 0;
+    border: 1px solid var(--pico-muted-border-color, #444);
+    border-radius: var(--pico-border-radius, 4px);
+    overflow: hidden;
+    background: var(--pico-card-background-color, #1e1e2e);
+    transition: border-color 0.15s;
+}
+
+.preview-thumb:hover figure {
+    border-color: var(--pico-primary, #6c8ebf);
+}
+
+.preview-thumb img {
+    display: block;
+    width: 100%;
+    height: auto;
+    transition: opacity 0.3s;
+    loading: lazy;
+}
+
+.preview-thumb img.dimmed {
+    opacity: 0.4;
+}
+
+/* Slide number badge */
+.preview-thumb figcaption {
+    font-size: 0.75rem;
+    color: var(--pico-muted-color, #888);
+    padding: 0.25rem 0.5rem;
+    text-align: center;
+    background: var(--pico-card-background-color, #1e1e2e);
+}
+
+/* Pulse on hash change */
+.preview-thumb.changed figure {
+    animation: preview-thumb-pulse 0.6s ease-out;
+}
+
+@keyframes preview-thumb-pulse {
+    0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--pico-primary, #6c8ebf) 60%, transparent); }
+    70%  { box-shadow: 0 0 0 6px transparent; }
+    100% { box-shadow: none; }
+}
+
+/* ── Empty state ─────────────────────────────────────────────────────── */
+.preview-empty {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: var(--pico-muted-color, #888);
+}
+
+.preview-empty p {
+    margin: 0.5rem 0;
+    font-size: 0.95rem;
+}
+
+/* ── Fullscreen detail dialog ────────────────────────────────────────── */
+#preview-detail-dialog {
+    max-width: 90vw;
+    max-height: 90vh;
+    padding: 1rem;
+}
+
+#preview-detail-dialog img {
+    display: block;
+    max-width: 100%;
+    max-height: calc(90vh - 5rem);
+    margin: 0 auto;
+}
+
+#preview-detail-nav {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 0.75rem;
+    font-size: 0.875rem;
+    color: var(--pico-muted-color, #888);
+}

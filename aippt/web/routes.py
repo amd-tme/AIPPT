@@ -1,4 +1,5 @@
 """API routes for the web UI."""
+import asyncio
 import json
 import logging
 import os
@@ -11,7 +12,7 @@ from typing import List
 
 logger = logging.getLogger(__name__)
 
-from fastapi import APIRouter, Request, UploadFile, File, Form
+from fastapi import APIRouter, Request, UploadFile, File, Form, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, StreamingResponse
 
 from aippt.catalog import (
@@ -2116,3 +2117,192 @@ async def remove_deck(deck_id: int, request: Request):
         "images_purged": purged_dir is not None,
         "images_dir": purged_dir,
     }
+
+
+# ---------------------------------------------------------------------------
+# Live preview endpoints  (Task 6 + Task 7)
+# ---------------------------------------------------------------------------
+
+
+def _preview_registry(request: Request):
+    registry = getattr(request.app.state, "preview_registry", None)
+    if registry is None:
+        raise RuntimeError("Preview registry not initialised")
+    return registry
+
+
+@router.post("/api/preview/sessions")
+async def create_preview_session(request: Request):
+    """Create a preview session for a slides-as-code script.
+
+    Body: ``{"script": "<path>"}``
+
+    Returns ``{"token": "...", "ws_url": "/ws/preview/<token>", "script": "..."}``
+    or 403 in view-only mode / when the script is outside the allow-list.
+    """
+    if getattr(request.app.state, "view_only", False):
+        return JSONResponse({"error": "Live preview is disabled in view-only mode"}, status_code=403)
+
+    body = await request.json()
+    script = body.get("script", "").strip()
+    if not script:
+        return JSONResponse({"error": "script path is required"}, status_code=400)
+
+    registry = _preview_registry(request)
+    try:
+        session = await registry.create(script)
+    except ValueError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=403)
+    except FileNotFoundError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=404)
+
+    return {
+        "token": session.token,
+        "ws_url": f"/ws/preview/{session.token}",
+        "script": session.script_path,
+    }
+
+
+@router.get("/api/preview/sessions/{token}")
+async def get_preview_session(token: str, request: Request):
+    """Return the current state of a preview session (polling fallback)."""
+    registry = _preview_registry(request)
+    session = registry.get(token)
+    if session is None:
+        return JSONResponse({"error": "Session not found"}, status_code=404)
+    return {"token": token, "script": session.script_path, "state": session.last_state}
+
+
+@router.delete("/api/preview/sessions/{token}")
+async def delete_preview_session(token: str, request: Request):
+    """Tear down a preview session and stop its watcher."""
+    registry = _preview_registry(request)
+    session = registry.get(token)
+    if session is None:
+        return JSONResponse({"error": "Session not found"}, status_code=404)
+    await registry.delete(token)
+    return {"status": "stopped", "token": token}
+
+
+@router.get("/api/preview/sessions/{token}/slides/{n}.jpg")
+async def get_preview_slide(token: str, n: int, request: Request):
+    """Serve a rendered slide JPEG for a preview session."""
+    registry = _preview_registry(request)
+    session = registry.get(token)
+    if session is None:
+        return JSONResponse({"error": "Session not found"}, status_code=404)
+
+    # Find the JPEG on disk from the last render result
+    state = session.last_state
+    slides = state.get("slides", [])
+    matched = next((s for s in slides if s.get("n") == n), None)
+    if matched is None:
+        return JSONResponse({"error": f"Slide {n} not yet rendered"}, status_code=404)
+
+    # Reconstruct path from out_dir
+    from pathlib import Path as _Path
+    img_path = _Path(session.out_dir) / f"slide-{n:02d}.jpg"
+    if not img_path.exists():
+        # pdftoppm may zero-pad differently; glob for it
+        candidates = list(_Path(session.out_dir).glob(f"slide*{n}*.jpg"))
+        if not candidates:
+            return JSONResponse({"error": "Image file not found on disk"}, status_code=404)
+        img_path = sorted(candidates)[0]
+
+    return FileResponse(str(img_path), media_type="image/jpeg",
+                        headers={"Cache-Control": "no-cache"})
+
+
+@router.get("/api/preview/scripts")
+async def list_preview_scripts(request: Request):
+    """Return discoverable slides-as-code scripts under output/ and examples/.
+
+    Used by the Live Preview UI to populate the script picker dropdown.
+    """
+    project_root = getattr(request.app.state, "project_root", os.getcwd())
+    search_dirs = [
+        os.path.join(project_root, "output"),
+        os.path.join(project_root, "examples"),
+    ]
+    results = []
+    seen = set()
+    for base in search_dirs:
+        base_path = Path(base)
+        if not base_path.is_dir():
+            continue
+        for ext in ("*.js", "*.mjs", "*.py"):
+            for p in sorted(base_path.rglob(ext)):
+                # Skip preview artifacts and node_modules
+                parts = set(p.parts)
+                if parts & {".preview", "node_modules", "__pycache__"}:
+                    continue
+                key = str(p.resolve())
+                if key in seen:
+                    continue
+                seen.add(key)
+                suffix = p.suffix.lower()
+                engine = "node" if suffix in (".js", ".mjs") else "python"
+                try:
+                    mtime = p.stat().st_mtime
+                except OSError:
+                    mtime = 0
+                results.append({
+                    "path": str(p),
+                    "name": p.name,
+                    "engine": engine,
+                    "mtime": mtime,
+                })
+    return results
+
+
+@router.websocket("/ws/preview/{token}")
+async def preview_websocket(token: str, websocket: WebSocket):
+    """WebSocket endpoint for live preview events.
+
+    On connect: replays the last known state so a fresh tab gets immediate
+    context. Subsequently forwards ``render_started``, ``render_complete``,
+    ``render_failed``, and ``watch_changed`` events.
+
+    Client may send ``{"action": "force_render"}`` or ``{"action": "cancel"}``.
+    """
+    registry = getattr(websocket.app.state, "preview_registry", None)
+    if registry is None:
+        await websocket.close(code=1011)
+        return
+
+    session = registry.get(token)
+    if session is None:
+        await websocket.close(code=4004)
+        return
+
+    await websocket.accept()
+    session.add_client(websocket)
+
+    # Replay last known state immediately
+    last = session.last_state
+    if last.get("event") and last["event"] != "idle":
+        try:
+            await websocket.send_json(last)
+        except Exception:
+            pass
+
+    try:
+        while True:
+            try:
+                data = await asyncio.wait_for(websocket.receive_json(), timeout=30)
+                action = (data or {}).get("action", "")
+                if action == "force_render":
+                    await session.force_render()
+                # "cancel" is a no-op for now; the watcher handles coalescing
+            except asyncio.TimeoutError:
+                # Send a keepalive ping
+                try:
+                    await websocket.send_json({"event": "ping"})
+                except Exception:
+                    break
+            except WebSocketDisconnect:
+                break
+            except Exception:
+                break
+    finally:
+        session.remove_client(websocket)
