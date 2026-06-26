@@ -42,6 +42,44 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   PptxViewJS bundle itself can't load, rather than showing a false success.
   Auto-reconnects on WebSocket drop with exponential backoff. Hidden entirely in
   view-only mode.
+- **Chat with a Deck or Slide** — multi-turn AI chat scoped to a whole deck
+  or a specific slide. A floating chat widget appears when browsing a deck;
+  click the 💬 FAB to open it. A **Chat** button in the slide detail modal
+  scopes the conversation to that slide. The LLM sees slide title, content,
+  and speaker notes; slide-scope chat also attaches the rendered thumbnail
+  image when the active model supports vision. Conversations survive page
+  reload (persisted in `chat_conversations` + `chat_messages`).
+- **Ask / Edit mode toggle** — the chat input row now shows an Ask / Edit
+  radio. In **Ask** mode the LLM is read-only (analysis, Q&A, summaries). In
+  **Edit** mode the LLM may propose structured patch blocks; these are
+  surfaced as a diff in the chat thread with **Apply** and **Reject** buttons.
+  No file is touched until the user explicitly clicks Apply.
+- **Apply / Reject / Undo flow** — proposed patches render as a before/after
+  diff directly in the message thread. Apply calls
+  `POST /api/chat/conversations/{id}/messages/{msg_id}/apply`; the applied
+  state is stored in `chat_messages.patch_applied_at` and shown as an **Undo**
+  button. Undo calls the matching `/revert` endpoint and logs the reversal.
+- **Slide scope dropdown** — the chat widget contains a "Scope" select
+  pre-populated with every slide in the deck. Choosing a slide directs the
+  LLM context to that slide's content only. Opening a slide from the grid
+  auto-scopes the dropdown to it.
+- **Patch engine** (`aippt/patch.py`) — structured find-and-replace edits
+  proposed by the LLM in fenced `patch` blocks. Patches are validated against
+  the live slide content before applying; every apply/revert is logged to
+  `.aippt/edit-history.jsonl` and the `edit_history` table.
+- **Streaming LLM** — `LLMClient.stream_text()` and
+  `stream_text_with_image()` yield text chunks for both Anthropic and
+  OpenAI-compatible providers, enabling real-time display of long responses.
+- **Chat REST + SSE endpoints** — `POST /api/chat/conversations/{id}/messages`
+  streams `chunk`, `patch_proposed`, `cancelled`, `done`, and `error` events.
+  Conversations CRUD at `/api/chat/conversations`. Apply/revert at
+  `/api/chat/conversations/{id}/messages/{msg_id}/apply|revert`.
+  Cancel in-flight stream at `/api/chat/conversations/{id}/cancel`.
+- **`aippt chat` CLI subcommand** — interactive REPL for chatting with a
+  cataloged deck from the terminal (with streaming output).
+- Chat features hidden automatically in view-only mode (`AIPPT_VIEW_ONLY=1`);
+  Edit mode endpoints return 403; the Edit radio and Chat modal button are
+  hidden client-side.
 
 ### Fixed
 

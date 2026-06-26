@@ -473,6 +473,160 @@ class LLMClient:
             raise
 
     # ------------------------------------------------------------------
+    # Streaming text generation
+    # ------------------------------------------------------------------
+
+    def stream_text(
+        self,
+        messages: list,
+        system_prompt: str = "You are a helpful assistant.",
+        max_tokens: int = 4096,
+        temperature: float = 0.7,
+    ):
+        """Stream text chunks from the LLM, yielding str fragments.
+
+        Args:
+            messages: List of ``{"role": ..., "content": ...}`` dicts.
+            system_prompt: System prompt string.
+            max_tokens: Maximum tokens to generate.
+            temperature: Sampling temperature.
+
+        Yields:
+            str: Each text fragment as it arrives from the provider.
+        """
+        try:
+            if self.model_config.provider == "anthropic":
+                with self.client.messages.stream(
+                    model=self.model,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    system=system_prompt,
+                    messages=messages,
+                ) as stream:
+                    for text in stream.text_stream:
+                        yield text
+            else:
+                with self.client.chat.completions.stream(
+                    model=self.model,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    messages=[{"role": "system", "content": system_prompt}] + messages,
+                ) as stream:
+                    for chunk in stream:
+                        delta = chunk.choices[0].delta.content
+                        if delta:
+                            yield delta
+        except Exception as exc:
+            logger.error("Error streaming text: %s", exc)
+            raise
+
+    def stream_text_with_image(
+        self,
+        messages: list,
+        image_path: str,
+        system_prompt: str = "You are a helpful assistant.",
+        max_tokens: int = 4096,
+        temperature: float = 0.7,
+    ):
+        """Stream text chunks for a conversation that includes a slide image.
+
+        The last user message has the image prepended to its content.  All
+        prior messages are passed verbatim so multi-turn history is preserved.
+
+        Args:
+            messages: List of ``{"role": ..., "content": ...}`` dicts. The
+                image is injected into the **last** user turn.
+            image_path: Path to the slide image file.
+            system_prompt: System prompt string.
+            max_tokens: Maximum tokens to generate.
+            temperature: Sampling temperature.
+
+        Yields:
+            str: Each text fragment as it arrives.
+
+        Raises:
+            ValueError: If the model does not support vision.
+            FileNotFoundError: If the image file does not exist.
+        """
+        if not self.model_config.supports_vision:
+            raise ValueError(
+                f"Model '{self.model}' does not support vision/multimodal input."
+            )
+        if not Path(image_path).exists():
+            raise FileNotFoundError(f"Image file not found: {image_path}")
+
+        try:
+            image_bytes, media_type = _prepare_image_for_api(image_path)
+            image_data = base64.b64encode(image_bytes).decode("utf-8")
+        except OSError as exc:
+            raise FileNotFoundError(
+                f"Failed to read image file '{image_path}': {exc}"
+            ) from exc
+
+        # Inject the image into the last user turn.
+        augmented = list(messages)
+        last_idx = next(
+            (i for i in range(len(augmented) - 1, -1, -1) if augmented[i]["role"] == "user"),
+            None,
+        )
+        if last_idx is None:
+            raise ValueError("messages must contain at least one user turn")
+
+        last_content = augmented[last_idx]["content"]
+
+        try:
+            if self.model_config.provider == "anthropic":
+                image_block = {
+                    "type": "image",
+                    "source": {"type": "base64", "media_type": media_type, "data": image_data},
+                }
+                if isinstance(last_content, str):
+                    augmented[last_idx] = {
+                        "role": "user",
+                        "content": [image_block, {"type": "text", "text": last_content}],
+                    }
+                else:
+                    augmented[last_idx] = {
+                        "role": "user",
+                        "content": [image_block] + list(last_content),
+                    }
+                with self.client.messages.stream(
+                    model=self.model,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    system=system_prompt,
+                    messages=augmented,
+                ) as stream:
+                    for text in stream.text_stream:
+                        yield text
+            else:
+                data_url = f"data:{media_type};base64,{image_data}"
+                image_block = {"type": "image_url", "image_url": {"url": data_url}}
+                if isinstance(last_content, str):
+                    augmented[last_idx] = {
+                        "role": "user",
+                        "content": [image_block, {"type": "text", "text": last_content}],
+                    }
+                else:
+                    augmented[last_idx] = {
+                        "role": "user",
+                        "content": [image_block] + list(last_content),
+                    }
+                with self.client.chat.completions.stream(
+                    model=self.model,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    messages=[{"role": "system", "content": system_prompt}] + augmented,
+                ) as stream:
+                    for chunk in stream:
+                        delta = chunk.choices[0].delta.content
+                        if delta:
+                            yield delta
+        except Exception as exc:
+            logger.error("Error streaming text with image: %s", exc)
+            raise
+
+    # ------------------------------------------------------------------
     # Image generation
     # ------------------------------------------------------------------
 

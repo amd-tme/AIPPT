@@ -85,6 +85,38 @@ CREATE TABLE IF NOT EXISTS edit_history (
 
 CREATE INDEX IF NOT EXISTS idx_edit_history_slide ON edit_history(slide_id);
 
+-- Chat conversations scoped to a deck (or a specific slide within it)
+CREATE TABLE IF NOT EXISTS chat_conversations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    deck_id INTEGER NOT NULL REFERENCES decks(id) ON DELETE CASCADE,
+    scope TEXT NOT NULL DEFAULT 'deck' CHECK(scope IN ('deck', 'slide')),
+    model TEXT NOT NULL DEFAULT '',
+    script_path TEXT DEFAULT NULL,
+    title TEXT NOT NULL DEFAULT 'New conversation',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_conv_deck ON chat_conversations(deck_id);
+
+-- Messages within a chat conversation
+CREATE TABLE IF NOT EXISTS chat_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    conversation_id INTEGER NOT NULL REFERENCES chat_conversations(id) ON DELETE CASCADE,
+    role TEXT NOT NULL CHECK(role IN ('user', 'assistant')),
+    content TEXT NOT NULL,
+    slide_id INTEGER REFERENCES slides(id) ON DELETE SET NULL,
+    mode TEXT DEFAULT 'ask' CHECK(mode IN ('ask', 'edit') OR mode IS NULL),
+    patch_json TEXT DEFAULT NULL,
+    patch_applied_at TEXT DEFAULT NULL,
+    patch_reverted_at TEXT DEFAULT NULL,
+    tokens_in INTEGER DEFAULT NULL,
+    tokens_out INTEGER DEFAULT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_msg_conv ON chat_messages(conversation_id);
+
 -- Indexes for efficient queries
 CREATE INDEX IF NOT EXISTS idx_decks_file_path ON decks(file_path);
 CREATE INDEX IF NOT EXISTS idx_decks_file_hash ON decks(file_hash);

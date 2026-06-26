@@ -100,6 +100,35 @@ def get_db(db_path: str = "slides.db") -> sqlite3.Connection:
             conn.execute(f"ALTER TABLE slides ADD COLUMN {col_ddl}")
             logger.debug("Migration: added slides.%s", col_name)
 
+    existing_chat_conv_cols = {
+        row[1]
+        for row in conn.execute("PRAGMA table_info(chat_conversations)").fetchall()
+    }
+    for col_ddl, col_name in (
+        ("scope TEXT NOT NULL DEFAULT 'deck'", "scope"),
+        ("model TEXT NOT NULL DEFAULT ''", "model"),
+        ("script_path TEXT DEFAULT NULL", "script_path"),
+    ):
+        if col_name not in existing_chat_conv_cols:
+            conn.execute(f"ALTER TABLE chat_conversations ADD COLUMN {col_ddl}")
+            logger.debug("Migration: added chat_conversations.%s", col_name)
+
+    existing_chat_msg_cols = {
+        row[1]
+        for row in conn.execute("PRAGMA table_info(chat_messages)").fetchall()
+    }
+    for col_ddl, col_name in (
+        ("mode TEXT DEFAULT 'ask'", "mode"),
+        ("patch_json TEXT DEFAULT NULL", "patch_json"),
+        ("patch_applied_at TEXT DEFAULT NULL", "patch_applied_at"),
+        ("patch_reverted_at TEXT DEFAULT NULL", "patch_reverted_at"),
+        ("tokens_in INTEGER DEFAULT NULL", "tokens_in"),
+        ("tokens_out INTEGER DEFAULT NULL", "tokens_out"),
+    ):
+        if col_name not in existing_chat_msg_cols:
+            conn.execute(f"ALTER TABLE chat_messages ADD COLUMN {col_ddl}")
+            logger.debug("Migration: added chat_messages.%s", col_name)
+
     conn.commit()
     # Schema setup is done committing; arm snapshot-on-commit so only real
     # catalog mutations from here on trigger a debounced snapshot.

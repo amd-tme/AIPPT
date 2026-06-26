@@ -478,7 +478,7 @@ async def get_slide(slide_id: int, request: Request):
     db_path = request.app.state.db_path
     conn = get_db(db_path)
     row = conn.execute(
-        """SELECT s.id, s.position, s.title, s.notes, s.content_hash, s.image_path,
+        """SELECT s.id, s.deck_id, s.position, s.title, s.notes, s.content_hash, s.image_path,
                   s.author, s.slide_created_date, s.updated_at, s.layout_type,
                   d.name as deck_name
            FROM slides s JOIN decks d ON s.deck_id = d.id
@@ -2294,3 +2294,274 @@ async def preview_websocket(token: str, websocket: WebSocket):
                 break
     finally:
         session.remove_client(websocket)
+
+
+# ---------------------------------------------------------------------------
+# Chat-with-a-Deck endpoints
+# ---------------------------------------------------------------------------
+
+# Active cancel tokens keyed by conversation_id
+_chat_cancel_tokens: dict = {}
+
+
+@router.get("/api/chat/conversations")
+async def list_chat_conversations(request: Request, deck_id: int):
+    """List conversations for a deck."""
+    if getattr(request.app.state, "view_only", False):
+        return JSONResponse({"error": "Chat is disabled in view-only mode"}, status_code=403)
+    from aippt.chat import ChatService
+    db_path = request.app.state.db_path
+    conn = get_db(db_path)
+    svc = ChatService(conn, llm=None)  # llm not needed for list
+    return svc.list_conversations(deck_id)
+
+
+@router.post("/api/chat/conversations")
+async def create_chat_conversation(request: Request):
+    """Create a new conversation for a deck."""
+    if getattr(request.app.state, "view_only", False):
+        return JSONResponse({"error": "Chat is disabled in view-only mode"}, status_code=403)
+    body = await request.json()
+    deck_id = body.get("deck_id")
+    title = body.get("title", "New conversation")
+    if not deck_id:
+        return JSONResponse({"error": "deck_id is required"}, status_code=400)
+    from aippt.chat import ChatService
+    db_path = request.app.state.db_path
+    conn = get_db(db_path)
+    svc = ChatService(conn, llm=None)
+    conv_id = svc.create_conversation(deck_id, title)
+    return {"id": conv_id, "deck_id": deck_id, "title": title}
+
+
+@router.get("/api/chat/conversations/{conversation_id}")
+async def get_chat_conversation(conversation_id: int, request: Request):
+    """Get conversation metadata and messages."""
+    if getattr(request.app.state, "view_only", False):
+        return JSONResponse({"error": "Chat is disabled in view-only mode"}, status_code=403)
+    from aippt.chat import ChatService
+    db_path = request.app.state.db_path
+    conn = get_db(db_path)
+    svc = ChatService(conn, llm=None)
+    conv = svc.get_conversation(conversation_id)
+    if not conv:
+        return JSONResponse({"error": "Conversation not found"}, status_code=404)
+    messages = svc.get_messages(conversation_id)
+    return {"conversation": conv, "messages": messages}
+
+
+@router.patch("/api/chat/conversations/{conversation_id}")
+async def rename_chat_conversation(conversation_id: int, request: Request):
+    """Rename a conversation."""
+    if getattr(request.app.state, "view_only", False):
+        return JSONResponse({"error": "Chat is disabled in view-only mode"}, status_code=403)
+    body = await request.json()
+    title = body.get("title", "")
+    if not title:
+        return JSONResponse({"error": "title is required"}, status_code=400)
+    from aippt.chat import ChatService
+    db_path = request.app.state.db_path
+    conn = get_db(db_path)
+    svc = ChatService(conn, llm=None)
+    ok = svc.rename_conversation(conversation_id, title)
+    if not ok:
+        return JSONResponse({"error": "Conversation not found"}, status_code=404)
+    return {"id": conversation_id, "title": title}
+
+
+@router.delete("/api/chat/conversations/{conversation_id}")
+async def delete_chat_conversation(conversation_id: int, request: Request):
+    """Delete a conversation and all its messages."""
+    if getattr(request.app.state, "view_only", False):
+        return JSONResponse({"error": "Chat is disabled in view-only mode"}, status_code=403)
+    from aippt.chat import ChatService
+    db_path = request.app.state.db_path
+    conn = get_db(db_path)
+    svc = ChatService(conn, llm=None)
+    ok = svc.delete_conversation(conversation_id)
+    if not ok:
+        return JSONResponse({"error": "Conversation not found"}, status_code=404)
+    return {"deleted": conversation_id}
+
+
+@router.post("/api/chat/conversations/{conversation_id}/messages")
+async def chat_send_message(conversation_id: int, request: Request):
+    """Send a user message and stream the assistant reply via SSE.
+
+    Request body (JSON):
+        message   (str, required)  — the user's text
+        slide_id  (int, optional)  — scope to a specific slide
+        model     (str, optional)  — override the LLM model
+        ntid      (str, optional)  — user NTID for gateway
+
+    Response: ``text/event-stream`` with ``data:`` lines.
+
+    Event types:
+        data: {"type":"chunk","text":"..."}
+        data: {"type":"patch_applied","slide_id":N,"field":"..."}
+        data: {"type":"patch_failed","slide_id":N,"field":"...","reason":"..."}
+        data: {"type":"cancelled"}
+        data: {"type":"done"}
+        data: {"type":"error","message":"..."}
+    """
+    if getattr(request.app.state, "view_only", False):
+        return JSONResponse({"error": "Chat is disabled in view-only mode"}, status_code=403)
+
+    body = await request.json()
+    user_message = body.get("message", "").strip()
+    slide_id = body.get("slide_id")
+    mode = body.get("mode", "ask")
+    if mode not in ("ask", "edit"):
+        mode = "ask"
+    # In view-only mode, force ask (read-only) regardless of what the client sent
+    if getattr(request.app.state, "view_only", False):
+        mode = "ask"
+    model_override = body.get("model")
+    user_ntid = body.get("ntid") or request.headers.get("X-User-NTID")
+
+    if not user_message:
+        return JSONResponse({"error": "message is required"}, status_code=400)
+
+    db_path = request.app.state.db_path
+
+    # Verify conversation exists
+    from aippt.chat import ChatService, CancelToken
+    conn_check = get_db(db_path)
+    svc_check = ChatService(conn_check, llm=None)
+    if not svc_check.get_conversation(conversation_id):
+        return JSONResponse({"error": "Conversation not found"}, status_code=404)
+    conn_check.close()
+
+    try:
+        llm = _make_llm_client(request, "improve", model_override, user_ntid)
+    except ValueError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
+
+    cancel_token = CancelToken()
+    _chat_cancel_tokens[conversation_id] = cancel_token
+
+    def _sse_event(payload: dict) -> str:
+        return f"data: {json.dumps(payload)}\n\n"
+
+    def generate():
+        conn = get_db(db_path)
+        svc = ChatService(conn, llm, db_cwd=str(Path(db_path).parent))
+        try:
+            for chunk in svc.stream_reply(
+                conversation_id,
+                user_message,
+                slide_id=slide_id,
+                mode=mode,
+                cancel_token=cancel_token,
+            ):
+                if chunk == "[CANCELLED]":
+                    yield _sse_event({"type": "cancelled"})
+                    return
+                elif chunk.startswith("[PATCH_PROPOSED:"):
+                    # Format: [PATCH_PROPOSED:msg_id:json_array]
+                    # Strip the leading sentinel prefix and the trailing ] added by the sentinel wrapper
+                    rest = chunk[len("[PATCH_PROPOSED:"):-1]  # -1 removes sentinel's closing ]
+                    colon = rest.index(":")
+                    msg_id = int(rest[:colon])
+                    patch_json = rest[colon + 1:]
+                    yield _sse_event({"type": "patch_proposed", "message_id": msg_id, "patches": json.loads(patch_json)})
+                else:
+                    yield _sse_event({"type": "chunk", "text": chunk})
+            yield _sse_event({"type": "done"})
+        except Exception as exc:
+            logger.error("Chat stream error: %s", exc)
+            yield _sse_event({"type": "error", "message": str(exc)})
+        finally:
+            conn.close()
+            _chat_cancel_tokens.pop(conversation_id, None)
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
+
+
+@router.post("/api/chat/conversations/{conversation_id}/cancel")
+async def cancel_chat_stream(conversation_id: int, request: Request):
+    """Cancel an in-progress streaming reply."""
+    token = _chat_cancel_tokens.get(conversation_id)
+    if token:
+        token.cancel()
+        return {"cancelled": True}
+    return {"cancelled": False}
+
+
+@router.post("/api/chat/conversations/{conversation_id}/messages/{message_id}/apply")
+async def apply_chat_patch(conversation_id: int, message_id: int, request: Request):
+    """Apply the patch proposed in an assistant message.
+
+    The user must explicitly call this after reviewing the proposed diff.
+    Returns 403 in view-only mode.
+    """
+    if getattr(request.app.state, "view_only", False):
+        return JSONResponse({"error": "Patch apply is disabled in view-only mode"}, status_code=403)
+
+    from aippt.chat import ChatService
+    db_path = request.app.state.db_path
+    conn = get_db(db_path)
+    svc = ChatService(conn, llm=None, db_cwd=str(Path(db_path).parent))
+    try:
+        ok, reason = svc.apply_message_patch(message_id)
+    finally:
+        conn.close()
+
+    if ok:
+        return {"applied": True}
+    return JSONResponse({"error": reason}, status_code=400)
+
+
+@router.post("/api/chat/conversations/{conversation_id}/messages/{message_id}/revert")
+async def revert_chat_patch(conversation_id: int, message_id: int, request: Request):
+    """Revert a previously applied patch on an assistant message.
+
+    Returns 403 in view-only mode.
+    """
+    if getattr(request.app.state, "view_only", False):
+        return JSONResponse({"error": "Patch revert is disabled in view-only mode"}, status_code=403)
+
+    from aippt.chat import ChatService
+    db_path = request.app.state.db_path
+    conn = get_db(db_path)
+    svc = ChatService(conn, llm=None, db_cwd=str(Path(db_path).parent))
+    try:
+        ok, reason = svc.revert_message_patch(message_id)
+    finally:
+        conn.close()
+
+    if ok:
+        return {"reverted": True}
+    return JSONResponse({"error": reason}, status_code=400)
+
+
+@router.post("/api/chat/slides/{slide_id}/revert")
+async def revert_slide_field(slide_id: int, request: Request):
+    """Revert the most recent LLM-applied edit on a slide field.
+
+    Request body (JSON):
+        field  (str, required)  — "title", "content_text", or "notes"
+    """
+    if getattr(request.app.state, "view_only", False):
+        return JSONResponse({"error": "Revert is disabled in view-only mode"}, status_code=403)
+    body = await request.json()
+    field = body.get("field", "").strip()
+    if not field:
+        return JSONResponse({"error": "field is required"}, status_code=400)
+
+    from aippt.patch import revert_last, PATCHABLE_FIELDS
+    if field not in PATCHABLE_FIELDS:
+        return JSONResponse(
+            {"error": f"field must be one of {sorted(PATCHABLE_FIELDS)}"}, status_code=400
+        )
+
+    db_path = request.app.state.db_path
+    conn = get_db(db_path)
+    try:
+        ok, msg = revert_last(slide_id, field, conn, source="chat-revert",
+                              cwd=str(Path(db_path).parent))
+        if not ok:
+            return JSONResponse({"error": msg}, status_code=404)
+        return {"reverted": True, "message": msg}
+    finally:
+        conn.close()
