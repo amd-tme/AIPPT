@@ -17,6 +17,7 @@
     <link rel="stylesheet" href="static/vendor/pico.min.css">
     <link rel="stylesheet" href="static/tokens.css">
     <link rel="stylesheet" href="static/pico-overrides.css">
+    <link rel="stylesheet" href="static/chat.css">
     <style>
         /* ── Vendored fonts ─────────────────────────────────── */
         @font-face {
@@ -1478,6 +1479,7 @@
                     <button class="outline" id="btn-analyze" onclick="runAiAction('analyze')">Analyze</button>
                     <button class="outline" id="btn-notes" onclick="runAiAction('notes')">Suggest Notes</button>
                     <button class="outline" id="btn-improvements" onclick="runAiAction('improvements')">Suggest Improvements</button>
+                    <button class="outline" id="btn-slide-chat" onclick="openSlideChat()">&#128172; Chat</button>
                 </div>
 
                 <div id="ai-spinner"><div class="spinner-icon"></div><span id="ai-spinner-label">Analyzing slide...</span></div>
@@ -1603,6 +1605,7 @@
     <script src="static/js/ms-auth.js"></script>
     <script>
         let currentSlideId = null;
+        let currentDeckId = null;
         let savedNotesValue = '';
         let slideList = [];       // ordered slide IDs for nav context
         let currentSlideIndex = -1;
@@ -1727,13 +1730,23 @@
         }
 
         function applyViewOnlyToSlideDialog() {
-            if (!viewOnly) return;
             const tip = 'LLM not configured';
             ['btn-analyze', 'btn-notes', 'btn-improvements'].forEach(id => {
                 const btn = document.getElementById(id);
-                btn.disabled = true;
-                btn.title = tip;
+                if (!btn) return;
+                btn.disabled = viewOnly;
+                btn.title = viewOnly ? tip : '';
             });
+            // Chat button: hide in view-only; show otherwise
+            const chatBtn = document.getElementById('btn-slide-chat');
+            if (chatBtn) chatBtn.style.display = viewOnly ? 'none' : '';
+        }
+
+        function openSlideChat() {
+            // Close the dialog, then open the floating chat scoped to this slide
+            document.getElementById('slide-dialog').close();
+            // _chatScopeToSlide opens the panel and sets the slide dropdown
+            _chatScopeToSlide(currentSlideId);
         }
 
         function applyViewOnlyToSettings() {
@@ -1866,6 +1879,9 @@
             hide('settings-view');
             hide('tag-results');
             document.getElementById('tag-filter-info').classList.remove('active');
+            // Hide floating chat widget when leaving the slide browser
+            const widget = document.getElementById('deck-chat-widget');
+            if (widget) widget.style.display = 'none';
             show('deck-list');
             loadCreateModels();
             const resp = await fetch('api/decks');
@@ -1891,6 +1907,7 @@
                     <td onclick="event.stopPropagation()">
                         <button class="outline" style="width:auto; padding:0.3rem 0.7rem; font-size:0.8rem;" onclick="downloadDeck(${d.id})">Download</button>
                         <button class="outline" style="width:auto; padding:0.3rem 0.7rem; font-size:0.8rem; margin-left:0.3rem;" onclick="writeNotesToDeck(${d.id})">Write Notes to Deck</button>
+                        ${!viewOnly ? `<button class="outline" style="width:auto; padding:0.3rem 0.7rem; font-size:0.8rem; margin-left:0.3rem;" onclick="event.stopPropagation(); browseDeckAndChat(${d.id}, '${escAttr(d.display_name || d.name)}')">&#128172; Chat</button>` : ''}
                         ${regenBtn}
                         ${window.isAdmin ? `<button class="outline admin-delete-btn" style="width:auto; padding:0.3rem 0.7rem; font-size:0.8rem; margin-left:0.3rem;" onclick="promptDeleteDeck(${d.id}, '${escAttr(d.display_name || d.name)}', ${d.slide_count})">Delete</button>` : ''}
                     </td>
@@ -1902,16 +1919,355 @@
         }
 
         async function browseDeck(deckId, name) {
+            currentDeckId = deckId;
             hide('deck-list');
             hide('search-view');
             hide('settings-view');
             hide('tag-results');
             show('slide-browser');
             document.getElementById('browser-title').textContent = name;
+            // Update chat widget title
+            const titleEl = document.getElementById('deck-chat-title');
+            if (titleEl) titleEl.textContent = name || 'Deck Chat';
+            // Show the floating chat widget for non-view-only users
+            const widget = document.getElementById('deck-chat-widget');
+            if (widget) widget.style.display = viewOnly ? 'none' : 'block';
+            // Collapse the chat panel itself (just show the FAB)
+            const panel = document.getElementById('deck-chat-panel');
+            if (panel) panel.style.display = 'none';
+            _deckChatConvId = null;
             const resp = await fetch(`api/decks/${deckId}/slides`);
             if (!resp.ok) { toast('Error loading slides'); return; }
             const slides = await resp.json();
             renderSlideGrid('slide-grid', slides);
+            // Populate the slide scope dropdown in the chat widget
+            await loadSlideScope(slides);
+        }
+
+        async function browseDeckAndChat(deckId, name) {
+            await browseDeck(deckId, name);
+            // Auto-open the panel
+            const panel = document.getElementById('deck-chat-panel');
+            if (panel) panel.style.display = 'flex';
+            await loadDeckConversations();
+        }
+
+        // ---------------------------------------------------------------------------
+        // Deck-level chat state + functions
+        // ---------------------------------------------------------------------------
+        let _deckChatConvId = null;
+        let _deckChatStreaming = false;
+        let _deckChatCancelFn = null;
+        let _deckChatStreamEl = null;
+        let _deckChatStreamBuf = '';
+
+        async function toggleDeckChat() {
+            const panel = document.getElementById('deck-chat-panel');
+            const isOpen = panel.style.display === 'flex';
+            if (isOpen) {
+                panel.style.display = 'none';
+            } else {
+                panel.style.display = 'flex';
+                await loadDeckConversations();
+            }
+        }
+
+        async function loadDeckConversations() {
+            if (!currentDeckId) return;
+            const resp = await fetch(`api/chat/conversations?deck_id=${currentDeckId}`);
+            if (!resp.ok) return;
+            const convs = await resp.json();
+            const sel = document.getElementById('deck-chat-conv-select');
+            sel.innerHTML = '<option value="">— conversation —</option>';
+            for (const c of convs) {
+                const opt = document.createElement('option');
+                opt.value = c.id;
+                opt.textContent = c.title;
+                sel.appendChild(opt);
+            }
+            if (convs.length === 1) {
+                sel.value = convs[0].id;
+                await onDeckConvChange();
+            }
+        }
+
+        async function onDeckConvChange() {
+            const sel = document.getElementById('deck-chat-conv-select');
+            const id = parseInt(sel.value);
+            document.getElementById('deck-chat-del-btn').style.display = id ? '' : 'none';
+            document.getElementById('deck-chat-input-row').style.display = id ? '' : 'none';
+            if (!id) { _deckChatConvId = null; document.getElementById('deck-chat-history').innerHTML = ''; return; }
+            _deckChatConvId = id;
+            const resp = await fetch(`api/chat/conversations/${id}`);
+            if (!resp.ok) return;
+            const data = await resp.json();
+            const histEl = document.getElementById('deck-chat-history');
+            histEl.innerHTML = '';
+            for (const m of data.messages) {
+                const div = document.createElement('div');
+                div.className = `chat-msg chat-msg--${m.role}`;
+                div.textContent = m.content;
+                histEl.appendChild(div);
+                // Re-render patch block if this assistant message had a proposed patch
+                if (m.role === 'assistant' && m.patch_json) {
+                    let patches;
+                    try { patches = JSON.parse(m.patch_json); } catch { patches = null; }
+                    if (patches) {
+                        const applied = !!m.patch_applied_at;
+                        const reverted = !!m.patch_reverted_at;
+                        const patchDiv = document.createElement('div');
+                        patchDiv.className = 'chat-msg chat-msg--assistant';
+                        patchDiv.dataset.patchMsgId = m.id;
+                        let actionsHtml;
+                        if (reverted) {
+                            actionsHtml = '<span style="font-size:0.78rem; color:var(--pico-muted-color);">&#8635; Reverted</span>';
+                        } else if (applied) {
+                            actionsHtml = `<span style="font-size:0.78rem; color:#4caf50;">&#10003; Applied</span>
+                                <button class="outline" onclick="undoDeckPatch(${_deckChatConvId}, ${m.id})"
+                                    style="width:auto; padding:0.2rem 0.55rem; font-size:0.75rem; margin-left:0.4rem;">&#8635; Undo</button>`;
+                        } else {
+                            actionsHtml = `<button onclick="applyDeckPatch(${_deckChatConvId}, ${m.id})" style="width:auto; padding:0.25rem 0.7rem; font-size:0.78rem;">&#10003; Apply</button>
+                                <button class="outline" onclick="rejectDeckPatch(${m.id})" style="width:auto; padding:0.25rem 0.7rem; font-size:0.78rem;">&#10007; Reject</button>`;
+                        }
+                        patchDiv.innerHTML = `
+                            <div style="margin-bottom:0.4rem; font-size:0.8rem; font-weight:bold;">&#128196; Proposed edit${patches.length > 1 ? 's' : ''}:</div>
+                            ${_renderPatchDiff(patches)}
+                            <div id="deck-patch-actions-${m.id}" style="display:flex; gap:0.4rem; margin-top:0.5rem; flex-wrap:wrap;">${actionsHtml}</div>`;
+                        histEl.appendChild(patchDiv);
+                    }
+                }
+            }
+            histEl.scrollTop = histEl.scrollHeight;
+        }
+
+        async function newDeckConv() {
+            if (!currentDeckId) return;
+            const title = prompt('Conversation title:', 'Deck overview chat') ;
+            if (title === null) return;
+            const resp = await fetch('api/chat/conversations', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({deck_id: currentDeckId, title: title || 'Deck overview chat'}),
+            });
+            if (!resp.ok) { toast('Failed to create conversation'); return; }
+            const conv = await resp.json();
+            _deckChatConvId = conv.id;
+            await loadDeckConversations();
+            document.getElementById('deck-chat-conv-select').value = _deckChatConvId;
+            document.getElementById('deck-chat-del-btn').style.display = '';
+            document.getElementById('deck-chat-input-row').style.display = '';
+            document.getElementById('deck-chat-history').innerHTML = '';
+        }
+
+        async function deleteDeckConv() {
+            if (!_deckChatConvId || !confirm('Delete this conversation?')) return;
+            await fetch(`api/chat/conversations/${_deckChatConvId}`, {method: 'DELETE'});
+            _deckChatConvId = null;
+            document.getElementById('deck-chat-history').innerHTML = '';
+            document.getElementById('deck-chat-input-row').style.display = 'none';
+            document.getElementById('deck-chat-del-btn').style.display = 'none';
+            await loadDeckConversations();
+        }
+
+        async function sendDeckChat() {
+            if (!_deckChatConvId || _deckChatStreaming) return;
+            const input = document.getElementById('deck-chat-input');
+            const text = input.value.trim();
+            if (!text) return;
+            input.value = '';
+            input.disabled = true;
+            document.getElementById('deck-chat-send-btn').style.display = 'none';
+            document.getElementById('deck-chat-stop-btn').style.display = '';
+
+            const histEl = document.getElementById('deck-chat-history');
+            const userDiv = document.createElement('div');
+            userDiv.className = 'chat-msg chat-msg--user';
+            userDiv.textContent = text;
+            histEl.appendChild(userDiv);
+
+            _deckChatStreamBuf = '';
+            _deckChatStreamEl = document.createElement('div');
+            _deckChatStreamEl.className = 'chat-msg chat-msg--assistant chat-msg--streaming';
+            _deckChatStreamEl.textContent = '…';
+            histEl.appendChild(_deckChatStreamEl);
+            histEl.scrollTop = histEl.scrollHeight;
+
+            const ctrl = new AbortController();
+            _deckChatCancelFn = () => { ctrl.abort(); _finishDeckChat(); };
+            _deckChatStreaming = true;
+
+            const ntid = (localStorage.getItem('aippt_ntid') || '').trim();
+            const scopeSel = document.getElementById('deck-chat-slide-select');
+            const scopeSlideId = scopeSel ? (parseInt(scopeSel.value) || undefined) : undefined;
+            const chatMode = document.querySelector('input[name="deck-chat-mode"]:checked')?.value || 'ask';
+            try {
+                const resp = await fetch(`api/chat/conversations/${_deckChatConvId}/messages`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({message: text, slide_id: scopeSlideId, mode: chatMode, ntid: ntid || undefined}),
+                    signal: ctrl.signal,
+                });
+                if (!resp.ok) {
+                    const err = await resp.json().catch(() => ({error: 'Unknown error'}));
+                    _deckChatStreamEl.textContent = `Error: ${err.error || resp.status}`;
+                    _deckChatStreamEl.classList.remove('chat-msg--streaming');
+                    _finishDeckChat();
+                    return;
+                }
+                const reader = resp.body.getReader();
+                const decoder = new TextDecoder();
+                let partial = '';
+                while (true) {
+                    const {done, value} = await reader.read();
+                    if (done) break;
+                    partial += decoder.decode(value, {stream: true});
+                    const lines = partial.split('\n');
+                    partial = lines.pop();
+                    for (const line of lines) {
+                        if (!line.startsWith('data:')) continue;
+                        const raw = line.slice(5).trim();
+                        if (!raw) continue;
+                        let evt; try { evt = JSON.parse(raw); } catch { continue; }
+                        if (evt.type === 'chunk') {
+                            _deckChatStreamBuf += evt.text;
+                            _deckChatStreamEl.textContent = _deckChatStreamBuf;
+                            histEl.scrollTop = histEl.scrollHeight;
+                        } else if (evt.type === 'patch_proposed') {
+                            _deckChatStreamEl.classList.remove('chat-msg--streaming');
+                            _appendPatchBlock(histEl, evt.message_id, evt.patches, _deckChatConvId);
+                        } else if (evt.type === 'done') {
+                            _deckChatStreamEl.classList.remove('chat-msg--streaming');
+                        } else if (evt.type === 'error') {
+                            _deckChatStreamEl.textContent = `Error: ${evt.message}`;
+                            _deckChatStreamEl.classList.remove('chat-msg--streaming');
+                        }
+                    }
+                }
+            } catch(e) {
+                if (e.name !== 'AbortError' && _deckChatStreamEl) {
+                    _deckChatStreamEl.textContent = `Connection error: ${e.message}`;
+                }
+            }
+            _finishDeckChat();
+        }
+
+        function stopDeckChat() {
+            if (_deckChatCancelFn) {
+                fetch(`api/chat/conversations/${_deckChatConvId}/cancel`, {method: 'POST'}).catch(() => {});
+                _deckChatCancelFn();
+            }
+        }
+
+        function _finishDeckChat() {
+            _deckChatStreaming = false;
+            _deckChatCancelFn = null;
+            _deckChatStreamEl = null;
+            _deckChatStreamBuf = '';
+            const input = document.getElementById('deck-chat-input');
+            if (input) { input.disabled = false; input.focus(); }
+            const sendBtn = document.getElementById('deck-chat-send-btn');
+            if (sendBtn) sendBtn.style.display = '';
+            const stopBtn = document.getElementById('deck-chat-stop-btn');
+            if (stopBtn) stopBtn.style.display = 'none';
+        }
+
+        async function loadSlideScope(slides) {
+            const sel = document.getElementById('deck-chat-slide-select');
+            if (!sel) return;
+            sel.innerHTML = '<option value="">All slides</option>';
+            (slides || []).forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.id;
+                opt.textContent = `Slide ${s.position}: ${s.title || '(untitled)'}`;
+                sel.appendChild(opt);
+            });
+        }
+
+        function onDeckSlideScopeChange() {
+            // Scope label updates automatically via the select; no extra work needed.
+        }
+
+        function onChatModeChange() {
+            const mode = document.querySelector('input[name="deck-chat-mode"]:checked')?.value || 'ask';
+            const hint = document.getElementById('deck-chat-mode-hint');
+            const input = document.getElementById('deck-chat-input');
+            if (mode === 'edit') {
+                if (hint) hint.textContent = 'LLM may propose edits';
+                if (input) input.placeholder = 'Ask for an edit… (Ctrl+Enter to send)';
+            } else {
+                if (hint) hint.textContent = '';
+                if (input) input.placeholder = 'Ask about this deck… (Ctrl+Enter to send)';
+            }
+        }
+
+        function _renderPatchDiff(patches) {
+            return patches.map(p => {
+                const oldLines = p.old_text.split('\n').map(l => `<span style="color:#f44336;">- ${esc(l)}</span>`).join('\n');
+                const newLines = p.new_text.split('\n').map(l => `<span style="color:#4caf50;">+ ${esc(l)}</span>`).join('\n');
+                return `<div style="font-size:0.75rem; margin-bottom:0.3rem;">
+                    <em style="color:var(--pico-muted-color);">Slide ${p.slide_id} · ${p.field}</em>
+                    <pre style="margin:0.2rem 0; padding:0.4rem; border-radius:6px; overflow-x:auto;
+                                background:rgba(0,0,0,0.25); line-height:1.4;">${oldLines}
+${newLines}</pre></div>`;
+            }).join('');
+        }
+
+        function _appendPatchBlock(histEl, msgId, patches, convId) {
+            const patchDiv = document.createElement('div');
+            patchDiv.className = 'chat-msg chat-msg--assistant';
+            patchDiv.dataset.patchMsgId = msgId;
+            patchDiv.innerHTML = `
+                <div style="margin-bottom:0.4rem; font-size:0.8rem; font-weight:bold;">&#128196; Proposed edit${patches.length > 1 ? 's' : ''}:</div>
+                ${_renderPatchDiff(patches)}
+                <div id="deck-patch-actions-${msgId}" style="display:flex; gap:0.4rem; margin-top:0.5rem; flex-wrap:wrap;">
+                    <button onclick="applyDeckPatch(${convId}, ${msgId})" style="width:auto; padding:0.25rem 0.7rem; font-size:0.78rem;">&#10003; Apply</button>
+                    <button class="outline" onclick="rejectDeckPatch(${msgId})" style="width:auto; padding:0.25rem 0.7rem; font-size:0.78rem;">&#10007; Reject</button>
+                </div>`;
+            histEl.appendChild(patchDiv);
+            histEl.scrollTop = histEl.scrollHeight;
+        }
+
+        async function applyDeckPatch(convId, msgId) {
+            const actionsDiv = document.getElementById(`deck-patch-actions-${msgId}`);
+            if (actionsDiv) actionsDiv.innerHTML = '<em style="font-size:0.78rem;">Applying…</em>';
+            const resp = await fetch(`api/chat/conversations/${convId}/messages/${msgId}/apply`, {method: 'POST'});
+            if (resp.ok) {
+                if (actionsDiv) actionsDiv.innerHTML = `
+                    <span style="font-size:0.78rem; color:#4caf50;">&#10003; Applied</span>
+                    <button class="outline" onclick="undoDeckPatch(${convId}, ${msgId})"
+                        style="width:auto; padding:0.2rem 0.55rem; font-size:0.75rem; margin-left:0.4rem;">&#8635; Undo</button>`;
+            } else {
+                const err = await resp.json().catch(() => ({error: 'unknown'}));
+                if (actionsDiv) actionsDiv.innerHTML = `<span style="font-size:0.78rem; color:#f44336;">&#10007; ${esc(err.error || 'Apply failed')}</span>`;
+            }
+        }
+
+        async function undoDeckPatch(convId, msgId) {
+            const actionsDiv = document.getElementById(`deck-patch-actions-${msgId}`);
+            if (actionsDiv) actionsDiv.innerHTML = '<em style="font-size:0.78rem;">Reverting…</em>';
+            const resp = await fetch(`api/chat/conversations/${convId}/messages/${msgId}/revert`, {method: 'POST'});
+            if (resp.ok) {
+                if (actionsDiv) actionsDiv.innerHTML = '<span style="font-size:0.78rem; color:var(--pico-muted-color);">&#8635; Reverted</span>';
+            } else {
+                const err = await resp.json().catch(() => ({error: 'unknown'}));
+                if (actionsDiv) actionsDiv.innerHTML = `<span style="font-size:0.78rem; color:#f44336;">&#10007; ${esc(err.error || 'Revert failed')}</span>`;
+            }
+        }
+
+        function rejectDeckPatch(msgId) {
+            const actionsDiv = document.getElementById(`deck-patch-actions-${msgId}`);
+            if (actionsDiv) actionsDiv.innerHTML = '<span style="font-size:0.78rem; color:var(--pico-muted-color);">Rejected</span>';
+        }
+
+        function _chatScopeToSlide(slideId) {
+            const sel = document.getElementById('deck-chat-slide-select');
+            if (sel) sel.value = slideId;
+            // Open the panel so the user sees the scoped chat
+            const panel = document.getElementById('deck-chat-panel');
+            if (panel && panel.style.display !== 'flex') {
+                panel.style.display = 'flex';
+                loadDeckConversations();
+            }
         }
 
         async function showSearch() {
@@ -2002,6 +2358,8 @@
             updateNavButtons();
             document.getElementById('slide-dialog').showModal();
             applyViewOnlyToSlideDialog();
+            // Auto-scope the floating chat widget to this slide
+            if (!viewOnly) _chatScopeToSlide(slideId);
         }
 
         async function refreshTags(slideId) {
@@ -3438,5 +3796,97 @@
 
         function toggleTheme() { toggleThemeDropdown(); }
     </script>
+
+    <!-- Unified floating chat widget (bottom-right, visible while browsing a deck) -->
+    <div id="deck-chat-widget" style="display:none; position:fixed; bottom:1.5rem; right:1.5rem; z-index:500;">
+
+        <!-- FAB bubble -->
+        <button id="deck-chat-fab" onclick="toggleDeckChat()" title="Chat with this deck"
+            style="width:3.2rem; height:3.2rem; border-radius:50%; border:none; cursor:pointer;
+                   background:var(--pico-primary); color:var(--pico-primary-inverse);
+                   font-size:1.35rem; display:flex; align-items:center; justify-content:center;
+                   box-shadow:0 4px 16px rgba(0,0,0,0.45); margin-left:auto; transition:transform 0.15s;">
+            &#128172;
+        </button>
+
+        <!-- Chat panel — expands above the FAB -->
+        <div id="deck-chat-panel"
+            style="display:none; flex-direction:column; position:absolute; bottom:3.8rem; right:0;
+                   width:520px; max-height:600px; border-radius:14px; overflow:hidden;
+                   background:var(--pico-card-background-color);
+                   border:1px solid var(--pico-muted-border-color);
+                   box-shadow:0 8px 36px rgba(0,0,0,0.5);">
+
+            <!-- Header -->
+            <div style="display:flex; align-items:center; justify-content:space-between;
+                        padding:0.6rem 0.85rem; background:var(--pico-primary-background);
+                        border-bottom:1px solid var(--pico-muted-border-color); flex-shrink:0;">
+                <strong style="font-size:0.88rem; display:flex; align-items:center; gap:0.4rem;">
+                    &#128172; <span id="deck-chat-title">Deck Chat</span>
+                </strong>
+                <button onclick="toggleDeckChat()"
+                    style="background:none; border:none; cursor:pointer; font-size:1.1rem;
+                           color:var(--pico-color); width:auto; padding:0; opacity:0.7; line-height:1;">&#x2715;</button>
+            </div>
+
+            <!-- Conversation row -->
+            <div style="display:flex; gap:0.35rem; padding:0.45rem 0.7rem;
+                        border-bottom:1px solid var(--pico-muted-border-color);
+                        align-items:center; flex-shrink:0; background:var(--pico-background-color);">
+                <select id="deck-chat-conv-select" style="flex:1; margin:0; font-size:0.8rem;" onchange="onDeckConvChange()">
+                    <option value="">— conversation —</option>
+                </select>
+                <button class="outline" onclick="newDeckConv()" style="width:auto; padding:0.2rem 0.5rem; font-size:0.75rem;">+ New</button>
+                <button class="outline" id="deck-chat-del-btn" onclick="deleteDeckConv()" style="width:auto; padding:0.2rem 0.6rem; font-size:0.75rem; display:none; color:#e53935; border-color:#e53935;" title="Delete conversation">&#128465; Delete</button>
+            </div>
+
+            <!-- Slide scope row -->
+            <div style="display:flex; gap:0.35rem; padding:0.4rem 0.7rem;
+                        border-bottom:1px solid var(--pico-muted-border-color);
+                        align-items:center; flex-shrink:0;">
+                <span style="font-size:0.75rem; color:var(--pico-muted-color); white-space:nowrap;">Scope:</span>
+                <select id="deck-chat-slide-select" style="flex:1; margin:0; font-size:0.8rem;" onchange="onDeckSlideScopeChange()">
+                    <option value="">&#127760; All slides</option>
+                </select>
+            </div>
+
+            <!-- Messages -->
+            <div class="chat-history" id="deck-chat-history"
+                style="flex:1; overflow-y:auto; padding:0.65rem 0.75rem;
+                       min-height:100px; max-height:260px;"></div>
+
+            <!-- Input -->
+            <div id="deck-chat-input-row" class="chat-input-row"
+                style="display:none; flex-direction:column; padding:0.5rem 0.7rem; gap:0.35rem;
+                       border-top:1px solid var(--pico-muted-border-color); flex-shrink:0;">
+                <!-- Ask / Edit mode toggle -->
+                <div style="display:flex; gap:0.6rem; align-items:center; font-size:0.78rem;">
+                    <label style="display:flex; align-items:center; gap:0.25rem; cursor:pointer; margin:0;">
+                        <input type="radio" name="deck-chat-mode" id="deck-chat-mode-ask" value="ask" checked
+                               style="margin:0;" onchange="onChatModeChange()">
+                        Ask
+                    </label>
+                    <label id="deck-chat-edit-label" style="display:flex; align-items:center; gap:0.25rem; cursor:pointer; margin:0;">
+                        <input type="radio" name="deck-chat-mode" id="deck-chat-mode-edit" value="edit"
+                               style="margin:0;" onchange="onChatModeChange()">
+                        Edit
+                    </label>
+                    <span id="deck-chat-mode-hint" style="color:var(--pico-muted-color); margin-left:auto; font-size:0.72rem;"></span>
+                </div>
+                <textarea id="deck-chat-input" rows="6"
+                    placeholder="Ask about this deck… (Ctrl+Enter to send)"
+                    style="width:100%; resize:vertical; margin:0; font-size:0.85rem;
+                           padding:0.6rem 0.7rem; min-height:8rem; max-height:16rem;"
+                    onkeydown="if(event.key==='Enter'&&(event.ctrlKey||event.metaKey)){event.preventDefault();sendDeckChat();}"></textarea>
+                <div style="display:flex; justify-content:flex-end; gap:0.4rem; margin-top:0.3rem;">
+                    <button id="deck-chat-send-btn" onclick="sendDeckChat()"
+                        style="width:auto; padding:0.3rem 1rem; font-size:0.82rem;">Send</button>
+                    <button id="deck-chat-stop-btn" onclick="stopDeckChat()"
+                        style="width:auto; padding:0.3rem 1rem; font-size:0.82rem; display:none;
+                               background:var(--pico-del-color,#c62828); color:#fff; border-color:transparent;">Stop</button>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

@@ -78,3 +78,5 @@ defaults:
   tags: claude-sonnet-4-6
   feedback: claude-sonnet-4-6
   reverse: claude-sonnet-4-6
+  improve: claude-sonnet-4-6
+  chat: claude-sonnet-4-6
