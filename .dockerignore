@@ -10,3 +10,12 @@ images/
 slides.db
 .pytest_cache/
 docs/plans/
+# Node deps are installed fresh via `npm ci` in the image (correct linux sharp
+# binary); never ship the 117M host copy into the build context.
+node_modules/
+# Sphinx output is rebuilt in the docs stage; keep stale local builds out.
+docs/_build/
+# Preview render artifacts and generated decks under examples/ — regenerated at
+# runtime, no need to bloat the context/image.
+**/.preview/
+examples/**/*.pptx
