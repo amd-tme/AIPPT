@@ -1,0 +1,162 @@
+/* Chat-with-a-Deck panel styles */
+
+/* ---------- Slide-level Chat tab inside slide-dialog ---------- */
+.chat-tab-btn {
+    font-size: 0.85rem;
+    padding: 0.3rem 0.75rem;
+    border-radius: 1rem;
+    background: var(--pico-secondary-background, transparent);
+    border: 1px solid var(--pico-muted-border-color);
+    cursor: pointer;
+    color: var(--pico-color);
+    transition: background 0.15s;
+}
+.chat-tab-btn:hover {
+    background: var(--pico-primary-background);
+    color: var(--pico-primary-inverse);
+}
+
+/* ---------- Chat panel embedded in slide-dialog ---------- */
+#slide-chat-panel {
+    margin-top: 1rem;
+    border-top: 1px solid var(--pico-muted-border-color);
+    padding-top: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.chat-conv-bar {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.chat-conv-bar select {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    font-size: 0.85rem;
+}
+
+.chat-conv-bar button {
+    width: auto;
+    padding: 0.3rem 0.7rem;
+    font-size: 0.8rem;
+}
+
+/* ---------- Message history ---------- */
+.chat-history {
+    max-height: 280px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    padding: 0.25rem 0;
+}
+
+.chat-msg {
+    padding: 0.4rem 0.65rem;
+    border-radius: 0.6rem;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-width: 90%;
+}
+
+.chat-msg--user {
+    background: var(--pico-primary-background);
+    color: var(--pico-primary-inverse);
+    align-self: flex-end;
+    border-bottom-right-radius: 0.15rem;
+}
+
+.chat-msg--assistant {
+    background: var(--pico-card-background-color, var(--pico-secondary-background));
+    align-self: flex-start;
+    border-bottom-left-radius: 0.15rem;
+}
+
+.chat-msg--streaming {
+    opacity: 0.85;
+}
+
+.chat-msg--patch {
+    font-size: 0.78rem;
+    font-style: italic;
+    background: transparent;
+    color: var(--pico-muted-color);
+    padding: 0.1rem 0.65rem;
+    align-self: flex-start;
+}
+
+/* ---------- Input row ---------- */
+.chat-input-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: flex-end;
+}
+
+.chat-input-row textarea {
+    flex: 1;
+    min-height: 2.4rem;
+    max-height: 8rem;
+    resize: vertical;
+    margin: 0;
+    font-size: 0.875rem;
+    padding: 0.4rem 0.6rem;
+}
+
+.chat-input-row button {
+    width: auto;
+    padding: 0.4rem 0.85rem;
+    font-size: 0.85rem;
+    align-self: flex-end;
+}
+
+/* Stop button shown during streaming */
+#chat-stop-btn {
+    background: var(--pico-del-color, #c62828);
+    color: #fff;
+    border-color: transparent;
+}
+
+/* ---------- Patch notification badges ---------- */
+.chat-patch-badge {
+    display: inline-block;
+    font-size: 0.72rem;
+    padding: 0.1rem 0.5rem;
+    border-radius: 1rem;
+    margin: 0.1rem 0.2rem;
+    vertical-align: middle;
+}
+
+.chat-patch-badge--applied {
+    background: var(--pico-ins-color, #1b5e20);
+    color: #fff;
+}
+
+.chat-patch-badge--failed {
+    background: var(--pico-del-color, #c62828);
+    color: #fff;
+}
+
+/* ---------- Undo button appended after patch ---------- */
+.chat-undo-btn {
+    display: inline-block;
+    font-size: 0.72rem;
+    padding: 0.1rem 0.45rem;
+    border-radius: 0.4rem;
+    border: 1px solid var(--pico-muted-border-color);
+    background: transparent;
+    color: var(--pico-color);
+    cursor: pointer;
+    width: auto;
+    margin-left: 0.25rem;
+    vertical-align: middle;
+}
+.chat-undo-btn:hover {
+    background: var(--pico-secondary-background);
+}

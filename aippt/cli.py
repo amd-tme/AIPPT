@@ -1581,6 +1581,105 @@ def cmd_metadata(args):
     return 0
 
 
+def cmd_chat(args):
+    """Interactive CLI chat with a cataloged deck."""
+    from aippt.catalog import get_db, get_deck_by_id
+    from aippt.chat import ChatService, CancelToken
+    from aippt.llm import LLMClient, load_gateway_config
+    from aippt.config import get_model_default, ConfigError
+
+    db_path = args.db
+    if not os.path.exists(db_path):
+        print(f"Database not found: {db_path}")
+        return 1
+
+    conn = get_db(db_path)
+
+    # Resolve deck by id or name
+    try:
+        deck_id = int(args.deck)
+        deck = get_deck_by_id(deck_id, db_path)
+    except ValueError:
+        row = conn.execute(
+            "SELECT id FROM decks WHERE name = ? OR name LIKE ?",
+            (args.deck, f"%{args.deck}%"),
+        ).fetchone()
+        deck = dict(row) if row else None
+        if deck:
+            deck_id = deck["id"]
+
+    if not deck:
+        print(f"Deck not found: {args.deck}")
+        conn.close()
+        return 1
+
+    print(f"Chatting with deck: {args.deck} (id={deck_id})")
+
+    # Build LLM client
+    try:
+        model = args.model or get_model_default("improve")
+    except ConfigError as exc:
+        print(f"Model config error: {exc}")
+        conn.close()
+        return 1
+
+    gateway = None
+    gw_path = getattr(args, "gateway_config", "gateway.yaml")
+    if os.path.exists(gw_path):
+        gateway = load_gateway_config(gw_path)
+
+    try:
+        llm = LLMClient(model=model, gateway=gateway, user_ntid=args.ntid)
+    except Exception as exc:
+        print(f"LLM init error: {exc}")
+        conn.close()
+        return 1
+
+    svc = ChatService(conn, llm, db_cwd=str(os.path.dirname(os.path.abspath(db_path))))
+
+    # Resume or create conversation
+    conv_id = args.conversation
+    if conv_id:
+        conv = svc.get_conversation(conv_id)
+        if not conv:
+            print(f"Conversation {conv_id} not found.")
+            conn.close()
+            return 1
+        print(f"Resuming conversation: {conv['title']}")
+        for m in svc.get_messages(conv_id):
+            role_label = "You" if m["role"] == "user" else "AI"
+            print(f"\n{role_label}: {m['content']}")
+    else:
+        conv_id = svc.create_conversation(deck_id)
+        print(f"Started new conversation (id={conv_id}). Type 'quit' to exit.\n")
+
+    print("Type your message (Ctrl+C or 'quit' to exit):\n")
+    while True:
+        try:
+            user_input = input("You: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\nBye.")
+            break
+
+        if not user_input or user_input.lower() in ("quit", "exit", "q"):
+            print("Bye.")
+            break
+
+        print("AI: ", end="", flush=True)
+        try:
+            for chunk in svc.stream_reply(conv_id, user_input, cancel_token=None):
+                if chunk.startswith("[PATCH_"):
+                    print(f"\n  [{chunk.strip('[]')}]", end="", flush=True)
+                else:
+                    print(chunk, end="", flush=True)
+            print()
+        except Exception as exc:
+            print(f"\nError: {exc}")
+
+    conn.close()
+    return 0
+
+
 def build_parser():
     """Build the argument parser with all subcommands."""
     parser = argparse.ArgumentParser(
@@ -1896,6 +1995,16 @@ def build_parser():
     p_merge_tpl.add_argument("--layout-map", default=None, help="JSON file overriding default layout map")
     p_merge_tpl.add_argument("--dry-run", action="store_true", help="Print layout assignments without writing")
 
+    # chat
+    p_chat = sub.add_parser("chat", help="Chat with a cataloged deck via the CLI")
+    p_chat.add_argument("deck", help="Deck name or ID in the catalog")
+    p_chat.add_argument("--db", default="slides.db", help="Catalog database path (default: slides.db)")
+    p_chat.add_argument("--model", default=None, help="LLM model override (defaults to models.yaml 'improve')")
+    p_chat.add_argument("--gateway-config", default="gateway.yaml", help="Gateway YAML config path")
+    p_chat.add_argument("--ntid", default=None, help="User NTID for gateway authentication")
+    p_chat.add_argument("--conversation", type=int, default=None, metavar="ID",
+                        help="Resume an existing conversation by ID")
+
     return parser
 
 
@@ -1941,6 +2050,7 @@ def main():
         "merge": cmd_merge,
         "metadata": cmd_metadata,
         "merge-template": cmd_merge_template,
+        "chat": cmd_chat,
     }
 
     if not args.command:
