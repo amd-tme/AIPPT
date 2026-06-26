@@ -15,6 +15,7 @@ requests>=2.31.0     # Downloading images
 fastapi>=0.100.0     # Web framework
 uvicorn>=0.23.0      # ASGI server
 python-multipart>=0.0.6  # File uploads
+watchfiles>=0.21     # Filesystem watcher for live preview sessions
 
 # Object storage (only needed when AIPPT_STORAGE=s3; the default fs backend
 # imports it lazily and runs without it installed)

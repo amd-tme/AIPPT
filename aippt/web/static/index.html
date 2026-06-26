@@ -17,6 +17,7 @@
     <link rel="stylesheet" href="static/vendor/pico.min.css">
     <link rel="stylesheet" href="static/tokens.css">
     <link rel="stylesheet" href="static/pico-overrides.css">
+    <link rel="stylesheet" href="static/preview.css">
     <style>
         /* ── Vendored fonts ─────────────────────────────────── */
         @font-face {
@@ -1139,6 +1140,7 @@
                 <a id="nav-decks" href="#" onclick="showDecks(); return false;">Decks</a>
                 <a id="nav-search" href="#" onclick="showSearch(); return false;">Search</a>
                 <a id="nav-settings" href="#" onclick="showSettings(); return false;">Settings</a>
+                <span id="nav-preview-item"><a id="nav-preview" href="#" onclick="showPreview(); return false;">Live Preview</a></span>
                 <a href="docs/index.html" target="_blank">Docs</a>
             </div>
             <!-- Right: action pills -->
@@ -1398,6 +1400,27 @@
             </div>
         </section>
 
+        <!-- Live Preview view -->
+        <section id="preview-view" style="display:none;">
+            <span class="eyebrow" style="margin-bottom:0.25rem;">Live Preview</span>
+            <h2 style="margin:0 0 0.75rem;">Script Preview</h2>
+            <div class="preview-toolbar">
+                <select id="preview-script-select"><option value="">— pick a script —</option></select>
+                <input id="preview-script-path" type="text" placeholder="or paste an absolute path…" style="flex:2 1 300px;">
+                <button id="preview-open-btn" onclick="previewOpen()">Open</button>
+                <button id="preview-force-btn" onclick="previewForce()" disabled>Force render</button>
+                <button id="preview-stop-btn" class="outline" onclick="previewStop()" disabled>Stop</button>
+                <span id="preview-status" class="preview-status preview-status--idle">Idle</span>
+            </div>
+            <p class="preview-disclaimer">&#9888; Rendered via LibreOffice — fonts and shape effects may differ slightly from PowerPoint export.</p>
+            <div id="preview-error" class="preview-error" style="display:none;"></div>
+            <div id="preview-grid" class="preview-grid"></div>
+            <details id="preview-log-details" style="margin-top:1rem;">
+                <summary style="cursor:pointer; color:var(--pico-muted-color); font-size:0.85rem;">Event log</summary>
+                <pre id="preview-log" style="max-height:10rem;overflow:auto;font-size:0.75rem;margin-top:0.5rem;"></pre>
+            </details>
+        </section>
+
         </div><!-- /.layout-content -->
         </div><!-- /#main-layout -->
 
@@ -1601,6 +1624,13 @@
     </footer>
 
     <script src="static/js/ms-auth.js"></script>
+    <script type="module">
+        import * as preview from './static/preview.js';
+        window.__previewModule = preview;
+        window.previewOpen  = () => preview.openFromUI();
+        window.previewForce = () => preview.forceRender();
+        window.previewStop  = () => preview.closeSession();
+    </script>
     <script>
         let currentSlideId = null;
         let savedNotesValue = '';
@@ -1708,6 +1738,9 @@
             const tip = 'LLM not configured';
             // Nav badge
             document.getElementById('view-only-badge').style.display = '';
+            // Hide Live Preview nav item — backend returns 403 in view-only mode
+            const previewItem = document.getElementById('nav-preview-item');
+            if (previewItem) previewItem.style.display = 'none';
             // Generate AI tags checkbox
             const tagsCheckbox = document.getElementById('deck-generate-tags');
             tagsCheckbox.disabled = true;
@@ -1854,7 +1887,7 @@
         }
 
         function setNavActive(id) {
-            ['nav-decks', 'nav-search', 'nav-settings'].forEach(function(navId) {
+            ['nav-decks', 'nav-search', 'nav-settings', 'nav-preview'].forEach(function(navId) {
                 document.getElementById(navId).classList.toggle('nav-active', navId === id);
             });
         }
@@ -2110,6 +2143,17 @@
             hide('tag-results');
             show('settings-view');
             await Promise.all([loadSettings(), loadTaxonomyView(), loadTemplateSettings()]);
+        }
+
+        async function showPreview() {
+            setNavActive('nav-preview');
+            hide('deck-list');
+            hide('slide-browser');
+            hide('search-view');
+            hide('settings-view');
+            hide('tag-results');
+            show('preview-view');
+            await window.__previewModule?.loadScriptPicker();
         }
 
         async function loadSettings() {

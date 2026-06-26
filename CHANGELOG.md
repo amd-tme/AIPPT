@@ -6,6 +6,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Live Script Render — Backend Pipeline.** New `aippt.preview` module adds
+  file-watch-driven PPTX rendering for slides-as-code workflows. Key additions:
+  - `Renderer` — detects engine (Node.js or Python), runs the script, converts
+    the emitted `.pptx` through LibreOffice → pdftoppm to produce per-slide
+    JPEGs.
+  - `PreviewSession` — debounced (300 ms) async watcher powered by `watchfiles`;
+    broadcasts render events over WebSocket to all connected clients and
+    coalesces rapid saves into a single render cycle.
+  - `SessionRegistry` — path-allowlist-enforced session pool with configurable
+    parallelism cap.
+  - `discover_local_imports` — regex scanner that finds relative `require()`/
+    `import` references in a script so the watcher can track helper files too.
+  - REST API: `POST/GET/DELETE /api/preview/sessions`, per-slide JPEG endpoint
+    (`/api/preview/sessions/{token}/slides/{n}.jpg`), and
+    `GET /api/preview/scripts` (script picker for the Live Preview UI).
+  - WebSocket: `/ws/preview/{token}` with replay-on-connect and
+    `force_render` support.
+  - CLI: `aippt preview <script> [--once|--watch]` for terminal-level preview.
+  - 34 unit + integration tests covering all new code paths.
+- **Live Preview panel** in the web UI: pick a slides-as-code script
+  (`.js`/`.mjs`/`.py`) from the script picker and watch its rendered thumbnails
+  update live as you edit in your IDE. Per-slide hash diffing means only changed
+  slides reload. Status badge tracks `Idle → Watching → Rendering → Updated`.
+  Error overlay shows `stage`, exit code, and `stderr_tail` when a render fails;
+  last-good thumbnails stay visible (dimmed). Auto-reconnects on WebSocket drop
+  with exponential backoff. Hidden entirely in view-only mode.
+
 ### Fixed
 
 - **Admin tier: case-insensitive NTID matching.** The admin allowlist gate
