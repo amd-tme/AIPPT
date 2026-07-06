@@ -1412,9 +1412,21 @@
                 <button id="preview-stop-btn" class="outline" onclick="previewStop()" disabled>Stop</button>
                 <span id="preview-status" class="preview-status preview-status--idle">Idle</span>
             </div>
-            <p class="preview-disclaimer">&#9888; Rendered via LibreOffice — fonts and shape effects may differ slightly from PowerPoint export.</p>
+            <p class="preview-disclaimer">&#9888; Rendered in-browser via PptxViewJS — fonts and complex effects may differ slightly from PowerPoint export.</p>
             <div id="preview-error" class="preview-error" style="display:none;"></div>
-            <div id="preview-grid" class="preview-grid"></div>
+            <!-- PptxViewJS viewer: main canvas + nav controls + thumbnail strip -->
+            <div id="preview-viewer" style="display:none;">
+                <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.5rem;">
+                    <button id="preview-prev-btn" onclick="window.__previewModule?.prevSlide()" style="width:auto; padding:0.25rem 0.75rem;">&#8592;</button>
+                    <span id="preview-slide-counter" style="font-size:0.85rem; color:var(--pico-muted-color);">—</span>
+                    <button id="preview-next-btn" onclick="window.__previewModule?.nextSlide()" style="width:auto; padding:0.25rem 0.75rem;">&#8594;</button>
+                </div>
+                <div id="preview-canvas-wrap" style="width:100%; overflow:hidden; border:1px solid var(--pico-border-color); border-radius:4px;">
+                    <canvas id="preview-canvas" style="display:block;"></canvas>
+                </div>
+                <div id="preview-thumb-strip" style="display:flex; gap:0.5rem; overflow-x:auto; margin-top:0.75rem; padding-bottom:0.25rem;"></div>
+            </div>
+            <div id="preview-grid" class="preview-grid" style="display:none;"></div>
             <details id="preview-log-details" style="margin-top:1rem;">
                 <summary style="cursor:pointer; color:var(--pico-muted-color); font-size:0.85rem;">Event log</summary>
                 <pre id="preview-log" style="max-height:10rem;overflow:auto;font-size:0.75rem;margin-top:0.5rem;"></pre>
@@ -1624,6 +1636,10 @@
     </footer>
 
     <script src="static/js/ms-auth.js"></script>
+    <!-- PptxViewJS: browser-native PPTX renderer (replaces LibreOffice pipeline) -->
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pptxviewjs/dist/PptxViewJS.min.js"></script>
     <script type="module">
         import * as preview from './static/preview.js';
         window.__previewModule = preview;
