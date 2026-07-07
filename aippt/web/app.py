@@ -9,6 +9,7 @@ from pathlib import Path
 
 from aippt.config import load_sharepoint_config, load_upload_config, load_admin_ntids, load_storage_config, DEFAULT_MAX_UPLOAD_MB
 from aippt.storage import build_storage
+from aippt.preview import SessionRegistry, Renderer
 from aippt.web.log_buffer import install_ring_buffer
 from aippt.web.logging_filter import install_authorization_scrub
 from aippt.web.middleware import UploadSizeLimitMiddleware
@@ -37,7 +38,7 @@ def detect_view_only(gateway_config: str) -> bool:
     return True
 
 
-def create_app(db_path: str = "slides.db", gateway_config: str = None, uploads_dir: str = "uploads", images_dir: str = "images", project_root: str = None, view_only: bool = None, max_upload_mb: int = None, storage_backend: str = None, data_dir: str = None) -> FastAPI:
+def create_app(db_path: str = "slides.db", gateway_config: str = None, uploads_dir: str = "uploads", images_dir: str = "images", project_root: str = None, view_only: bool = None, max_upload_mb: int = None, storage_backend: str = None, data_dir: str = None, preview_allow_dirs: list = None, preview_concurrency: int = 2) -> FastAPI:
     """Create and configure the FastAPI application.
 
     Args:
@@ -116,8 +117,21 @@ def create_app(db_path: str = "slides.db", gateway_config: str = None, uploads_d
                 scheduler.flush()
                 scheduler.shutdown()
                 set_snapshot_scheduler(None)
+            await _app.state.preview_registry.shutdown()
 
     app = FastAPI(title="AIPPT", version="2.0.0", lifespan=_lifespan)
+    # Preview session registry — allow-list defaults to output/ and examples/
+    _default_allow = [
+        os.path.join(resolved_root, "output"),
+        os.path.join(resolved_root, "examples"),
+    ]
+    allow_dirs = [os.path.abspath(d) for d in (preview_allow_dirs or [])] or _default_allow
+    app.state.preview_registry = SessionRegistry(
+        allow_dirs=allow_dirs,
+        max_parallel=preview_concurrency,
+        renderer=Renderer(project_root=resolved_root),
+    )
+
     app.state.log_buffer = log_buffer
     app.state.db_path = db_path
     app.state.gateway_config = gateway_config

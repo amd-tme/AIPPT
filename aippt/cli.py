@@ -477,7 +477,9 @@ def cmd_serve(args):
     max_upload_mb = getattr(args, 'max_upload_mb', None)
     storage_backend = getattr(args, 'storage', None)
     data_dir = getattr(args, 'data_dir', None)
-    app = create_app(db_path=db_path, gateway_config=gateway_config, uploads_dir=uploads_dir, images_dir=images_dir, project_root=base, view_only=view_only, max_upload_mb=max_upload_mb, storage_backend=storage_backend, data_dir=data_dir)
+    allow_dirs = getattr(args, 'allow_dirs', None) or None
+    preview_concurrency = getattr(args, 'preview_concurrency', 2)
+    app = create_app(db_path=db_path, gateway_config=gateway_config, uploads_dir=uploads_dir, images_dir=images_dir, project_root=base, view_only=view_only, max_upload_mb=max_upload_mb, storage_backend=storage_backend, data_dir=data_dir, preview_allow_dirs=allow_dirs, preview_concurrency=preview_concurrency)
     mode = "view-only" if app.state.view_only else "full"
     print(f"Starting AIPPT web UI on http://{args.host}:{args.port} ({mode} mode)")
     uvicorn.run(app, host=args.host, port=args.port)
@@ -1688,6 +1690,19 @@ def build_parser():
     p_serve.add_argument("--max-upload-mb", type=int, default=None, help="Maximum upload size in MB. Overrides upload.max_size_mb in gateway.yaml; default 50.")
     p_serve.add_argument("--storage", choices=["fs", "s3"], default=None, help="Storage backend for library assets and the catalog snapshot. 'fs' (default) uses the local data dir; 's3' uses S3-compatible object storage (MinIO) configured via MINIO_* env vars. Overrides the AIPPT_STORAGE env var.")
     p_serve.add_argument("--data-dir", default=None, help="Durable data root that object-storage keys are computed relative to (e.g. /app/data). Defaults to the dirs.yaml base directory. Set this to the data volume in container deployments so keys match the uploads/images/output layout.")
+    p_serve.add_argument("--allow-dir", dest="allow_dirs", action="append", default=[], metavar="DIR",
+                         help="Add a directory to the preview runner allow-list. Repeatable. Defaults to output/ and examples/ under the project root.")
+    p_serve.add_argument("--preview-concurrency", type=int, default=2, metavar="N",
+                         help="Maximum simultaneous preview renders (default: 2).")
+
+    # preview (live slides-as-code rendering)
+    p_preview = sub.add_parser("preview", help="Live-render a slides-as-code script to a .pptx")
+    p_preview.add_argument("script", help="Path to the .js/.mjs/.py script to render")
+    p_preview.add_argument("--once", action="store_true", default=True, help="Render once and exit (default)")
+    p_preview.add_argument("--watch", action="store_true", help="Watch for changes and stream events as JSON Lines")
+    p_preview.add_argument("--out-dir", default=None, help="Output directory for the .pptx (default: output/.preview/<stem>)")
+    p_preview.add_argument("--allow-dir", dest="allow_dirs", action="append", default=[], metavar="DIR",
+                           help="Extra directory to allow script execution from (repeatable)")
 
     # storage (object-storage maintenance)
     p_storage = sub.add_parser("storage", help="Object-storage maintenance (backfill)")
@@ -1899,6 +1914,73 @@ def build_parser():
     return parser
 
 
+def cmd_preview(args):
+    """Render a slides-as-code script to a .pptx (once or watch)."""
+    import asyncio
+    import json as _json
+    from pathlib import Path as _Path
+    from aippt.preview import Renderer, PreviewSession, SessionRegistry, discover_local_imports
+
+    script = str(_Path(args.script).resolve())
+    stem = _Path(script).stem
+    out_dir = args.out_dir or os.path.join("output", ".preview", stem)
+
+    renderer = Renderer(project_root=os.getcwd())
+
+    if args.watch:
+        # Long-running watch mode — stream JSONL events to stdout
+        allow_dirs = args.allow_dirs or [str(_Path(script).parent)]
+
+        async def _watch():
+            registry = SessionRegistry(allow_dirs=allow_dirs, renderer=renderer)
+            try:
+                session = await registry.create(script, out_base=os.path.join("output", ".preview"))
+                print(_json.dumps({"event": "session_started", "token": session.token,
+                                   "script": script, "out_dir": session.out_dir}), flush=True)
+
+                # Proxy events to stdout by monkey-patching _broadcast
+                _orig_broadcast = session._broadcast
+
+                async def _stdout_broadcast(message):
+                    print(_json.dumps(message), flush=True)
+                    await _orig_broadcast(message)
+
+                session._broadcast = _stdout_broadcast
+
+                # Block until Ctrl-C
+                while True:
+                    await asyncio.sleep(1)
+            except KeyboardInterrupt:
+                pass
+            finally:
+                await registry.shutdown()
+
+        asyncio.run(_watch())
+        return 0
+
+    # --once (default): single render, print JSON result
+    os.makedirs(out_dir, exist_ok=True)
+    result = renderer.render(script, out_dir)
+    if result.success:
+        payload = {
+            "success": True,
+            "duration_ms": result.duration_ms,
+            "out_dir": out_dir,
+            "pptx_path": result.pptx_path,
+        }
+        print(_json.dumps(payload, indent=2))
+        return 0
+    else:
+        payload = {
+            "success": False,
+            "stage": result.stage,
+            "exit_code": result.exit_code,
+            "stderr_tail": result.stderr_tail,
+        }
+        print(_json.dumps(payload, indent=2))
+        return 1
+
+
 def main():
     """Main entry point."""
     # Ensure stdout/stderr can handle Unicode (LLM responses often contain
@@ -1941,6 +2023,7 @@ def main():
         "merge": cmd_merge,
         "metadata": cmd_metadata,
         "merge-template": cmd_merge_template,
+        "preview": cmd_preview,
     }
 
     if not args.command:
