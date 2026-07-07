@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from aippt.preview import (
+    PreviewSession,
     Renderer,
     RenderResult,
     SessionRegistry,
@@ -95,7 +96,13 @@ class TestRenderer:
         assert found is not None
         assert found.name == "new.pptx"
 
-    def test_render_soffice_failure(self, tmp_path):
+    def test_render_success_returns_pptx(self, tmp_path):
+        """A successful script run that emits a .pptx yields success + pptx_path.
+
+        PptxViewJS mode stops at the .pptx — there is no LibreOffice/pdftoppm
+        stage — so the script running cleanly and a fresh .pptx existing is the
+        whole success path.
+        """
         r = Renderer()
         script = tmp_path / "deck.js"
         script.write_text("// ok")
@@ -105,19 +112,13 @@ class TestRenderer:
         pptx.write_bytes(b"PK")
 
         ok = MagicMock(returncode=0, stderr="", stdout="")
-        fail = MagicMock(returncode=1, stderr="soffice crashed", stdout="")
 
-        call_count = [0]
-
-        def fake_run(cmd, **kwargs):
-            call_count[0] += 1
-            return ok if call_count[0] == 1 else fail
-
-        with patch.object(r, "_run", side_effect=fake_run):
+        with patch.object(r, "_run", return_value=ok):
             result = r.render(str(script), str(out))
 
-        assert not result.success
-        assert result.stage == "soffice"
+        assert result.success
+        assert result.pptx_path == str(pptx.resolve())
+        assert result.duration_ms is not None
 
 
 # ---------------------------------------------------------------------------
@@ -198,15 +199,13 @@ class TestSessionRegistry:
         script.write_text("// bad")
 
         with pytest.raises(ValueError, match="outside the allowed"):
-            asyncio.get_event_loop().run_until_complete(registry.create(str(script)))
+            asyncio.run(registry.create(str(script)))
 
     def test_rejects_missing_script(self, tmp_path):
         registry = SessionRegistry(allow_dirs=[str(tmp_path)])
 
         with pytest.raises(FileNotFoundError):
-            asyncio.get_event_loop().run_until_complete(
-                registry.create(str(tmp_path / "missing.js"))
-            )
+            asyncio.run(registry.create(str(tmp_path / "missing.js")))
 
     def test_returns_existing_session_for_same_script(self, tmp_path):
         script = tmp_path / "deck.js"
@@ -215,16 +214,16 @@ class TestSessionRegistry:
         registry = SessionRegistry(allow_dirs=[str(tmp_path)])
 
         async def _run():
-            with patch("aippt.preview.PreviewSession.start", new_callable=lambda: lambda self: asyncio.coroutine(lambda: None)()):
+            # Patch start to a no-op so create() doesn't spawn a watcher.
+            async def _noop_start(self):
                 pass
-            # Patch start to be a no-op
-            with patch.object(registry, "create", wraps=registry.create):
+            with patch.object(PreviewSession, "start", _noop_start):
                 s1 = await registry.create(str(script))
                 s2 = await registry.create(str(script))
                 assert s1 is s2
                 await registry.shutdown()
 
-        asyncio.get_event_loop().run_until_complete(_run())
+        asyncio.run(_run())
 
     def test_get_returns_none_for_unknown_token(self, tmp_path):
         registry = SessionRegistry(allow_dirs=[str(tmp_path)])
@@ -236,4 +235,4 @@ class TestSessionRegistry:
         async def _run():
             await registry.delete("nonexistent")  # should not raise
 
-        asyncio.get_event_loop().run_until_complete(_run())
+        asyncio.run(_run())

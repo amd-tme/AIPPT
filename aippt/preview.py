@@ -13,7 +13,6 @@ recorded in ``slides.db``.
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import logging
 import os
 import re
@@ -32,21 +31,12 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 @dataclass
-class SlideImage:
-    n: int
-    path: str        # absolute path on disk
-    url: str         # API URL served to the client
-    hash: str        # sha256: prefix + first 16 hex chars
-
-
-@dataclass
 class RenderResult:
     success: bool
-    stage: Optional[str] = None          # "node" | "python" | "soffice" | "pdftoppm"
+    stage: Optional[str] = None          # "node" | "python"
     exit_code: Optional[int] = None
     stderr_tail: Optional[str] = None
     stdout: Optional[str] = None
-    slides: List[SlideImage] = field(default_factory=list)
     pptx_path: Optional[str] = None      # absolute path to the generated .pptx (pptxviewjs mode)
     duration_ms: Optional[int] = None
     warnings: List[str] = field(default_factory=list)
@@ -63,14 +53,6 @@ _VENV_PYTHON = (
 )
 
 
-def _hash_file(path: str) -> str:
-    h = hashlib.sha256()
-    with open(path, "rb") as fh:
-        for chunk in iter(lambda: fh.read(65536), b""):
-            h.update(chunk)
-    return "sha256:" + h.hexdigest()[:16]
-
-
 def _tail(text: str, lines: int = 30) -> str:
     return "\n".join(text.splitlines()[-lines:])
 
@@ -82,9 +64,6 @@ class Renderer:
     and pdftoppm are no longer needed because PptxViewJS renders the file
     directly in the browser.
     """
-
-    def __init__(self, dpi: int = 150):
-        self.dpi = dpi  # kept for API compatibility; unused in pptxviewjs mode
 
     def render(self, script_path: str, out_dir: str) -> RenderResult:
         """Run *script_path* and return the path to the generated .pptx.
