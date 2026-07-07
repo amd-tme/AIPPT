@@ -1915,7 +1915,7 @@ def build_parser():
 
 
 def cmd_preview(args):
-    """Render a slides-as-code script to per-slide JPEGs (once or watch)."""
+    """Render a slides-as-code script to a .pptx (once or watch)."""
     import asyncio
     import json as _json
     from pathlib import Path as _Path
@@ -1925,7 +1925,7 @@ def cmd_preview(args):
     stem = _Path(script).stem
     out_dir = args.out_dir or os.path.join("output", ".preview", stem)
 
-    renderer = Renderer()
+    renderer = Renderer(project_root=os.getcwd())
 
     if args.watch:
         # Long-running watch mode — stream JSONL events to stdout

@@ -91,10 +91,49 @@ class TestRenderer:
         time.sleep(0.01)
         new.write_bytes(b"PK")
 
-        start = time.monotonic() - 1
-        found = Renderer._find_pptx(tmp_path / "script.js", tmp_path, start)
+        start = time.time() - 1
+        found = Renderer._find_pptx(tmp_path / "script.js", tmp_path, wall_start=start)
         assert found is not None
         assert found.name == "new.pptx"
+
+    def test_find_pptx_rejects_stale_files(self, tmp_path):
+        """A .pptx older than wall_start must not count as a fresh render.
+
+        Regression: the mtime cutoff used to compare epoch mtimes against a
+        ``time.monotonic()`` start, which is always smaller, so any pre-existing
+        .pptx was returned as a false success.
+        """
+        import time
+        stale = tmp_path / "stale.pptx"
+        stale.write_bytes(b"PK")
+        # Backdate the file well before the render started.
+        old_ts = time.time() - 3600
+        os.utime(stale, (old_ts, old_ts))
+
+        start = time.time()
+        found = Renderer._find_pptx(tmp_path / "script.js", tmp_path, wall_start=start)
+        assert found is None
+
+    def test_render_fails_when_script_writes_nothing(self, tmp_path):
+        """Script exits 0 but emits no fresh .pptx → failure, not stale reuse."""
+        import time
+        r = Renderer(project_root=str(tmp_path))
+        script = tmp_path / "noop.js"
+        script.write_text("// writes nothing")
+        out = tmp_path / "out"
+        out.mkdir()
+        # A stale, pre-existing pptx that must NOT be served as success.
+        stale = out / "stale.pptx"
+        stale.write_bytes(b"PK")
+        old_ts = time.time() - 3600
+        os.utime(stale, (old_ts, old_ts))
+
+        ok = MagicMock(returncode=0, stderr="", stdout="")
+        with patch.object(r, "_run", return_value=ok):
+            result = r.render(str(script), str(out))
+
+        assert not result.success
+        assert "No .pptx" in (result.stderr_tail or "")
 
     def test_render_success_returns_pptx(self, tmp_path):
         """A successful script run that emits a .pptx yields success + pptx_path.
@@ -103,17 +142,20 @@ class TestRenderer:
         stage — so the script running cleanly and a fresh .pptx existing is the
         whole success path.
         """
-        r = Renderer()
+        r = Renderer(project_root=str(tmp_path))
         script = tmp_path / "deck.js"
         script.write_text("// ok")
         out = tmp_path / "out"
         out.mkdir()
         pptx = out / "deck.pptx"
-        pptx.write_bytes(b"PK")
 
-        ok = MagicMock(returncode=0, stderr="", stdout="")
+        # Simulate the script writing the .pptx during the run, so its mtime is
+        # after the render's wall_start (mirrors a real render).
+        def fake_run(cmd, **kwargs):
+            pptx.write_bytes(b"PK")
+            return MagicMock(returncode=0, stderr="", stdout="")
 
-        with patch.object(r, "_run", return_value=ok):
+        with patch.object(r, "_run", side_effect=fake_run):
             result = r.render(str(script), str(out))
 
         assert result.success

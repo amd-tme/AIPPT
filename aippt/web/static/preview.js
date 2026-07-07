@@ -254,12 +254,30 @@ function onRenderStarted(data) {
 async function onRenderComplete(data) {
     clearError();
     lastGoodTs = data.ts;
-    setStatus('updated', `Updated ${relativeTime(lastGoodTs)}`);
 
-    if (!data.pptx_url) return;
+    if (!data.pptx_url) {
+        setStatus('updated', `Updated ${relativeTime(lastGoodTs)}`);
+        return;
+    }
 
     const canvas = el('preview-canvas');
-    if (!canvas || !window.PptxViewJS) return;
+    if (!canvas) return;
+
+    // The browser-side renderer must be present. If the PptxViewJS bundle
+    // failed to load (e.g. CDN blocked on an air-gapped network), don't leave
+    // a misleading green "Updated" badge over a blank viewer — surface it.
+    if (!window.PptxViewJS) {
+        setStatus('error');
+        showError({
+            stage: 'viewer',
+            stderr_tail: 'PptxViewJS failed to load — the deck rendered on the '
+                + 'server but cannot be displayed. Check that '
+                + 'static/vendor/PptxViewJS.min.js is reachable.',
+        });
+        return;
+    }
+
+    setStatus('updated', `Updated ${relativeTime(lastGoodTs)}`);
 
     // Destroy previous viewer before loading new deck
     if (pptxViewer) {
@@ -297,7 +315,12 @@ async function onRenderComplete(data) {
         _highlightThumb(index);
     });
 
-    await pptxViewer.loadFromUrl(data.pptx_url + `?t=${Date.now()}`);
+    try {
+        await pptxViewer.loadFromUrl(data.pptx_url + `?t=${Date.now()}`);
+    } catch (e) {
+        setStatus('error');
+        showError({ stage: 'viewer', stderr_tail: 'Failed to render the deck in the browser: ' + String(e) });
+    }
 }
 
 function onRenderFailed(data) {

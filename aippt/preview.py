@@ -63,7 +63,14 @@ class Renderer:
     The pipeline stops after locating the generated .pptx file — LibreOffice
     and pdftoppm are no longer needed because PptxViewJS renders the file
     directly in the browser.
+
+    Scripts are executed with ``cwd`` set to *project_root* (not the script's
+    own directory) because AIPPT decks reference paths relative to the project
+    root — e.g. ``themes/amd.yaml`` and ``output/<deck>.pptx``.
     """
+
+    def __init__(self, project_root: Optional[str] = None):
+        self.project_root = str(Path(project_root).resolve()) if project_root else os.getcwd()
 
     def render(self, script_path: str, out_dir: str) -> RenderResult:
         """Run *script_path* and return the path to the generated .pptx.
@@ -71,14 +78,15 @@ class Renderer:
         The caller is responsible for creating *out_dir*.
         """
         t0 = time.monotonic()
+        wall_start = time.time()  # epoch — compared against file mtimes
         script = Path(script_path).resolve()
         out = Path(out_dir).resolve()
         out.mkdir(parents=True, exist_ok=True)
 
-        # --- Step 1: run the script ---
+        # --- Step 1: run the script from the project root ---
         cmd, stage = self._build_command(script)
         env = {**os.environ, "AIPPT_PREVIEW_OUT": str(out)}
-        result = self._run(cmd, cwd=str(script.parent), env=env)
+        result = self._run(cmd, cwd=self.project_root, env=env)
         if result.returncode != 0:
             return RenderResult(
                 success=False,
@@ -89,7 +97,7 @@ class Renderer:
             )
 
         # --- Step 2: find the PPTX ---
-        pptx = self._find_pptx(script, out, start_ts=t0)
+        pptx = self._find_pptx(script, out, self.project_root, wall_start=wall_start)
         if pptx is None:
             return RenderResult(
                 success=False,
@@ -126,17 +134,37 @@ class Renderer:
         )
 
     @staticmethod
-    def _find_pptx(script: Path, out_dir: Path, start_ts: float) -> Optional[Path]:
-        """Locate the PPTX produced by the script.
+    def _find_pptx(
+        script: Path,
+        out_dir: Path,
+        project_root: Optional[str] = None,
+        wall_start: Optional[float] = None,
+    ) -> Optional[Path]:
+        """Locate the PPTX freshly produced by the script.
 
-        Preference order:
-        1. ``AIPPT_PREVIEW_OUT`` dir — newest .pptx written after start_ts.
-        2. Script's own directory — newest .pptx written after start_ts.
+        Only files modified at or after *wall_start* (an epoch timestamp from
+        ``time.time()``) count — this rejects stale/committed .pptx files left
+        in the search dirs, so a script that writes nothing is a failure rather
+        than a false success.
+
+        Search order (most-specific first):
+        1. ``AIPPT_PREVIEW_OUT`` dir.
+        2. Project root's ``output/`` dir (where AIPPT decks write by default).
+        3. Script's own directory.
         """
-        for search_dir in (out_dir, script.parent):
+        cutoff = (wall_start - 0.5) if wall_start is not None else 0.0
+
+        search_dirs = [out_dir]
+        if project_root:
+            search_dirs.append(Path(project_root) / "output")
+        search_dirs.append(script.parent)
+
+        for search_dir in search_dirs:
+            if not search_dir.is_dir():
+                continue
             candidates = [
                 p for p in search_dir.glob("*.pptx")
-                if p.stat().st_mtime >= start_ts - 0.5
+                if p.stat().st_mtime >= cutoff
             ]
             if candidates:
                 return max(candidates, key=lambda p: p.stat().st_mtime)

@@ -13,8 +13,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   stops once the `.pptx` is generated and serves it directly; PptxViewJS renders
   it in the browser, so no LibreOffice/pdftoppm/image conversion is required.
   Key additions:
-  - `Renderer` — detects engine (Node.js or Python), runs the script, and
-    locates the emitted `.pptx`.
+  - `Renderer` — detects engine (Node.js or Python), runs the script from the
+    project root (so decks can reference `themes/*.yaml` and `output/` by
+    relative path), and locates the freshly emitted `.pptx` (by mtime, so a
+    script that writes nothing fails instead of reusing a stale file).
   - `PreviewSession` — debounced (300 ms) async watcher powered by `watchfiles`;
     broadcasts render events over WebSocket to all connected clients and
     coalesces rapid saves into a single render cycle.
@@ -28,13 +30,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - WebSocket: `/ws/preview/{token}` with replay-on-connect and
     `force_render` support.
   - CLI: `aippt preview <script> [--once|--watch]` for terminal-level preview.
-  - 46 unit + integration tests covering all new code paths.
+  - 48 unit + integration tests covering all new code paths.
 - **Live Preview panel** in the web UI: pick a slides-as-code script
   (`.js`/`.mjs`/`.py`) from the script picker and watch the rendered deck update
   live as you edit in your IDE. The deck renders in-browser on an HTML5 canvas
-  via PptxViewJS, with a slide counter, numbered thumbnail strip, and prev/next
-  navigation. Status badge tracks `Idle → Watching → Rendering → Updated`.
-  Error overlay shows `stage`, exit code, and `stderr_tail` when a render fails.
+  via PptxViewJS (jszip, chart.js, and pptxviewjs are vendored under
+  `static/vendor/` so the preview works on air-gapped / proxied networks), with
+  a slide counter, numbered thumbnail strip, and prev/next navigation. Status
+  badge tracks `Idle → Watching → Rendering → Updated`. Error overlay shows
+  `stage`, exit code, and `stderr_tail` when a render fails — including when the
+  PptxViewJS bundle itself can't load, rather than showing a false success.
   Auto-reconnects on WebSocket drop with exponential backoff. Hidden entirely in
   view-only mode.
 
