@@ -2288,6 +2288,7 @@ ${newLines}</pre></div>`;
                     <span style="font-size:0.78rem; color:#4caf50;">&#10003; Applied</span>
                     <button class="outline" onclick="undoDeckPatch(${convId}, ${msgId})"
                         style="width:auto; padding:0.2rem 0.55rem; font-size:0.75rem; margin-left:0.4rem;">&#8635; Undo</button>`;
+                await _refreshSlideGrid();
             } else {
                 const err = await resp.json().catch(() => ({error: 'unknown'}));
                 if (actionsDiv) actionsDiv.innerHTML = `<span style="font-size:0.78rem; color:#f44336;">&#10007; ${esc(err.error || 'Apply failed')}</span>`;
@@ -2300,10 +2301,19 @@ ${newLines}</pre></div>`;
             const resp = await fetch(`api/chat/conversations/${convId}/messages/${msgId}/revert`, {method: 'POST'});
             if (resp.ok) {
                 if (actionsDiv) actionsDiv.innerHTML = '<span style="font-size:0.78rem; color:var(--pico-muted-color);">&#8635; Reverted</span>';
+                await _refreshSlideGrid();
             } else {
                 const err = await resp.json().catch(() => ({error: 'unknown'}));
                 if (actionsDiv) actionsDiv.innerHTML = `<span style="font-size:0.78rem; color:#f44336;">&#10007; ${esc(err.error || 'Revert failed')}</span>`;
             }
+        }
+
+        async function _refreshSlideGrid() {
+            if (!currentDeckId) return;
+            const resp = await fetch(`api/decks/${currentDeckId}/slides`);
+            if (!resp.ok) return;
+            const slides = await resp.json();
+            renderSlideGrid('slide-grid', slides);
         }
 
         function rejectDeckPatch(msgId) {

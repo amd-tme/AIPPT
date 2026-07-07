@@ -2300,7 +2300,8 @@ async def preview_websocket(token: str, websocket: WebSocket):
 # Chat-with-a-Deck endpoints
 # ---------------------------------------------------------------------------
 
-# Active cancel tokens keyed by conversation_id
+# Active cancel tokens keyed by conversation_id.
+# Safe for single-worker uvicorn only — would leak/misfire across multiple workers.
 _chat_cancel_tokens: dict = {}
 
 
@@ -2312,8 +2313,11 @@ async def list_chat_conversations(request: Request, deck_id: int):
     from aippt.chat import ChatService
     db_path = request.app.state.db_path
     conn = get_db(db_path)
-    svc = ChatService(conn, llm=None)  # llm not needed for list
-    return svc.list_conversations(deck_id)
+    try:
+        svc = ChatService(conn, llm=None)
+        return svc.list_conversations(deck_id)
+    finally:
+        conn.close()
 
 
 @router.post("/api/chat/conversations")
@@ -2329,9 +2333,12 @@ async def create_chat_conversation(request: Request):
     from aippt.chat import ChatService
     db_path = request.app.state.db_path
     conn = get_db(db_path)
-    svc = ChatService(conn, llm=None)
-    conv_id = svc.create_conversation(deck_id, title)
-    return {"id": conv_id, "deck_id": deck_id, "title": title}
+    try:
+        svc = ChatService(conn, llm=None)
+        conv_id = svc.create_conversation(deck_id, title)
+        return {"id": conv_id, "deck_id": deck_id, "title": title}
+    finally:
+        conn.close()
 
 
 @router.get("/api/chat/conversations/{conversation_id}")
@@ -2342,12 +2349,15 @@ async def get_chat_conversation(conversation_id: int, request: Request):
     from aippt.chat import ChatService
     db_path = request.app.state.db_path
     conn = get_db(db_path)
-    svc = ChatService(conn, llm=None)
-    conv = svc.get_conversation(conversation_id)
-    if not conv:
-        return JSONResponse({"error": "Conversation not found"}, status_code=404)
-    messages = svc.get_messages(conversation_id)
-    return {"conversation": conv, "messages": messages}
+    try:
+        svc = ChatService(conn, llm=None)
+        conv = svc.get_conversation(conversation_id)
+        if not conv:
+            return JSONResponse({"error": "Conversation not found"}, status_code=404)
+        messages = svc.get_messages(conversation_id)
+        return {"conversation": conv, "messages": messages}
+    finally:
+        conn.close()
 
 
 @router.patch("/api/chat/conversations/{conversation_id}")
@@ -2362,11 +2372,14 @@ async def rename_chat_conversation(conversation_id: int, request: Request):
     from aippt.chat import ChatService
     db_path = request.app.state.db_path
     conn = get_db(db_path)
-    svc = ChatService(conn, llm=None)
-    ok = svc.rename_conversation(conversation_id, title)
-    if not ok:
-        return JSONResponse({"error": "Conversation not found"}, status_code=404)
-    return {"id": conversation_id, "title": title}
+    try:
+        svc = ChatService(conn, llm=None)
+        ok = svc.rename_conversation(conversation_id, title)
+        if not ok:
+            return JSONResponse({"error": "Conversation not found"}, status_code=404)
+        return {"id": conversation_id, "title": title}
+    finally:
+        conn.close()
 
 
 @router.delete("/api/chat/conversations/{conversation_id}")
@@ -2398,8 +2411,7 @@ async def chat_send_message(conversation_id: int, request: Request):
 
     Event types:
         data: {"type":"chunk","text":"..."}
-        data: {"type":"patch_applied","slide_id":N,"field":"..."}
-        data: {"type":"patch_failed","slide_id":N,"field":"...","reason":"..."}
+        data: {"type":"patch_proposed","message_id":N,"patches":[...]}
         data: {"type":"cancelled"}
         data: {"type":"done"}
         data: {"type":"error","message":"..."}

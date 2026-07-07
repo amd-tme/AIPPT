@@ -20,7 +20,7 @@ from typing import Generator, Iterator, List, Optional
 import sqlite3
 
 from aippt.llm import LLMClient
-from aippt.patch import extract_patches, apply_patch, revert_last, Patch
+from aippt.patch import extract_patches, apply_patch, revert_by_id, revert_last, Patch
 
 logger = logging.getLogger(__name__)
 
@@ -196,28 +196,36 @@ class ChatService:
 
         patches = [Patch(**p) for p in json.loads(row["patch_json"])]
         errors = []
+        history_ids = []
         for patch in patches:
             patch.conversation_id = row["conversation_id"]
             patch.message_id = message_id
             try:
-                apply_patch(patch, self.conn, source="chat", cwd=self.db_cwd)
+                history_id = apply_patch(patch, self.conn, source="chat", cwd=self.db_cwd)
+                history_ids.append(history_id)
             except ValueError as exc:
                 errors.append(str(exc))
 
         if errors:
             return False, "; ".join(errors)
 
+        # Store the first (usually only) history_id so Undo reverts the exact row.
         self.conn.execute(
-            "UPDATE chat_messages SET patch_applied_at = datetime('now') WHERE id = ?",
-            (message_id,),
+            "UPDATE chat_messages SET patch_applied_at = datetime('now'), edit_history_id = ? WHERE id = ?",
+            (history_ids[0] if history_ids else None, message_id),
         )
         self.conn.commit()
         return True, "ok"
 
     def revert_message_patch(self, message_id: int) -> tuple[bool, str]:
-        """Revert the patch stored on *message_id*. Returns (ok, reason)."""
+        """Revert the patch stored on *message_id*. Returns (ok, reason).
+
+        Uses the stored edit_history_id to revert the exact row created when
+        this message's patch was applied, avoiding the "reverts the wrong patch"
+        bug that occurred when multiple patches touched the same slide+field.
+        """
         row = self.conn.execute(
-            "SELECT patch_json, patch_applied_at FROM chat_messages WHERE id = ?",
+            "SELECT patch_json, patch_applied_at, edit_history_id FROM chat_messages WHERE id = ?",
             (message_id,),
         ).fetchone()
         if not row:
@@ -227,17 +235,24 @@ class ChatService:
         if not row["patch_json"]:
             return False, "No patch on this message"
 
-        patches = [Patch(**p) for p in json.loads(row["patch_json"])]
-        errors = []
-        for patch in patches:
-            ok, reason = revert_last(
-                patch.slide_id, patch.field, self.conn, source="chat-revert", cwd=self.db_cwd
-            )
+        history_id = row["edit_history_id"]
+        if history_id is not None:
+            # Precise revert: target the exact edit_history row this message created.
+            ok, reason = revert_by_id(history_id, self.conn, source="chat-revert", cwd=self.db_cwd)
             if not ok:
-                errors.append(reason)
-
-        if errors:
-            return False, "; ".join(errors)
+                return False, reason
+        else:
+            # Fallback for messages applied before edit_history_id tracking was added.
+            patches = [Patch(**p) for p in json.loads(row["patch_json"])]
+            errors = []
+            for patch in patches:
+                ok, reason = revert_last(
+                    patch.slide_id, patch.field, self.conn, source="chat-revert", cwd=self.db_cwd
+                )
+                if not ok:
+                    errors.append(reason)
+            if errors:
+                return False, "; ".join(errors)
 
         self.conn.execute(
             "UPDATE chat_messages SET patch_reverted_at = datetime('now') WHERE id = ?",

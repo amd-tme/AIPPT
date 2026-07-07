@@ -110,6 +110,7 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     patch_json TEXT DEFAULT NULL,
     patch_applied_at TEXT DEFAULT NULL,
     patch_reverted_at TEXT DEFAULT NULL,
+    edit_history_id INTEGER DEFAULT NULL,  -- edit_history row for this message's applied patch
     tokens_in INTEGER DEFAULT NULL,
     tokens_out INTEGER DEFAULT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))

@@ -124,6 +124,7 @@ def get_db(db_path: str = "slides.db") -> sqlite3.Connection:
         ("patch_reverted_at TEXT DEFAULT NULL", "patch_reverted_at"),
         ("tokens_in INTEGER DEFAULT NULL", "tokens_in"),
         ("tokens_out INTEGER DEFAULT NULL", "tokens_out"),
+        ("edit_history_id INTEGER DEFAULT NULL", "edit_history_id"),
     ):
         if col_name not in existing_chat_msg_cols:
             conn.execute(f"ALTER TABLE chat_messages ADD COLUMN {col_ddl}")

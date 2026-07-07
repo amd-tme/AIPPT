@@ -141,8 +141,12 @@ def apply_patch(
     *,
     source: str = "chat",
     cwd: Optional[str] = None,
-) -> None:
+) -> int:
     """Apply *patch* to the database and append an entry to the edit-history log.
+
+    Returns:
+        The ``edit_history.id`` of the new row, so callers can link a specific
+        message to the exact history entry it created.
 
     Raises:
         ValueError: If the patch fails validation.
@@ -163,17 +167,58 @@ def apply_patch(
         (new_value, patch.slide_id),
     )
 
-    # Record in edit_history table
-    conn.execute(
+    # Record in edit_history table and capture the row id
+    cur = conn.execute(
         """INSERT INTO edit_history (slide_id, field, old_value, new_value, source)
            VALUES (?, ?, ?, ?, ?)""",
         (patch.slide_id, patch.field, current, new_value, source),
     )
+    history_id: int = cur.lastrowid
     conn.commit()
 
     # Append to .aippt/edit-history.jsonl
     _append_history(patch, current, new_value, cwd=cwd)
     logger.info("Applied patch to slides.%s for slide %d", patch.field, patch.slide_id)
+    return history_id
+
+
+def revert_by_id(
+    history_id: int,
+    conn: sqlite3.Connection,
+    *,
+    source: str = "chat",
+    cwd: Optional[str] = None,
+) -> Tuple[bool, str]:
+    """Revert a specific edit_history row by its id.
+
+    This is the precise form used by message-level Undo so that clicking Undo
+    on a specific message reverts exactly that patch, not "the most recent one
+    for the same slide+field."
+
+    Returns *(ok, message)*.
+    """
+    row = conn.execute(
+        "SELECT slide_id, field, old_value, new_value FROM edit_history WHERE id = ?",
+        (history_id,),
+    ).fetchone()
+
+    if row is None:
+        return False, f"No edit history row with id={history_id}"
+
+    slide_id, field = row["slide_id"], row["field"]
+    old_value, new_value = row["old_value"], row["new_value"]
+
+    conn.execute(
+        f"UPDATE slides SET {field} = ?, updated_at = datetime('now') WHERE id = ?",
+        (old_value, slide_id),
+    )
+    conn.execute("DELETE FROM edit_history WHERE id = ?", (history_id,))
+    conn.commit()
+
+    revert_patch = Patch(slide_id=slide_id, field=field, old_text=new_value or "", new_text=old_value or "")
+    _append_history(revert_patch, new_value or "", old_value or "", cwd=cwd, action="revert")
+    logger.info("Reverted edit_history id=%d on slides.%s for slide %d", history_id, field, slide_id)
+    return True, f"Reverted slide {slide_id} field '{field}' to previous value"
 
 
 def revert_last(
