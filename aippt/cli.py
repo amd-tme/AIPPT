@@ -1696,12 +1696,11 @@ def build_parser():
                          help="Maximum simultaneous preview renders (default: 2).")
 
     # preview (live slides-as-code rendering)
-    p_preview = sub.add_parser("preview", help="Live-render a slides-as-code script to per-slide JPEGs")
+    p_preview = sub.add_parser("preview", help="Live-render a slides-as-code script to a .pptx")
     p_preview.add_argument("script", help="Path to the .js/.mjs/.py script to render")
     p_preview.add_argument("--once", action="store_true", default=True, help="Render once and exit (default)")
     p_preview.add_argument("--watch", action="store_true", help="Watch for changes and stream events as JSON Lines")
-    p_preview.add_argument("--out-dir", default=None, help="Output directory for JPEGs (default: output/.preview/<stem>)")
-    p_preview.add_argument("--dpi", type=int, default=150, help="JPEG resolution (default: 150)")
+    p_preview.add_argument("--out-dir", default=None, help="Output directory for the .pptx (default: output/.preview/<stem>)")
     p_preview.add_argument("--allow-dir", dest="allow_dirs", action="append", default=[], metavar="DIR",
                            help="Extra directory to allow script execution from (repeatable)")
 
@@ -1916,7 +1915,7 @@ def build_parser():
 
 
 def cmd_preview(args):
-    """Render a slides-as-code script to per-slide JPEGs (once or watch)."""
+    """Render a slides-as-code script to a .pptx (once or watch)."""
     import asyncio
     import json as _json
     from pathlib import Path as _Path
@@ -1926,7 +1925,7 @@ def cmd_preview(args):
     stem = _Path(script).stem
     out_dir = args.out_dir or os.path.join("output", ".preview", stem)
 
-    renderer = Renderer(dpi=args.dpi)
+    renderer = Renderer(project_root=os.getcwd())
 
     if args.watch:
         # Long-running watch mode — stream JSONL events to stdout
@@ -1965,10 +1964,9 @@ def cmd_preview(args):
     if result.success:
         payload = {
             "success": True,
-            "slide_count": len(result.slides),
             "duration_ms": result.duration_ms,
             "out_dir": out_dir,
-            "slides": [{"n": s.n, "path": s.path, "hash": s.hash} for s in result.slides],
+            "pptx_path": result.pptx_path,
         }
         print(_json.dumps(payload, indent=2))
         return 0

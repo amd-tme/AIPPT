@@ -2184,33 +2184,21 @@ async def delete_preview_session(token: str, request: Request):
     return {"status": "stopped", "token": token}
 
 
-@router.get("/api/preview/sessions/{token}/slides/{n}.jpg")
-async def get_preview_slide(token: str, n: int, request: Request):
-    """Serve a rendered slide JPEG for a preview session."""
+@router.get("/api/preview/sessions/{token}/pptx")
+async def get_preview_pptx(token: str, request: Request):
+    """Serve the last rendered .pptx for a preview session (consumed by PptxViewJS)."""
     registry = _preview_registry(request)
     session = registry.get(token)
     if session is None:
         return JSONResponse({"error": "Session not found"}, status_code=404)
-
-    # Find the JPEG on disk from the last render result
-    state = session.last_state
-    slides = state.get("slides", [])
-    matched = next((s for s in slides if s.get("n") == n), None)
-    if matched is None:
-        return JSONResponse({"error": f"Slide {n} not yet rendered"}, status_code=404)
-
-    # Reconstruct path from out_dir
-    from pathlib import Path as _Path
-    img_path = _Path(session.out_dir) / f"slide-{n:02d}.jpg"
-    if not img_path.exists():
-        # pdftoppm may zero-pad differently; glob for it
-        candidates = list(_Path(session.out_dir).glob(f"slide*{n}*.jpg"))
-        if not candidates:
-            return JSONResponse({"error": "Image file not found on disk"}, status_code=404)
-        img_path = sorted(candidates)[0]
-
-    return FileResponse(str(img_path), media_type="image/jpeg",
-                        headers={"Cache-Control": "no-cache"})
+    pptx_path = getattr(session, "last_pptx_path", None)
+    if not pptx_path or not Path(pptx_path).exists():
+        return JSONResponse({"error": "No rendered .pptx available yet"}, status_code=404)
+    return FileResponse(
+        pptx_path,
+        media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        headers={"Cache-Control": "no-cache"},
+    )
 
 
 @router.get("/api/preview/scripts")

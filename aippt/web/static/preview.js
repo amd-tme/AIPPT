@@ -15,12 +15,10 @@
 
 let session = null;          // { token, wsUrl, script }
 let ws = null;
-let slideHashes = {};        // { n: shortHash }  — for per-slide diff
 let lastGoodTs = null;
 let reconnectTimer = null;
 let reconnectDelay = 1000;   // ms, doubles each attempt, capped at 10 000
-let detailIndex = 0;         // currently shown slide in detail dialog
-let detailSlides = [];       // [{n, url}] from last render_complete
+let pptxViewer = null;       // PPTXViewer instance (pptxviewjs)
 
 const RECENT_KEY = 'aippt_preview_recent';
 const MAX_RECENT = 5;
@@ -150,7 +148,7 @@ async function openSession(script) {
 
     setStatus('watching');
     clearError();
-    clearGrid();
+    _clearViewer();
 
     try {
         const resp = await fetch('api/preview/sessions', {
@@ -187,6 +185,7 @@ export async function closeSession() {
     setStatus('stopped');
     setButtons(false);
     showReconnectBanner(false);
+    _clearViewer();
 }
 
 // ── WebSocket ─────────────────────────────────────────────────────────────────
@@ -250,150 +249,129 @@ export function forceRender() {
 function onRenderStarted(data) {
     setStatus('rendering');
     clearError();
-    // Dim existing thumbnails while rendering
-    document.querySelectorAll('.preview-thumb img').forEach(img => img.classList.add('dimmed'));
 }
 
-function onRenderComplete(data) {
+async function onRenderComplete(data) {
     clearError();
     lastGoodTs = data.ts;
-    const elapsed = lastGoodTs ? relativeTime(lastGoodTs) : '';
-    setStatus('updated', elapsed ? `Updated ${elapsed}` : 'Updated');
 
-    const slides = data.slides || [];
-    detailSlides = slides.map(s => ({ n: s.n, url: s.url }));
-
-    if (!el('preview-grid').children.length) {
-        buildGrid(slides);
-    } else {
-        slides.forEach(s => {
-            const shortHash = (s.hash || '').slice(0, 8);
-            if (shortHash && slideHashes[s.n] === shortHash) return; // unchanged
-            slideHashes[s.n] = shortHash;
-            updateThumb(s.n, s.url, shortHash);
-        });
+    if (!data.pptx_url) {
+        setStatus('updated', `Updated ${relativeTime(lastGoodTs)}`);
+        return;
     }
 
-    // Un-dim all
-    document.querySelectorAll('.preview-thumb img').forEach(img => img.classList.remove('dimmed'));
+    const canvas = el('preview-canvas');
+    if (!canvas) return;
+
+    // The browser-side renderer must be present. If the PptxViewJS bundle
+    // failed to load (e.g. CDN blocked on an air-gapped network), don't leave
+    // a misleading green "Updated" badge over a blank viewer — surface it.
+    if (!window.PptxViewJS) {
+        setStatus('error');
+        showError({
+            stage: 'viewer',
+            stderr_tail: 'PptxViewJS failed to load — the deck rendered on the '
+                + 'server but cannot be displayed. Check that '
+                + 'static/vendor/PptxViewJS.min.js is reachable.',
+        });
+        return;
+    }
+
+    setStatus('updated', `Updated ${relativeTime(lastGoodTs)}`);
+
+    // Destroy previous viewer before loading new deck
+    if (pptxViewer) {
+        try { pptxViewer.destroy?.(); } catch { /* ignore */ }
+        pptxViewer = null;
+    }
+
+    // Show viewer first so clientWidth is non-zero when we measure the container.
+    // (If viewer is display:none, clientWidth returns 0 and PptxViewJS renders
+    // to a 0x0 canvas, producing a blank result on first Open.)
+    el('preview-viewer').style.display = '';
+
+    // Set canvas pixel dimensions before PPTXViewer initialises — it reads
+    // CSS width as a raw number so "100%" becomes 100px. Setting attributes
+    // explicitly and removing all CSS width avoids the misread entirely.
+    const wrap = el('preview-canvas-wrap');
+    const displayW = (wrap && wrap.clientWidth > 0) ? wrap.clientWidth : 960;
+    const displayH = Math.round(displayW * 9 / 16);
+    canvas.width  = displayW;
+    canvas.height = displayH;
+    canvas.style.width  = '';
+    canvas.style.height = '';
+
+    const { PPTXViewer } = window.PptxViewJS;
+    pptxViewer = new PPTXViewer({ canvas, fitMode: 'contain' });
+
+    pptxViewer.on('loadComplete', ({ slideCount }) => {
+        _updateCounter(pptxViewer.currentSlideIndex ?? 0, slideCount);
+        _buildThumbStrip(slideCount);
+        pptxViewer.render();
+    });
+
+    pptxViewer.on('slideChanged', (index) => {
+        _updateCounter(index, pptxViewer.slideCount);
+        _highlightThumb(index);
+    });
+
+    try {
+        await pptxViewer.loadFromUrl(data.pptx_url + `?t=${Date.now()}`);
+    } catch (e) {
+        setStatus('error');
+        showError({ stage: 'viewer', stderr_tail: 'Failed to render the deck in the browser: ' + String(e) });
+    }
 }
 
 function onRenderFailed(data) {
     setStatus('error');
     showError(data);
-    // Dim thumbnails to indicate stale
-    document.querySelectorAll('.preview-thumb img').forEach(img => img.classList.add('dimmed'));
 }
 
-// ── Thumbnail grid ────────────────────────────────────────────────────────────
+// ── PptxViewJS helpers ────────────────────────────────────────────────────────
 
-function clearGrid() {
-    const grid = el('preview-grid');
-    if (grid) grid.innerHTML = '';
-    slideHashes = {};
-    detailSlides = [];
-    lastGoodTs = null;
+function _updateCounter(index, total) {
+    const counter = el('preview-slide-counter');
+    if (counter) counter.textContent = `Slide ${index + 1} of ${total}`;
 }
 
-function buildGrid(slides) {
-    const grid = el('preview-grid');
-    if (!grid) return;
-    grid.innerHTML = '';
-    slides.forEach(s => {
-        const shortHash = (s.hash || '').slice(0, 8);
-        slideHashes[s.n] = shortHash;
-        grid.appendChild(makeThumb(s.n, s.url, shortHash));
+function _buildThumbStrip(slideCount) {
+    const strip = el('preview-thumb-strip');
+    if (!strip) return;
+    strip.innerHTML = '';
+    for (let i = 0; i < slideCount; i++) {
+        const btn = document.createElement('button');
+        btn.className = 'preview-thumb-btn' + (i === 0 ? ' active' : '');
+        btn.dataset.index = i;
+        btn.textContent = `${i + 1}`;
+        btn.style.cssText = 'min-width:2rem; padding:0.2rem 0.4rem; font-size:0.75rem;';
+        btn.onclick = () => pptxViewer?.goToSlide(i);
+        strip.appendChild(btn);
+    }
+}
+
+function _highlightThumb(index) {
+    const strip = el('preview-thumb-strip');
+    if (!strip) return;
+    strip.querySelectorAll('.preview-thumb-btn').forEach(btn => {
+        btn.classList.toggle('active', parseInt(btn.dataset.index) === index);
     });
 }
 
-function makeThumb(n, url, shortHash) {
-    const div = document.createElement('div');
-    div.className = 'preview-thumb';
-    div.dataset.n = n;
-    div.onclick = () => openDetail(n - 1);
-
-    const fig = document.createElement('figure');
-    const img = document.createElement('img');
-    img.src = url + (shortHash ? `?h=${shortHash}` : '');
-    img.alt = `Slide ${n}`;
-    img.loading = 'lazy';
-
-    const cap = document.createElement('figcaption');
-    cap.textContent = `Slide ${n}`;
-
-    fig.appendChild(img);
-    fig.appendChild(cap);
-    div.appendChild(fig);
-    return div;
-}
-
-function updateThumb(n, url, shortHash) {
-    let thumb = document.querySelector(`.preview-thumb[data-n="${n}"]`);
-    if (!thumb) {
-        // New slide appeared (e.g. deck grew) — append
-        const grid = el('preview-grid');
-        if (grid) { thumb = makeThumb(n, url, shortHash); grid.appendChild(thumb); }
-        return;
+function _clearViewer() {
+    if (pptxViewer) {
+        try { pptxViewer.destroy?.(); } catch { /* ignore */ }
+        pptxViewer = null;
     }
-    const img = thumb.querySelector('img');
-    if (img) {
-        img.src = url + (shortHash ? `?h=${shortHash}` : '');
-        img.classList.remove('dimmed');
-    }
-    // Pulse animation
-    thumb.classList.remove('changed');
-    void thumb.offsetWidth; // reflow
-    thumb.classList.add('changed');
-    setTimeout(() => thumb.classList.remove('changed'), 700);
+    const viewer = el('preview-viewer');
+    if (viewer) viewer.style.display = 'none';
+    const strip = el('preview-thumb-strip');
+    if (strip) strip.innerHTML = '';
+    lastGoodTs = null;
 }
 
-// ── Detail view ───────────────────────────────────────────────────────────────
-
-function openDetail(idx) {
-    if (!detailSlides.length) return;
-    detailIndex = Math.max(0, Math.min(idx, detailSlides.length - 1));
-
-    let dlg = el('preview-detail-dialog');
-    if (!dlg) {
-        dlg = document.createElement('dialog');
-        dlg.id = 'preview-detail-dialog';
-        dlg.innerHTML = `
-            <img id="preview-detail-img" alt="">
-            <div id="preview-detail-nav">
-                <button id="preview-detail-prev" onclick="window.__previewModule.detailPrev()">&#8592; Prev</button>
-                <span id="preview-detail-label"></span>
-                <button id="preview-detail-next" onclick="window.__previewModule.detailNext()">Next &#8594;</button>
-                <button onclick="this.closest('dialog').close()" style="margin-left:1rem;">Close</button>
-            </div>`;
-        document.body.appendChild(dlg);
-        dlg.addEventListener('keydown', e => {
-            if (e.key === 'ArrowLeft')  { e.preventDefault(); detailPrev(); }
-            if (e.key === 'ArrowRight') { e.preventDefault(); detailNext(); }
-            if (e.key === 'Escape')     { dlg.close(); }
-        });
-    }
-    renderDetail();
-    dlg.showModal();
-}
-
-function renderDetail() {
-    const slide = detailSlides[detailIndex];
-    if (!slide) return;
-    const img   = el('preview-detail-img');
-    const label = el('preview-detail-label');
-    if (img)   img.src = slide.url;
-    if (label) label.textContent = `Slide ${slide.n} of ${detailSlides.length}`;
-    el('preview-detail-prev').disabled = detailIndex === 0;
-    el('preview-detail-next').disabled = detailIndex === detailSlides.length - 1;
-}
-
-export function detailPrev() {
-    if (detailIndex > 0) { detailIndex--; renderDetail(); }
-}
-
-export function detailNext() {
-    if (detailIndex < detailSlides.length - 1) { detailIndex++; renderDetail(); }
-}
+export function prevSlide() { pptxViewer?.previousSlide?.(); }
+export function nextSlide() { pptxViewer?.nextSlide?.(); }
 
 // ── Error display ─────────────────────────────────────────────────────────────
 

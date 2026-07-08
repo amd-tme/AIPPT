@@ -157,14 +157,14 @@ class TestPreviewAPI:
         assert resp.json()["status"] == "stopped"
         assert app.state.preview_registry.get(session.token) is None
 
-    def test_slide_image_not_found_session(self, client):
-        resp = client.get("/api/preview/sessions/badtoken/slides/1.jpg")
+    def test_pptx_not_found_session(self, client):
+        resp = client.get("/api/preview/sessions/badtoken/pptx")
         assert resp.status_code == 404
 
-    def test_slide_image_no_slides_yet(self, client, app, script_file):
+    def test_pptx_no_render_yet(self, client, app, script_file):
         session = _stub_session(app.state.preview_registry, str(script_file))
-        session.last_state = {"event": "idle", "slides": []}
-        resp = client.get(f"/api/preview/sessions/{session.token}/slides/1.jpg")
+        session.last_pptx_path = None
+        resp = client.get(f"/api/preview/sessions/{session.token}/pptx")
         assert resp.status_code == 404
 
 

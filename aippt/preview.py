@@ -13,7 +13,6 @@ recorded in ``slides.db``.
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import logging
 import os
 import re
@@ -32,21 +31,13 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 @dataclass
-class SlideImage:
-    n: int
-    path: str        # absolute path on disk
-    url: str         # API URL served to the client
-    hash: str        # sha256: prefix + first 16 hex chars
-
-
-@dataclass
 class RenderResult:
     success: bool
-    stage: Optional[str] = None          # "node" | "python" | "soffice" | "pdftoppm"
+    stage: Optional[str] = None          # "node" | "python"
     exit_code: Optional[int] = None
     stderr_tail: Optional[str] = None
     stdout: Optional[str] = None
-    slides: List[SlideImage] = field(default_factory=list)
+    pptx_path: Optional[str] = None      # absolute path to the generated .pptx (pptxviewjs mode)
     duration_ms: Optional[int] = None
     warnings: List[str] = field(default_factory=list)
 
@@ -62,42 +53,40 @@ _VENV_PYTHON = (
 )
 
 
-def _hash_file(path: str) -> str:
-    h = hashlib.sha256()
-    with open(path, "rb") as fh:
-        for chunk in iter(lambda: fh.read(65536), b""):
-            h.update(chunk)
-    return "sha256:" + h.hexdigest()[:16]
-
-
 def _tail(text: str, lines: int = 30) -> str:
     return "\n".join(text.splitlines()[-lines:])
 
 
 class Renderer:
-    """Run a slides-as-code script and convert the output to per-slide JPEGs.
+    """Run a slides-as-code script and produce a .pptx for browser-side rendering.
 
-    Args:
-        dpi: JPEG resolution passed to ``pdftoppm``.
+    The pipeline stops after locating the generated .pptx file — LibreOffice
+    and pdftoppm are no longer needed because PptxViewJS renders the file
+    directly in the browser.
+
+    Scripts are executed with ``cwd`` set to *project_root* (not the script's
+    own directory) because AIPPT decks reference paths relative to the project
+    root — e.g. ``themes/amd.yaml`` and ``output/<deck>.pptx``.
     """
 
-    def __init__(self, dpi: int = 150):
-        self.dpi = dpi
+    def __init__(self, project_root: Optional[str] = None):
+        self.project_root = str(Path(project_root).resolve()) if project_root else os.getcwd()
 
     def render(self, script_path: str, out_dir: str) -> RenderResult:
-        """Render *script_path* to JPEGs under *out_dir*.
+        """Run *script_path* and return the path to the generated .pptx.
 
         The caller is responsible for creating *out_dir*.
         """
         t0 = time.monotonic()
+        wall_start = time.time()  # epoch — compared against file mtimes
         script = Path(script_path).resolve()
         out = Path(out_dir).resolve()
         out.mkdir(parents=True, exist_ok=True)
 
-        # --- Step 1: run the script ---
+        # --- Step 1: run the script from the project root ---
         cmd, stage = self._build_command(script)
         env = {**os.environ, "AIPPT_PREVIEW_OUT": str(out)}
-        result = self._run(cmd, cwd=str(script.parent), env=env)
+        result = self._run(cmd, cwd=self.project_root, env=env)
         if result.returncode != 0:
             return RenderResult(
                 success=False,
@@ -108,7 +97,7 @@ class Renderer:
             )
 
         # --- Step 2: find the PPTX ---
-        pptx = self._find_pptx(script, out, start_ts=t0)
+        pptx = self._find_pptx(script, out, self.project_root, wall_start=wall_start)
         if pptx is None:
             return RenderResult(
                 success=False,
@@ -117,72 +106,8 @@ class Renderer:
                 stderr_tail="No .pptx file found after script completed.",
             )
 
-        # --- Step 3: soffice PPTX → PDF ---
-        # Use --outdir . (relative) because WSL2 LibreOffice misinterprets
-        # absolute paths passed to --outdir and nests them inside cwd.
-        # cwd=out means "." resolves to the correct output directory.
-        pdf_result = self._run(
-            [
-                "libreoffice", "--headless",
-                "--convert-to", "pdf",
-                str(pptx),
-                "--outdir", ".",
-            ],
-            cwd=str(out),
-            env={**os.environ, "HOME": "/tmp"},
-        )
-        if pdf_result.returncode != 0:
-            return RenderResult(
-                success=False,
-                stage="soffice",
-                exit_code=pdf_result.returncode,
-                stderr_tail=_tail(pdf_result.stderr),
-            )
-
-        pdf_path = out / (pptx.stem + ".pdf")
-        if not pdf_path.exists():
-            # soffice may keep the original name even with --convert-to pdf
-            candidates = list(out.glob("*.pdf"))
-            if not candidates:
-                return RenderResult(
-                    success=False,
-                    stage="soffice",
-                    exit_code=0,
-                    stderr_tail="soffice exited 0 but no PDF found in output dir.",
-                )
-            pdf_path = max(candidates, key=lambda p: p.stat().st_mtime)
-
-        # --- Step 4: pdftoppm PDF → JPEGs ---
-        slide_prefix = str(out / "slide")
-        ppm_result = self._run(
-            ["pdftoppm", "-jpeg", "-r", str(self.dpi), str(pdf_path), slide_prefix],
-            cwd=str(out),
-        )
-        if ppm_result.returncode != 0:
-            return RenderResult(
-                success=False,
-                stage="pdftoppm",
-                exit_code=ppm_result.returncode,
-                stderr_tail=_tail(ppm_result.stderr),
-            )
-
-        # --- Step 5: collect slides ---
-        jpegs = sorted(out.glob("slide-*.jpg"), key=lambda p: p.name)
-        if not jpegs:
-            # pdftoppm on some systems omits the dash
-            jpegs = sorted(out.glob("slide*.jpg"), key=lambda p: p.name)
-
-        slides = []
-        for i, jp in enumerate(jpegs, start=1):
-            slides.append(SlideImage(
-                n=i,
-                path=str(jp),
-                url="",   # filled in by routes with the token
-                hash=_hash_file(str(jp)),
-            ))
-
         duration_ms = int((time.monotonic() - t0) * 1000)
-        return RenderResult(success=True, slides=slides, duration_ms=duration_ms)
+        return RenderResult(success=True, pptx_path=str(pptx), duration_ms=duration_ms)
 
     # ------------------------------------------------------------------
     # Helpers
@@ -209,17 +134,37 @@ class Renderer:
         )
 
     @staticmethod
-    def _find_pptx(script: Path, out_dir: Path, start_ts: float) -> Optional[Path]:
-        """Locate the PPTX produced by the script.
+    def _find_pptx(
+        script: Path,
+        out_dir: Path,
+        project_root: Optional[str] = None,
+        wall_start: Optional[float] = None,
+    ) -> Optional[Path]:
+        """Locate the PPTX freshly produced by the script.
 
-        Preference order:
-        1. ``AIPPT_PREVIEW_OUT`` dir — newest .pptx written after start_ts.
-        2. Script's own directory — newest .pptx written after start_ts.
+        Only files modified at or after *wall_start* (an epoch timestamp from
+        ``time.time()``) count — this rejects stale/committed .pptx files left
+        in the search dirs, so a script that writes nothing is a failure rather
+        than a false success.
+
+        Search order (most-specific first):
+        1. ``AIPPT_PREVIEW_OUT`` dir.
+        2. Project root's ``output/`` dir (where AIPPT decks write by default).
+        3. Script's own directory.
         """
-        for search_dir in (out_dir, script.parent):
+        cutoff = (wall_start - 0.5) if wall_start is not None else 0.0
+
+        search_dirs = [out_dir]
+        if project_root:
+            search_dirs.append(Path(project_root) / "output")
+        search_dirs.append(script.parent)
+
+        for search_dir in search_dirs:
+            if not search_dir.is_dir():
+                continue
             candidates = [
                 p for p in search_dir.glob("*.pptx")
-                if p.stat().st_mtime >= start_ts - 0.5
+                if p.stat().st_mtime >= cutoff
             ]
             if candidates:
                 return max(candidates, key=lambda p: p.stat().st_mtime)
@@ -330,6 +275,7 @@ class PreviewSession:
         self._render_task: Optional[asyncio.Task] = None
         self._watch_task: Optional[asyncio.Task] = None
         self._stopped = False
+        self.last_pptx_path: Optional[str] = None  # path to last successful .pptx
 
     # --- public interface ---------------------------------------------------
 
@@ -424,20 +370,12 @@ class PreviewSession:
                 result = RenderResult(success=False, stage="python", stderr_tail=str(exc))
 
         if result.success:
-            slides_payload = [
-                {
-                    "n": s.n,
-                    "url": f"/api/preview/sessions/{self.token}/slides/{s.n}.jpg",
-                    "hash": s.hash,
-                }
-                for s in result.slides
-            ]
+            self.last_pptx_path = result.pptx_path
             payload = {
                 "event": "render_complete",
                 "ts": time.time(),
                 "duration_ms": result.duration_ms,
-                "slide_count": len(result.slides),
-                "slides": slides_payload,
+                "pptx_url": f"/api/preview/sessions/{self.token}/pptx",
                 "warnings": result.warnings,
             }
             self._state = _SessionState(event="render_complete", payload=payload)

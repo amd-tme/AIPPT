@@ -129,7 +129,7 @@ def create_app(db_path: str = "slides.db", gateway_config: str = None, uploads_d
     app.state.preview_registry = SessionRegistry(
         allow_dirs=allow_dirs,
         max_parallel=preview_concurrency,
-        renderer=Renderer(),
+        renderer=Renderer(project_root=resolved_root),
     )
 
     app.state.log_buffer = log_buffer

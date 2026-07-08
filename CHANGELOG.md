@@ -9,10 +9,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - **Live Script Render — Backend Pipeline.** New `aippt.preview` module adds
-  file-watch-driven PPTX rendering for slides-as-code workflows. Key additions:
-  - `Renderer` — detects engine (Node.js or Python), runs the script, converts
-    the emitted `.pptx` through LibreOffice → pdftoppm to produce per-slide
-    JPEGs.
+  file-watch-driven PPTX rendering for slides-as-code workflows. The server
+  stops once the `.pptx` is generated and serves it directly; PptxViewJS renders
+  it in the browser, so no LibreOffice/pdftoppm/image conversion is required.
+  Key additions:
+  - `Renderer` — detects engine (Node.js or Python), runs the script from the
+    project root (so decks can reference `themes/*.yaml` and `output/` by
+    relative path), and locates the freshly emitted `.pptx` (by mtime, so a
+    script that writes nothing fails instead of reusing a stale file).
   - `PreviewSession` — debounced (300 ms) async watcher powered by `watchfiles`;
     broadcasts render events over WebSocket to all connected clients and
     coalesces rapid saves into a single render cycle.
@@ -20,20 +24,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     parallelism cap.
   - `discover_local_imports` — regex scanner that finds relative `require()`/
     `import` references in a script so the watcher can track helper files too.
-  - REST API: `POST/GET/DELETE /api/preview/sessions`, per-slide JPEG endpoint
-    (`/api/preview/sessions/{token}/slides/{n}.jpg`), and
+  - REST API: `POST/GET/DELETE /api/preview/sessions`, the rendered-deck
+    endpoint (`GET /api/preview/sessions/{token}/pptx`), and
     `GET /api/preview/scripts` (script picker for the Live Preview UI).
   - WebSocket: `/ws/preview/{token}` with replay-on-connect and
     `force_render` support.
   - CLI: `aippt preview <script> [--once|--watch]` for terminal-level preview.
-  - 34 unit + integration tests covering all new code paths.
+  - 48 unit + integration tests covering all new code paths.
 - **Live Preview panel** in the web UI: pick a slides-as-code script
-  (`.js`/`.mjs`/`.py`) from the script picker and watch its rendered thumbnails
-  update live as you edit in your IDE. Per-slide hash diffing means only changed
-  slides reload. Status badge tracks `Idle → Watching → Rendering → Updated`.
-  Error overlay shows `stage`, exit code, and `stderr_tail` when a render fails;
-  last-good thumbnails stay visible (dimmed). Auto-reconnects on WebSocket drop
-  with exponential backoff. Hidden entirely in view-only mode.
+  (`.js`/`.mjs`/`.py`) from the script picker and watch the rendered deck update
+  live as you edit in your IDE. The deck renders in-browser on an HTML5 canvas
+  via PptxViewJS (jszip, chart.js, and pptxviewjs are vendored under
+  `static/vendor/` so the preview works on air-gapped / proxied networks), with
+  a slide counter, numbered thumbnail strip, and prev/next navigation. Status
+  badge tracks `Idle → Watching → Rendering → Updated`. Error overlay shows
+  `stage`, exit code, and `stderr_tail` when a render fails — including when the
+  PptxViewJS bundle itself can't load, rather than showing a false success.
+  Auto-reconnects on WebSocket drop with exponential backoff. Hidden entirely in
+  view-only mode.
 
 ### Fixed
 
