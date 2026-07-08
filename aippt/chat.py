@@ -33,24 +33,50 @@ of truth for what is on the slides. Do NOT ask the user to share slides or scree
 the text content is already there.
 """
 
-_EDIT_MODE_ADDENDUM = """\
-When the user asks you to make a specific text change, emit a patch block in this
-exact format (one block per edit):
+_EDIT_MODE_ADDENDUM_TEMPLATE = """\
+When the user asks you to make a specific text change, emit exactly one fenced JSON block:
 
-```patch
-slide: <slide_id>
-field: <title|content_text|notes>
----
-exact text to find (verbatim, multiline OK)
-===
-replacement text
+```json
+{{
+  "patch": {{
+    "script": "{script_path}",
+    "anchor": "<unique function name or line substring near the change>",
+    "old": "<exact text to replace — copy verbatim from the script above>",
+    "new": "<replacement text>",
+    "summary": "<one line: what and why>"
+  }}
+}}
 ```
 
 Rules for patches:
-- The old text MUST match verbatim — copy it exactly from the slide content shown.
+- Use the exact script path shown in the [Script: ...] header above — copy it verbatim.
+- The "old" text MUST match the script verbatim — copy it exactly.
 - Make one focused change per block.
-- Do not emit a patch if the user is only asking a question or requesting analysis.
-- After patches, briefly explain what you changed and why.
+- Do not emit a patch block if the user is only asking a question or requesting analysis.
+- After the block, briefly explain what you changed and why.
+"""
+
+_EDIT_MODE_ADDENDUM_GENERIC = """\
+When the user asks you to make a specific text change, emit exactly one fenced JSON block:
+
+```json
+{
+  "patch": {
+    "script": "<absolute path shown in [Script: ...] header>",
+    "anchor": "<unique function name or line substring near the change>",
+    "old": "<exact text to replace — copy verbatim from the script above>",
+    "new": "<replacement text>",
+    "summary": "<one line: what and why>"
+  }
+}
+```
+
+Rules for patches:
+- Use the exact script path shown in the [Script: ...] header above — copy it verbatim.
+- The "old" text MUST match the script verbatim — copy it exactly.
+- Make one focused change per block.
+- Do not emit a patch block if the user is only asking a question or requesting analysis.
+- After the block, briefly explain what you changed and why.
 """
 
 _ASK_MODE_ADDENDUM = """\
@@ -60,8 +86,14 @@ requested edits in this turn.
 """
 
 
-def _system_prompt(mode: str) -> str:
-    addendum = _EDIT_MODE_ADDENDUM if mode == "edit" else _ASK_MODE_ADDENDUM
+def _system_prompt(mode: str, script_path: Optional[str] = None) -> str:
+    if mode == "edit":
+        if script_path:
+            addendum = _EDIT_MODE_ADDENDUM_TEMPLATE.format(script_path=script_path)
+        else:
+            addendum = _EDIT_MODE_ADDENDUM_GENERIC
+    else:
+        addendum = _ASK_MODE_ADDENDUM
     return _SYSTEM_PROMPT_BASE + "\n" + addendum
 
 
@@ -102,11 +134,11 @@ class ChatService:
     # Conversation CRUD
     # ------------------------------------------------------------------
 
-    def create_conversation(self, deck_id: int, title: str = "New conversation") -> int:
+    def create_conversation(self, deck_id: int, title: str = "New conversation", script_path: Optional[str] = None) -> int:
         """Create a new conversation for *deck_id* and return its id."""
         cur = self.conn.execute(
-            "INSERT INTO chat_conversations (deck_id, title) VALUES (?, ?)",
-            (deck_id, title),
+            "INSERT INTO chat_conversations (deck_id, title, script_path) VALUES (?, ?, ?)",
+            (deck_id, title, script_path),
         )
         self.conn.commit()
         return cur.lastrowid
@@ -125,7 +157,7 @@ class ChatService:
     def get_conversation(self, conversation_id: int) -> Optional[dict]:
         """Return conversation metadata or None."""
         row = self.conn.execute(
-            "SELECT id, deck_id, title, created_at, updated_at FROM chat_conversations WHERE id = ?",
+            "SELECT id, deck_id, title, script_path, created_at, updated_at FROM chat_conversations WHERE id = ?",
             (conversation_id,),
         ).fetchone()
         return dict(row) if row else None
@@ -265,6 +297,15 @@ class ChatService:
     # Slide / deck context helpers
     # ------------------------------------------------------------------
 
+    def _build_script_context(self, script_path: str) -> str:
+        """Return the full .js script content so the LLM can produce verbatim patches."""
+        from pathlib import Path
+        try:
+            content = Path(script_path).read_text(encoding="utf-8")
+        except OSError:
+            return ""
+        return f"[Script: {script_path}]\n```javascript\n{content}\n```\n"
+
     def _build_deck_context(self, deck_id: int) -> str:
         """Return a compact summary of every slide in *deck_id* for deck-level chat."""
         rows = self.conn.execute(
@@ -352,10 +393,14 @@ class ChatService:
             mode: ``"ask"`` (read-only) or ``"edit"`` (patches allowed).
             cancel_token: If set, streaming stops when ``cancel_token.is_cancelled``.
         """
+        conv = self.get_conversation(conversation_id)
+        conv_script_path = conv.get("script_path") if conv else None
+
         if slide_id:
             context = self._build_slide_context(slide_id)
+        elif conv_script_path:
+            context = self._build_script_context(conv_script_path)
         else:
-            conv = self.get_conversation(conversation_id)
             context = self._build_deck_context(conv["deck_id"]) if conv else ""
         full_user_content = (
             f"{context}\n\n---\n\n{user_message}" if context else user_message
@@ -365,12 +410,15 @@ class ChatService:
         self._save_message(conversation_id, "user", user_message, slide_id, mode=mode)
 
         # Build LLM history — re-inject context for every prior user turn so
-        # the model always has slide data regardless of history depth.
+        # the model always has the script/slide data regardless of history depth.
         history = self.get_messages(conversation_id)
         conv_meta = self.get_conversation(conversation_id)
-        deck_ctx = (
-            self._build_deck_context(conv_meta["deck_id"]) if conv_meta else ""
-        )
+        script_path_for_ctx = conv_meta.get("script_path") if conv_meta else None
+        deck_ctx: str
+        if script_path_for_ctx:
+            deck_ctx = self._build_script_context(script_path_for_ctx)
+        else:
+            deck_ctx = self._build_deck_context(conv_meta["deck_id"]) if conv_meta else ""
         llm_messages = []
         for m in history[:-1]:  # exclude the message we just saved
             if m["role"] == "assistant":
@@ -384,7 +432,8 @@ class ChatService:
 
         image_path = self._get_slide_image(slide_id) if slide_id else None
         use_vision = image_path is not None and self.llm.model_config.supports_vision
-        system = _system_prompt(mode)
+        script_path = conv_meta.get("script_path") if conv_meta else None
+        system = _system_prompt(mode, script_path=script_path)
 
         if use_vision:
             stream_iter: Iterator[str] = self.llm.stream_text_with_image(
@@ -419,15 +468,23 @@ class ChatService:
         if mode == "edit":
             patches = extract_patches(full_reply)
             if patches:
-                patch_dicts = [
-                    {
-                        "slide_id": p.slide_id,
-                        "field": p.field,
-                        "old_text": p.old_text,
-                        "new_text": p.new_text,
-                    }
-                    for p in patches
-                ]
+                patch_dicts = []
+                for p in patches:
+                    if p.is_script_patch:
+                        patch_dicts.append({
+                            "script_path": p.script_path,
+                            "anchor": p.anchor,
+                            "old": p.old,
+                            "new": p.new,
+                            "summary": p.summary,
+                        })
+                    else:
+                        patch_dicts.append({
+                            "slide_id": p.slide_id,
+                            "field": p.field,
+                            "old_text": p.old_text,
+                            "new_text": p.new_text,
+                        })
                 patch_json_str = json.dumps(patch_dicts)
 
         msg_id = self._save_message(

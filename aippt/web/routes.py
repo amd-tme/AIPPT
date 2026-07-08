@@ -2163,6 +2163,23 @@ async def create_preview_session(request: Request):
     }
 
 
+@router.get("/api/preview/sessions")
+async def find_preview_session_by_script(request: Request, script: str = None):
+    """Find a preview session by its script path. Used by the inline chat preview."""
+    if not script:
+        return JSONResponse({"error": "script query param required"}, status_code=400)
+    registry = _preview_registry(request)
+    resolved = str(Path(script).resolve())
+    for session in list(registry._sessions.values()):
+        if str(Path(session.script_path).resolve()) == resolved:
+            return {
+                "token": session.token,
+                "ws_url": f"/ws/preview/{session.token}",
+                "script": session.script_path,
+            }
+    return JSONResponse({"error": "No active preview session for that script"}, status_code=404)
+
+
 @router.get("/api/preview/sessions/{token}")
 async def get_preview_session(token: str, request: Request):
     """Return the current state of a preview session (polling fallback)."""
@@ -2194,11 +2211,60 @@ async def get_preview_pptx(token: str, request: Request):
     pptx_path = getattr(session, "last_pptx_path", None)
     if not pptx_path or not Path(pptx_path).exists():
         return JSONResponse({"error": "No rendered .pptx available yet"}, status_code=404)
+    script_stem = Path(session.script_path).stem if session.script_path else "deck"
+    filename = f"{script_stem}.pptx"
     return FileResponse(
         pptx_path,
         media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        headers={"Cache-Control": "no-cache"},
+        headers={
+            "Cache-Control": "no-cache",
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
     )
+
+
+@router.post("/api/preview/sessions/{token}/catalog")
+async def catalog_preview_session(token: str, request: Request):
+    """Catalog the last rendered PPTX from a preview session into the deck library.
+
+    Sets source_script_path so the deck shows up as a 'script' origin and
+    a chat conversation can be created with the correct script path wired in.
+    Returns the deck id and whether it was newly cataloged or already existed.
+    """
+    if getattr(request.app.state, "view_only", False):
+        return JSONResponse({"error": "Catalog is disabled in view-only mode"}, status_code=403)
+    registry = _preview_registry(request)
+    session = registry.get(token)
+    if session is None:
+        return JSONResponse({"error": "Session not found"}, status_code=404)
+    pptx_path = getattr(session, "last_pptx_path", None)
+    if not pptx_path or not Path(pptx_path).exists():
+        return JSONResponse({"error": "No rendered .pptx available yet — force a render first"}, status_code=404)
+
+    db_path = request.app.state.db_path
+    try:
+        deck_id = catalog_deck(
+            deck_path=pptx_path,
+            db_path=db_path,
+            source_script_path=session.script_path,
+            source_engine="pptxgenjs",
+        )
+        # catalog_deck early-returns on hash match without updating source_script_path.
+        # Always ensure it's set so the chat conversation gets the correct script path.
+        conn = get_db(db_path)
+        try:
+            conn.execute(
+                "UPDATE decks SET source_script_path = ? WHERE id = ? AND (source_script_path IS NULL OR source_script_path != ?)",
+                (session.script_path, deck_id, session.script_path),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception as exc:
+        logger.error("catalog_preview_session error: %s", exc)
+        return JSONResponse({"error": str(exc)}, status_code=500)
+
+    return {"deck_id": deck_id, "script_path": session.script_path}
 
 
 @router.get("/api/preview/scripts")
@@ -2335,7 +2401,12 @@ async def create_chat_conversation(request: Request):
     conn = get_db(db_path)
     try:
         svc = ChatService(conn, llm=None)
-        conv_id = svc.create_conversation(deck_id, title)
+        # Look up the deck's source script path so the LLM gets the exact path
+        deck_row = conn.execute(
+            "SELECT source_script_path FROM decks WHERE id=?", (deck_id,)
+        ).fetchone()
+        script_path = deck_row["source_script_path"] if deck_row else None
+        conv_id = svc.create_conversation(deck_id, title, script_path=script_path)
         return {"id": conv_id, "deck_id": deck_id, "title": title}
     finally:
         conn.close()
@@ -2390,11 +2461,14 @@ async def delete_chat_conversation(conversation_id: int, request: Request):
     from aippt.chat import ChatService
     db_path = request.app.state.db_path
     conn = get_db(db_path)
-    svc = ChatService(conn, llm=None)
-    ok = svc.delete_conversation(conversation_id)
-    if not ok:
-        return JSONResponse({"error": "Conversation not found"}, status_code=404)
-    return {"deleted": conversation_id}
+    try:
+        svc = ChatService(conn, llm=None)
+        ok = svc.delete_conversation(conversation_id)
+        if not ok:
+            return JSONResponse({"error": "Conversation not found"}, status_code=404)
+        return {"deleted": conversation_id}
+    finally:
+        conn.close()
 
 
 @router.post("/api/chat/conversations/{conversation_id}/messages")

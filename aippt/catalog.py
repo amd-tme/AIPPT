@@ -57,7 +57,7 @@ class _CatalogConnection(sqlite3.Connection):
 
 def get_db(db_path: str = "slides.db") -> sqlite3.Connection:
     """Open database connection, create schema if needed."""
-    conn = sqlite3.connect(db_path, timeout=30, factory=_CatalogConnection)
+    conn = sqlite3.connect(db_path, timeout=30, factory=_CatalogConnection, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode = WAL")
     conn.execute("PRAGMA foreign_keys = ON")

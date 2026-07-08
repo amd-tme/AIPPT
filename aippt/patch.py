@@ -35,6 +35,12 @@ _PATCH_BLOCK_RE = re.compile(
     re.DOTALL,
 )
 
+# JSON patch format: ```json { "patch": { "script": "...", "old": "...", "new": "...", ... } } ```
+_JSON_PATCH_BLOCK_RE = re.compile(
+    r"```json\s*\n(\{.*?\})\s*```",
+    re.DOTALL,
+)
+
 _EDIT_HISTORY_DIR = ".aippt"
 _EDIT_HISTORY_FILE = "edit-history.jsonl"
 
@@ -43,43 +49,72 @@ PATCHABLE_FIELDS = {"title", "content_text", "notes"}
 
 @dataclass
 class Patch:
-    slide_id: int
-    field: str
-    old_text: str
-    new_text: str
+    # Script-file patch fields (new format)
+    script_path: Optional[str] = None
+    anchor: Optional[str] = None
+    old: Optional[str] = None
+    new: Optional[str] = None
+    summary: Optional[str] = None
+    # Legacy SQLite-field patch fields (old format)
+    slide_id: Optional[int] = None
+    field: Optional[str] = None
+    old_text: Optional[str] = None
+    new_text: Optional[str] = None
     conversation_id: Optional[int] = None
     message_id: Optional[int] = None
+
+    @property
+    def is_script_patch(self) -> bool:
+        return self.script_path is not None
 
 
 def extract_patches(text: str) -> List[Patch]:
     """Parse all patch blocks from *text* and return :class:`Patch` objects.
 
-    Blocks that are malformed (missing required keys, unknown field) are
-    logged and skipped rather than raising.
+    Supports both the legacy ```patch format and the new ```json format.
+    Blocks that are malformed are logged and skipped.
     """
     patches: List[Patch] = []
+
+    # New JSON format
+    for m in _JSON_PATCH_BLOCK_RE.finditer(text):
+        try:
+            data = json.loads(m.group(1))
+            p_data = data.get("patch", {})
+            if not p_data.get("script") or not p_data.get("old") or "new" not in p_data:
+                logger.warning("Skipping JSON patch block: missing required keys")
+                continue
+            patches.append(Patch(
+                script_path=p_data["script"],
+                anchor=p_data.get("anchor", ""),
+                old=p_data["old"],
+                new=p_data["new"],
+                summary=p_data.get("summary", ""),
+            ))
+        except (json.JSONDecodeError, KeyError) as exc:
+            logger.warning("Skipping malformed JSON patch block: %s", exc)
+
+    # Legacy ```patch format (fallback)
     for m in _PATCH_BLOCK_RE.finditer(text):
         body = m.group(1)
         try:
-            p = _parse_patch_block(body)
+            p = _parse_legacy_patch_block(body)
             patches.append(p)
         except ValueError as exc:
             logger.warning("Skipping malformed patch block: %s", exc)
+
     return patches
 
 
-def _parse_patch_block(body: str) -> Patch:
-    """Parse a single patch block body (the text inside the fences)."""
+def _parse_legacy_patch_block(body: str) -> Patch:
+    """Parse a single legacy ```patch block body."""
     if "===" not in body:
         raise ValueError("missing '===' separator between old and new text")
-
-    # Split header (key: value lines) from the diff body at the first "---"
     if "---\n" not in body:
         raise ValueError("missing '---' separator between header and diff body")
 
     header_part, diff_part = body.split("---\n", 1)
 
-    # Parse header key-value pairs
     header: dict = {}
     for line in header_part.splitlines():
         line = line.strip()
@@ -112,26 +147,93 @@ def _parse_patch_block(body: str) -> Patch:
     )
 
 
-def validate_patch(patch: Patch, conn: sqlite3.Connection) -> Tuple[bool, str]:
-    """Check that *patch* can be applied to the database.
+def _sync_script_patch_to_slides(patch: Patch, conn: sqlite3.Connection) -> None:
+    """Mirror a script-file patch into the SQLite slides table.
 
-    Returns *(ok, reason)* — if ``ok`` is False, *reason* explains why.
+    Finds every deck whose ``source_script_path`` matches the patched file and
+    applies a search-and-replace across ``title``, ``content_text``, and ``notes``
+    so the slide grid reflects the change without a full re-catalog.
+
+    Opens a fresh connection on the same database file to avoid cross-thread
+    SQLite errors when called from a FastAPI thread-pool worker.
     """
+    # Use a fresh connection so this function is thread-safe regardless of
+    # which thread the caller's conn was created in.
+    db_file = conn.execute("PRAGMA database_list").fetchone()[2]
+    sync_conn = sqlite3.connect(db_file, timeout=30, check_same_thread=False)
+    sync_conn.row_factory = sqlite3.Row
+    try:
+        decks = sync_conn.execute(
+            "SELECT id FROM decks WHERE source_script_path = ?",
+            (patch.script_path,),
+        ).fetchall()
+        for deck in decks:
+            for field in ("title", "content_text", "notes"):
+                sync_conn.execute(
+                    f"UPDATE slides SET {field} = replace({field}, ?, ?), "  # noqa: S608
+                    f"updated_at = datetime('now') "
+                    f"WHERE deck_id = ? AND {field} LIKE ?",
+                    (patch.old, patch.new, deck["id"], f"%{patch.old}%"),
+                )
+        sync_conn.commit()
+    finally:
+        sync_conn.close()
+
+
+def _sync_script_revert_to_slides(old: str, new: str, script_path: str, conn: sqlite3.Connection) -> None:
+    """Reverse a previously synced script patch in SQLite (swap old↔new)."""
+    db_file = conn.execute("PRAGMA database_list").fetchone()[2]
+    sync_conn = sqlite3.connect(db_file, timeout=30, check_same_thread=False)
+    sync_conn.row_factory = sqlite3.Row
+    try:
+        decks = sync_conn.execute(
+            "SELECT id FROM decks WHERE source_script_path = ?",
+            (script_path,),
+        ).fetchall()
+        for deck in decks:
+            for field in ("title", "content_text", "notes"):
+                sync_conn.execute(
+                    f"UPDATE slides SET {field} = replace({field}, ?, ?), "  # noqa: S608
+                    f"updated_at = datetime('now') "
+                    f"WHERE deck_id = ? AND {field} LIKE ?",
+                    (new, old, deck["id"], f"%{new}%"),
+                )
+        sync_conn.commit()
+    finally:
+        sync_conn.close()
+
+
+def validate_patch(patch: Patch, conn: sqlite3.Connection) -> Tuple[bool, str]:
+    """Check that *patch* can be applied.
+
+    For script-file patches, verifies the file exists and contains the old text.
+    For legacy SQLite patches, verifies the slide field contains the old text.
+    Returns *(ok, reason)*.
+    """
+    if patch.is_script_patch:
+        script = Path(patch.script_path)
+        if not script.exists():
+            return False, f"script file not found: {patch.script_path}"
+        content = script.read_text(encoding="utf-8")
+        if patch.old not in content:
+            return False, (
+                "old text not found in script — the file may have changed since the patch was proposed"
+            )
+        return True, ""
+
+    # Legacy SQLite path
     row = conn.execute(
-        f"SELECT {patch.field} FROM slides WHERE id = ?",  # noqa: S608 — field validated above
+        f"SELECT {patch.field} FROM slides WHERE id = ?",  # noqa: S608
         (patch.slide_id,),
     ).fetchone()
-
     if row is None:
         return False, f"slide id {patch.slide_id} not found"
-
     current: str = row[0] or ""
     if patch.old_text not in current:
         return False, (
             f"old_text not found in slides.{patch.field} for slide {patch.slide_id}; "
             "the slide may have changed since the patch was generated"
         )
-
     return True, ""
 
 
@@ -142,19 +244,38 @@ def apply_patch(
     source: str = "chat",
     cwd: Optional[str] = None,
 ) -> int:
-    """Apply *patch* to the database and append an entry to the edit-history log.
+    """Apply *patch* and record it in edit_history.
 
-    Returns:
-        The ``edit_history.id`` of the new row, so callers can link a specific
-        message to the exact history entry it created.
+    For script-file patches: writes the replacement directly to the .js file on disk.
+    For legacy patches: updates the SQLite slides table.
 
-    Raises:
-        ValueError: If the patch fails validation.
+    Returns the ``edit_history.id`` of the new row.
+    Raises ``ValueError`` if validation fails.
     """
     ok, reason = validate_patch(patch, conn)
     if not ok:
         raise ValueError(f"Patch validation failed: {reason}")
 
+    if patch.is_script_patch:
+        script = Path(patch.script_path)
+        content = script.read_text(encoding="utf-8")
+        new_content = content.replace(patch.old, patch.new, 1)
+        script.write_text(new_content, encoding="utf-8")
+
+        # Mirror the change into SQLite so the slide grid updates immediately.
+        _sync_script_patch_to_slides(patch, conn)
+
+        cur = conn.execute(
+            """INSERT INTO edit_history (slide_id, field, old_value, new_value, source)
+               VALUES (NULL, 'script', ?, ?, ?)""",
+            (patch.old, patch.new, source),
+        )
+        history_id: int = cur.lastrowid
+        conn.commit()
+        logger.info("Applied script patch to %s", patch.script_path)
+        return history_id
+
+    # Legacy SQLite path
     row = conn.execute(
         f"SELECT {patch.field} FROM slides WHERE id = ?",
         (patch.slide_id,),
@@ -166,17 +287,14 @@ def apply_patch(
         f"UPDATE slides SET {patch.field} = ?, updated_at = datetime('now') WHERE id = ?",
         (new_value, patch.slide_id),
     )
-
-    # Record in edit_history table and capture the row id
     cur = conn.execute(
         """INSERT INTO edit_history (slide_id, field, old_value, new_value, source)
            VALUES (?, ?, ?, ?, ?)""",
         (patch.slide_id, patch.field, current, new_value, source),
     )
-    history_id: int = cur.lastrowid
+    history_id = cur.lastrowid
     conn.commit()
 
-    # Append to .aippt/edit-history.jsonl
     _append_history(patch, current, new_value, cwd=cwd)
     logger.info("Applied patch to slides.%s for slide %d", patch.field, patch.slide_id)
     return history_id
@@ -207,6 +325,28 @@ def revert_by_id(
 
     slide_id, field = row["slide_id"], row["field"]
     old_value, new_value = row["old_value"], row["new_value"]
+
+    if field == "script":
+        # Script-file revert: find the script path from the conversation's script_path
+        # The script path is stored implicitly — we find the chat_messages row that
+        # references this history_id to get the conversation's script_path.
+        msg_row = conn.execute(
+            """SELECT cc.script_path FROM chat_messages cm
+               JOIN chat_conversations cc ON cm.conversation_id = cc.id
+               WHERE cm.edit_history_id = ?""",
+            (history_id,),
+        ).fetchone()
+        if msg_row and msg_row["script_path"]:
+            script = Path(msg_row["script_path"])
+            if script.exists():
+                content = script.read_text(encoding="utf-8")
+                script.write_text(content.replace(new_value, old_value, 1), encoding="utf-8")
+            # Mirror the revert into SQLite so the slide grid updates immediately.
+            _sync_script_revert_to_slides(old_value, new_value, msg_row["script_path"], conn)
+        conn.execute("DELETE FROM edit_history WHERE id = ?", (history_id,))
+        conn.commit()
+        logger.info("Reverted script patch id=%d", history_id)
+        return True, "Reverted script edit"
 
     conn.execute(
         f"UPDATE slides SET {field} = ?, updated_at = datetime('now') WHERE id = ?",
