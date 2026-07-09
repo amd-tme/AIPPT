@@ -215,9 +215,18 @@ def validate_patch(patch: Patch, conn: sqlite3.Connection) -> Tuple[bool, str]:
         if not script.exists():
             return False, f"script file not found: {patch.script_path}"
         content = script.read_text(encoding="utf-8")
-        if patch.old not in content:
+        occurrences = content.count(patch.old)
+        if occurrences == 0:
             return False, (
                 "old text not found in script — the file may have changed since the patch was proposed"
+            )
+        # The file write replaces only the first occurrence, but the SQLite grid
+        # mirror replaces every occurrence. Requiring a unique match keeps the two
+        # in sync and forces the LLM to widen the anchor when the text is ambiguous.
+        if occurrences > 1:
+            return False, (
+                f"old text appears {occurrences} times in the script — the patch is ambiguous; "
+                "include more surrounding context so it matches exactly once"
             )
         return True, ""
 

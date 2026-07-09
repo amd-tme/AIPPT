@@ -130,6 +130,38 @@ def get_db(db_path: str = "slides.db") -> sqlite3.Connection:
             conn.execute(f"ALTER TABLE chat_messages ADD COLUMN {col_ddl}")
             logger.debug("Migration: added chat_messages.%s", col_name)
 
+    # Idempotent migration: relax edit_history.slide_id from NOT NULL to nullable.
+    # Script-file patches (field='script') record slide_id=NULL, which the original
+    # NOT NULL constraint rejected. SQLite can't drop a column constraint in place,
+    # so rebuild the table when the old constraint is still present.
+    slide_id_info = next(
+        (row for row in conn.execute("PRAGMA table_info(edit_history)").fetchall()
+         if row[1] == "slide_id"),
+        None,
+    )
+    if slide_id_info is not None and slide_id_info[3] == 1:  # notnull flag set
+        logger.debug("Migration: relaxing edit_history.slide_id to nullable")
+        # Rebuild inside the schema-setup connection. foreign_keys is ON, but no
+        # table references edit_history, so a plain rebuild is safe.
+        conn.execute("""
+            CREATE TABLE edit_history_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                slide_id INTEGER REFERENCES slides(id) ON DELETE CASCADE,
+                field TEXT NOT NULL,
+                old_value TEXT,
+                new_value TEXT,
+                source TEXT NOT NULL DEFAULT 'web',
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        conn.execute(
+            "INSERT INTO edit_history_new (id, slide_id, field, old_value, new_value, source, created_at) "
+            "SELECT id, slide_id, field, old_value, new_value, source, created_at FROM edit_history"
+        )
+        conn.execute("DROP TABLE edit_history")
+        conn.execute("ALTER TABLE edit_history_new RENAME TO edit_history")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_edit_history_slide ON edit_history(slide_id)")
+
     conn.commit()
     # Schema setup is done committing; arm snapshot-on-commit so only real
     # catalog mutations from here on trigger a debounced snapshot.

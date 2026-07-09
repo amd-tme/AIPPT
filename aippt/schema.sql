@@ -72,10 +72,12 @@ CREATE TABLE IF NOT EXISTS slide_sections (
     PRIMARY KEY (slide_id)
 );
 
--- Append-only edit history for tracking field changes
+-- Append-only edit history for tracking field changes.
+-- slide_id is nullable: script-file patches (field='script') are not tied to a
+-- single slide row, so they record NULL here.
 CREATE TABLE IF NOT EXISTS edit_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    slide_id INTEGER NOT NULL REFERENCES slides(id) ON DELETE CASCADE,
+    slide_id INTEGER REFERENCES slides(id) ON DELETE CASCADE,
     field TEXT NOT NULL,
     old_value TEXT,
     new_value TEXT,

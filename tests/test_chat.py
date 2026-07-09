@@ -221,6 +221,123 @@ class TestRevertPatch:
 
 
 # ---------------------------------------------------------------------------
+# Script-file patch tests (the new .js-patch path)
+# ---------------------------------------------------------------------------
+
+class TestScriptPatch:
+    def _seed_script_deck(self, conn, tmp_path, body):
+        script = tmp_path / "deck.js"
+        script.write_text(body, encoding="utf-8")
+        cur = conn.execute(
+            "INSERT INTO decks (name, file_path, file_hash, source_script_path) VALUES (?,?,?,?)",
+            ("script-deck", "/tmp/script-deck.pptx", "shash", str(script)),
+        )
+        return str(script), cur.lastrowid
+
+    def test_apply_script_patch_fresh_db(self, conn, tmp_path):
+        """A script patch inserts slide_id=NULL into edit_history; regression
+        test for the NOT NULL crash on a freshly-initialized database."""
+        script, _ = self._seed_script_deck(conn, tmp_path, "var title = 'Old Title';\n")
+        conn.commit()
+        p = Patch(script_path=script, old="Old Title", new="New Title", summary="s")
+        history_id = apply_patch(p, conn, cwd=str(tmp_path))
+        assert history_id > 0
+        assert "New Title" in Path(script).read_text()
+        row = conn.execute(
+            "SELECT slide_id, field FROM edit_history WHERE id = ?", (history_id,)
+        ).fetchone()
+        assert row["slide_id"] is None
+        assert row["field"] == "script"
+
+    def test_apply_script_patch_syncs_grid(self, conn, tmp_path):
+        script, deck_id = self._seed_script_deck(conn, tmp_path, "title = 'Alpha';\n")
+        conn.execute(
+            "INSERT INTO slides (deck_id, position, title, content_text, content_hash) VALUES (?,?,?,?,?)",
+            (deck_id, 1, "Alpha", "body", "sh1"),
+        )
+        conn.commit()
+        p = Patch(script_path=script, old="Alpha", new="Beta", summary="s")
+        apply_patch(p, conn, cwd=str(tmp_path))
+        row = conn.execute(
+            "SELECT title FROM slides WHERE deck_id = ? AND position = 1", (deck_id,)
+        ).fetchone()
+        assert row["title"] == "Beta"
+
+    def test_ambiguous_old_text_rejected(self, conn, tmp_path):
+        """When old text matches more than once, the file write (first-only) and
+        the grid mirror (replace-all) would diverge, so the patch is rejected."""
+        script, _ = self._seed_script_deck(conn, tmp_path, "a = 'Foo';\nb = 'Foo';\n")
+        conn.commit()
+        p = Patch(script_path=script, old="Foo", new="Bar", summary="s")
+        ok, reason = validate_patch(p, conn)
+        assert not ok
+        assert "ambiguous" in reason
+        with pytest.raises(ValueError, match="validation failed"):
+            apply_patch(p, conn, cwd=str(tmp_path))
+        # File must be untouched after a rejected apply.
+        assert Path(script).read_text() == "a = 'Foo';\nb = 'Foo';\n"
+
+    def test_unique_context_disambiguates(self, conn, tmp_path):
+        script, _ = self._seed_script_deck(conn, tmp_path, "a = 'Foo';\nb = 'Foo';\n")
+        conn.commit()
+        p = Patch(script_path=script, old="a = 'Foo'", new="a = 'Bar'", summary="s")
+        ok, reason = validate_patch(p, conn)
+        assert ok, reason
+        apply_patch(p, conn, cwd=str(tmp_path))
+        assert Path(script).read_text() == "a = 'Bar';\nb = 'Foo';\n"
+
+    def test_missing_script_file_rejected(self, conn, tmp_path):
+        p = Patch(script_path=str(tmp_path / "gone.js"), old="x", new="y", summary="s")
+        ok, reason = validate_patch(p, conn)
+        assert not ok
+        assert "not found" in reason
+
+
+class TestEditHistoryMigration:
+    def test_legacy_notnull_slide_id_is_relaxed(self, tmp_path):
+        """A pre-existing DB with edit_history.slide_id NOT NULL is migrated to
+        nullable without losing rows, and the migration is idempotent."""
+        db_path = str(tmp_path / "legacy.db")
+        raw = sqlite3.connect(db_path)
+        raw.executescript(
+            """
+            CREATE TABLE slides (
+                id INTEGER PRIMARY KEY, deck_id INT, position INT,
+                title TEXT DEFAULT '', content_text TEXT DEFAULT '',
+                content_hash TEXT DEFAULT '', notes TEXT DEFAULT ''
+            );
+            CREATE TABLE edit_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                slide_id INTEGER NOT NULL REFERENCES slides(id) ON DELETE CASCADE,
+                field TEXT NOT NULL, old_value TEXT, new_value TEXT,
+                source TEXT NOT NULL DEFAULT 'web',
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            INSERT INTO slides (id, deck_id, position, title) VALUES (1, 1, 1, 'x');
+            INSERT INTO edit_history (slide_id, field, old_value, new_value, source)
+                VALUES (1, 'notes', 'a', 'b', 'web');
+            """
+        )
+        raw.commit()
+        raw.close()
+
+        def slide_id_notnull(c):
+            info = next(r for r in c.execute("PRAGMA table_info(edit_history)") if r[1] == "slide_id")
+            return info[3]
+
+        conn = get_db(db_path)
+        assert slide_id_notnull(conn) == 0
+        row = conn.execute("SELECT slide_id, field, old_value, new_value FROM edit_history").fetchone()
+        assert (row["slide_id"], row["field"], row["old_value"], row["new_value"]) == (1, "notes", "a", "b")
+        conn.close()
+
+        # Re-open: migration must be a no-op the second time.
+        conn2 = get_db(db_path)
+        assert slide_id_notnull(conn2) == 0
+        conn2.close()
+
+
+# ---------------------------------------------------------------------------
 # ChatService tests
 # ---------------------------------------------------------------------------
 
