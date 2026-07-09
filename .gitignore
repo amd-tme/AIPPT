@@ -63,6 +63,9 @@ enhanced-pipeline-text.md
 git-course-*.md
 test-sections.md
 
+# Chat patch audit logs (written by patch engine to server cwd)
+.aippt/
+
 # Test artifacts dropped at repo root by validation sessions
 /slides.csv
 /aippt-*.jpeg

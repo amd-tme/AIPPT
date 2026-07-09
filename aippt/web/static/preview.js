@@ -46,8 +46,10 @@ function setStatus(state, detail) {
 function setButtons(hasSession) {
     const forceBtn = el('preview-force-btn');
     const stopBtn  = el('preview-stop-btn');
+    const saveBtn  = el('preview-save-btn');
     if (forceBtn) forceBtn.disabled = !hasSession;
     if (stopBtn)  stopBtn.disabled  = !hasSession;
+    if (saveBtn)  saveBtn.disabled  = !hasSession;
 }
 
 function logEvent(data) {
@@ -372,6 +374,7 @@ function _clearViewer() {
 
 export function prevSlide() { pptxViewer?.previousSlide?.(); }
 export function nextSlide() { pptxViewer?.nextSlide?.(); }
+export function getSessionToken() { return session?.token ?? null; }
 
 // ── Error display ─────────────────────────────────────────────────────────────
 

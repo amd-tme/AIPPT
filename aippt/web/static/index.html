@@ -18,6 +18,7 @@
     <link rel="stylesheet" href="static/tokens.css">
     <link rel="stylesheet" href="static/pico-overrides.css">
     <link rel="stylesheet" href="static/preview.css">
+    <link rel="stylesheet" href="static/chat.css">
     <style>
         /* ── Vendored fonts ─────────────────────────────────── */
         @font-face {
@@ -328,7 +329,7 @@
             background: var(--bg-card);
             color: var(--text-primary);
             border: 1px solid var(--pico-muted-border-color);
-            border-radius: var(--pico-border-radius);
+            border-radius: 8px !important;
             overflow: hidden;
             cursor: pointer;
             transition: border-color 0.2s, box-shadow 0.2s;
@@ -346,6 +347,7 @@
             height: 180px;
             object-fit: cover;
             display: block;
+            border-radius: 0 !important;
         }
         .slide-card .card-body {
             padding: 0.75rem;
@@ -392,13 +394,93 @@
             font-weight: 500;
         }
         .no-image {
-            background: var(--pico-muted-border-color);
+            background: #1a1a2e;
             height: 180px;
             display: flex;
-            align-items: center;
-            justify-content: center;
-            color: var(--pico-muted-color);
-            font-size: 0.85rem;
+            flex-direction: column;
+            align-items: flex-start;
+            justify-content: flex-end;
+            padding: 0.75rem 0.85rem 0.6rem;
+            border-radius: 0 !important;
+            position: relative;
+            overflow: hidden;
+        }
+        .no-image::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, #0d1b2a 0%, #1a1a2e 60%, #16213e 100%);
+        }
+        .no-image .ni-num {
+            position: relative;
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--accent, #00c2de);
+            line-height: 1;
+            margin-bottom: 0.3rem;
+        }
+        .no-image .ni-title {
+            position: relative;
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: #e0e0e0;
+            line-height: 1.3;
+            margin-bottom: 0.2rem;
+            max-height: 2.6rem;
+            overflow: hidden;
+        }
+        .no-image .ni-body {
+            position: relative;
+            font-size: 0.7rem;
+            color: rgba(255,255,255,0.45);
+            line-height: 1.35;
+            max-height: 2.7rem;
+            overflow: hidden;
+        }
+        /* Two-column deck browser */
+        .deck-browser-layout {
+            display: grid;
+            grid-template-columns: 60fr 40fr;
+            gap: 1.5rem;
+            align-items: start;
+        }
+        .deck-browser-right {
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            overflow-y: auto;
+            padding-top: 1rem;
+            padding-bottom: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+        .deck-inline-preview-wrap {
+            border: 1px solid var(--pico-border-color);
+            border-radius: 4px;
+            overflow: hidden;
+            background: #111;
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            position: relative;
+        }
+        .deck-inline-preview-wrap canvas {
+            position: absolute;
+            inset: 0;
+            width: 100% !important;
+            height: 100% !important;
+        }
+        .deck-inline-chat {
+            border: 1px solid var(--pico-muted-border-color);
+            border-radius: 10px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+        }
+        @media (max-width: 900px) {
+            .deck-browser-layout { grid-template-columns: 1fr; }
+            .deck-browser-right { position: static; height: auto; overflow-y: visible; }
         }
         .tag-removable {
             display: inline-flex;
@@ -1304,7 +1386,97 @@
                 <a href="#" onclick="showDecks(); return false;">&larr; Back to decks</a>
             </p>
             <h2 id="browser-title">Slides</h2>
-            <div class="slide-grid" id="slide-grid"></div>
+            <div class="deck-browser-layout">
+                <!-- Left column: slide grid -->
+                <div>
+                    <div class="slide-grid" id="slide-grid"></div>
+                </div>
+
+                <!-- Right column: live preview + inline chat -->
+                <div class="deck-browser-right" id="deck-browser-right">
+                    <!-- Live preview -->
+                    <div>
+                        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.4rem;">
+                            <strong style="font-size:0.8rem; color:var(--pico-muted-color);">Live Preview</strong>
+                            <div style="display:flex; gap:0.3rem;">
+                                <button id="deck-preview-prev" onclick="deckInlinePreviewPrev()"
+                                    style="width:auto; padding:0.15rem 0.5rem; font-size:0.75rem;" disabled>&lsaquo;</button>
+                                <span id="deck-preview-pos" style="font-size:0.75rem; color:var(--pico-muted-color); align-self:center;"></span>
+                                <button id="deck-preview-next" onclick="deckInlinePreviewNext()"
+                                    style="width:auto; padding:0.15rem 0.5rem; font-size:0.75rem;" disabled>&rsaquo;</button>
+                            </div>
+                        </div>
+                        <div class="deck-inline-preview-wrap" id="deck-inline-preview-wrap">
+                            <span id="deck-inline-preview-status" style="font-size:0.8rem; color:var(--pico-muted-color);">No live preview</span>
+                        </div>
+                    </div>
+
+                    <!-- Inline chat panel (always visible for non-view-only) -->
+                    <div class="deck-inline-chat" id="deck-inline-chat-container" style="display:none;">
+                        <!-- Header -->
+                        <div style="display:flex; align-items:center; justify-content:space-between;
+                                    padding:0.5rem 0.75rem; background:var(--pico-primary-background);
+                                    border-bottom:1px solid var(--pico-muted-border-color); flex-shrink:0;">
+                            <strong style="font-size:0.85rem;">&#128172; <span id="deck-chat-title">Deck Chat</span></strong>
+                        </div>
+
+                        <!-- Conversation row -->
+                        <div style="display:flex; gap:0.35rem; padding:0.4rem 0.65rem;
+                                    border-bottom:1px solid var(--pico-muted-border-color);
+                                    align-items:center; flex-shrink:0; background:var(--pico-background-color);">
+                            <select id="deck-chat-conv-select" style="flex:1; margin:0; font-size:0.8rem;" onchange="onDeckConvChange()">
+                                <option value="">— conversation —</option>
+                            </select>
+                            <button class="outline" onclick="newDeckConv()" style="width:auto; padding:0.2rem 0.5rem; font-size:0.75rem;">+ New</button>
+                            <button class="outline" id="deck-chat-del-btn" onclick="deleteDeckConv()" style="width:auto; padding:0.2rem 0.6rem; font-size:0.75rem; display:none; color:#e53935; border-color:#e53935;" title="Delete conversation">&#128465;</button>
+                        </div>
+
+                        <!-- Slide scope row -->
+                        <div style="display:flex; gap:0.35rem; padding:0.35rem 0.65rem;
+                                    border-bottom:1px solid var(--pico-muted-border-color);
+                                    align-items:center; flex-shrink:0;">
+                            <span style="font-size:0.75rem; color:var(--pico-muted-color); white-space:nowrap;">Scope:</span>
+                            <select id="deck-chat-slide-select" style="flex:1; margin:0; font-size:0.8rem;" onchange="onDeckSlideScopeChange()">
+                                <option value="">&#127760; All slides</option>
+                            </select>
+                        </div>
+
+                        <!-- Messages -->
+                        <div class="chat-history" id="deck-chat-history"
+                            style="flex:1; overflow-y:auto; padding:0.6rem 0.7rem;
+                                   min-height:120px; max-height:320px;"></div>
+
+                        <!-- Input (always visible) -->
+                        <div id="deck-chat-input-row" class="chat-input-row"
+                            style="display:flex; flex-direction:column; padding:0.5rem 0.65rem; gap:0.3rem;
+                                   border-top:1px solid var(--pico-muted-border-color); flex-shrink:0;">
+                            <div style="display:flex; gap:0.6rem; align-items:center; font-size:0.78rem;">
+                                <label style="display:flex; align-items:center; gap:0.25rem; cursor:pointer; margin:0;">
+                                    <input type="radio" name="deck-chat-mode" id="deck-chat-mode-ask" value="ask" checked
+                                           style="margin:0;" onchange="onChatModeChange()"> Ask
+                                </label>
+                                <label id="deck-chat-edit-label" style="display:flex; align-items:center; gap:0.25rem; cursor:pointer; margin:0;">
+                                    <input type="radio" name="deck-chat-mode" id="deck-chat-mode-edit" value="edit"
+                                           style="margin:0;" onchange="onChatModeChange()"> Edit
+                                </label>
+                                <span id="deck-chat-mode-hint" style="color:var(--pico-muted-color); margin-left:auto; font-size:0.72rem;"></span>
+                            </div>
+                            <textarea id="deck-chat-input" rows="4"
+                                placeholder="Ask about this deck… (Ctrl+Enter to send)"
+                                style="width:100%; resize:vertical; margin:0; font-size:0.85rem;
+                                       padding:0.5rem 0.65rem; min-height:5rem; max-height:12rem;"
+                                onkeydown="if(event.key==='Enter'&&(event.ctrlKey||event.metaKey)){event.preventDefault();sendDeckChat();}"></textarea>
+                            <div style="display:flex; justify-content:flex-end; gap:0.4rem;">
+                                <button id="deck-chat-send-btn" onclick="sendDeckChat()"
+                                    style="width:auto; padding:0.3rem 1rem; font-size:0.82rem;">Send</button>
+                                <button id="deck-chat-stop-btn" onclick="stopDeckChat()"
+                                    style="width:auto; padding:0.3rem 1rem; font-size:0.82rem; display:none;
+                                           background:var(--pico-del-color,#c62828); color:#fff; border-color:transparent;">Stop</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </section>
 
         <!-- Search view -->
@@ -1410,6 +1582,7 @@
                 <button id="preview-open-btn" onclick="previewOpen()">Open</button>
                 <button id="preview-force-btn" onclick="previewForce()" disabled>Force render</button>
                 <button id="preview-stop-btn" class="outline" onclick="previewStop()" disabled>Stop</button>
+                <button id="preview-save-btn" class="outline" onclick="previewSaveDeck()" disabled title="Download PPTX and add to Cataloged Decks">&#128190; Save to Library</button>
                 <span id="preview-status" class="preview-status preview-status--idle">Idle</span>
             </div>
             <p class="preview-disclaimer">&#9888; Rendered in-browser via PptxViewJS — fonts and complex effects may differ slightly from PowerPoint export.</p>
@@ -1513,6 +1686,7 @@
                     <button class="outline" id="btn-analyze" onclick="runAiAction('analyze')">Analyze</button>
                     <button class="outline" id="btn-notes" onclick="runAiAction('notes')">Suggest Notes</button>
                     <button class="outline" id="btn-improvements" onclick="runAiAction('improvements')">Suggest Improvements</button>
+                    <button class="outline" id="btn-slide-chat" onclick="openSlideChat()">&#128172; Chat</button>
                 </div>
 
                 <div id="ai-spinner"><div class="spinner-icon"></div><span id="ai-spinner-label">Analyzing slide...</span></div>
@@ -1649,9 +1823,59 @@
         window.previewOpen  = () => preview.openFromUI();
         window.previewForce = () => preview.forceRender();
         window.previewStop  = () => preview.closeSession();
+        window.previewGetToken = () => preview.getSessionToken();
+
+        window.previewSaveDeck = async function() {
+            const token = preview.getSessionToken();
+            if (!token) { alert('No active preview session — open a script first.'); return; }
+            const btn = document.getElementById('preview-save-btn');
+            if (btn) { btn.disabled = true; btn.innerHTML = 'Saving…'; }
+            try {
+                // 1. Download the PPTX
+                const pptxResp = await fetch(`api/preview/sessions/${token}/pptx`);
+                if (!pptxResp.ok) {
+                    const err = await pptxResp.json().catch(() => ({}));
+                    alert('Save failed: ' + (err.error || pptxResp.statusText));
+                    return;
+                }
+                const cd = pptxResp.headers.get('Content-Disposition') || '';
+                const match = cd.match(/filename="?([^";\s]+)"?/);
+                const filename = match ? match[1] : 'deck.pptx';
+                const blob = await pptxResp.blob();
+                const dlUrl = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = dlUrl; a.download = filename;
+                document.body.appendChild(a); a.click(); a.remove();
+                URL.revokeObjectURL(dlUrl);
+
+                // 2. Catalog into the deck library
+                const catResp = await fetch(`api/preview/sessions/${token}/catalog`, {method: 'POST'});
+                if (!catResp.ok) {
+                    const err = await catResp.json().catch(() => ({}));
+                    toast('Downloaded but catalog failed: ' + (err.error || catResp.statusText));
+                    return;
+                }
+                const catData = await catResp.json();
+                const deckId = catData.deck_id;
+
+                // 3. Notify user with a link to go browse the deck
+                const statusBar = document.getElementById('preview-status');
+                if (statusBar) {
+                    const orig = statusBar.outerHTML;
+                    statusBar.innerHTML = `<span style="color:#4caf50; font-size:0.8rem;">&#10003; Saved to Library &mdash;
+                        <a href="#" onclick="showDecks(); setTimeout(()=>browseDeck(${deckId},'${filename.replace('.pptx','')}'),300); return false;"
+                           style="color:#4caf50; text-decoration:underline;">Open in Decks</a></span>`;
+                    setTimeout(() => { statusBar.innerHTML = orig; }, 6000);
+                }
+                toast(`"${filename}" saved to Cataloged Decks`);
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerHTML = '&#128190; Save to Library'; }
+            }
+        };
     </script>
     <script>
         let currentSlideId = null;
+        let currentDeckId = null;
         let savedNotesValue = '';
         let slideList = [];       // ordered slide IDs for nav context
         let currentSlideIndex = -1;
@@ -1779,13 +2003,23 @@
         }
 
         function applyViewOnlyToSlideDialog() {
-            if (!viewOnly) return;
             const tip = 'LLM not configured';
             ['btn-analyze', 'btn-notes', 'btn-improvements'].forEach(id => {
                 const btn = document.getElementById(id);
-                btn.disabled = true;
-                btn.title = tip;
+                if (!btn) return;
+                btn.disabled = viewOnly;
+                btn.title = viewOnly ? tip : '';
             });
+            // Chat button: hide in view-only; show otherwise
+            const chatBtn = document.getElementById('btn-slide-chat');
+            if (chatBtn) chatBtn.style.display = viewOnly ? 'none' : '';
+        }
+
+        function openSlideChat() {
+            // Close the dialog, then open the floating chat scoped to this slide
+            document.getElementById('slide-dialog').close();
+            // _chatScopeToSlide opens the panel and sets the slide dropdown
+            _chatScopeToSlide(currentSlideId);
         }
 
         function applyViewOnlyToSettings() {
@@ -1916,8 +2150,10 @@
             hide('slide-browser');
             hide('search-view');
             hide('settings-view');
+            hide('preview-view');
             hide('tag-results');
             document.getElementById('tag-filter-info').classList.remove('active');
+            _clearDeckInlinePreview();
             show('deck-list');
             loadCreateModels();
             const resp = await fetch('api/decks');
@@ -1943,8 +2179,9 @@
                     <td onclick="event.stopPropagation()">
                         <button class="outline" style="width:auto; padding:0.3rem 0.7rem; font-size:0.8rem;" onclick="downloadDeck(${d.id})">Download</button>
                         <button class="outline" style="width:auto; padding:0.3rem 0.7rem; font-size:0.8rem; margin-left:0.3rem;" onclick="writeNotesToDeck(${d.id})">Write Notes to Deck</button>
+                        ${!viewOnly ? `<button class="outline" style="width:auto; padding:0.3rem 0.7rem; font-size:0.8rem; margin-left:0.3rem;" onclick="event.stopPropagation(); browseDeckAndChat(${d.id}, '${escAttr(d.display_name || d.name)}')">&#128172; Chat</button>` : ''}
                         ${regenBtn}
-                        ${window.isAdmin ? `<button class="outline admin-delete-btn" style="width:auto; padding:0.3rem 0.7rem; font-size:0.8rem; margin-left:0.3rem;" onclick="promptDeleteDeck(${d.id}, '${escAttr(d.display_name || d.name)}', ${d.slide_count})">Delete</button>` : ''}
+                        ${!viewOnly ? `<button class="outline admin-delete-btn" style="width:auto; padding:0.3rem 0.7rem; font-size:0.8rem; margin-left:0.3rem;" onclick="promptDeleteDeck(${d.id}, '${escAttr(d.display_name || d.name)}', ${d.slide_count})">Delete</button>` : ''}
                     </td>
                 </tr>`;
             }).join('');
@@ -1953,17 +2190,602 @@
             });
         }
 
+        let currentDeckScriptPath = null;
+
         async function browseDeck(deckId, name) {
+            currentDeckId = deckId;
+            currentDeckScriptPath = null;
             hide('deck-list');
             hide('search-view');
             hide('settings-view');
+            hide('preview-view');
             hide('tag-results');
             show('slide-browser');
             document.getElementById('browser-title').textContent = name;
+            const titleEl = document.getElementById('deck-chat-title');
+            if (titleEl) titleEl.textContent = name || 'Deck Chat';
+
+            // Show inline chat for non-view-only users
+            const chatContainer = document.getElementById('deck-inline-chat-container');
+            if (chatContainer) chatContainer.style.display = viewOnly ? 'none' : 'flex';
+
+            _deckChatConvId = null;
+
+            // Fetch deck metadata to get script path
+            try {
+                const dmeta = await fetch(`api/decks/${deckId}`);
+                if (dmeta.ok) {
+                    const d = await dmeta.json();
+                    currentDeckScriptPath = d?.origin?.source_script_path || null;
+                }
+            } catch(_) {}
+
             const resp = await fetch(`api/decks/${deckId}/slides`);
             if (!resp.ok) { toast('Error loading slides'); return; }
             const slides = await resp.json();
             renderSlideGrid('slide-grid', slides);
+            await loadSlideScope(slides);
+
+            if (currentDeckScriptPath) {
+                _initDeckInlinePreview(currentDeckScriptPath);
+            } else {
+                _clearDeckInlinePreview();
+            }
+
+            if (!viewOnly) await loadDeckConversations();
+        }
+
+        async function browseDeckAndChat(deckId, name) {
+            await browseDeck(deckId, name);
+        }
+
+        // ---------------------------------------------------------------------------
+        // Deck-level chat state + functions
+        // ---------------------------------------------------------------------------
+        let _deckChatConvId = null;
+        let _deckChatStreaming = false;
+        let _deckChatCancelFn = null;
+        let _deckChatStreamEl = null;
+        let _deckChatStreamBuf = '';
+
+        // ---------------------------------------------------------------------------
+        // Inline live preview
+        // ---------------------------------------------------------------------------
+        let _inlinePreviewWs = null;
+        let _inlinePreviewToken = null;
+        let _inlinePreviewPptxUrl = null;
+        let _inlinePreviewSlides = [];
+        let _inlinePreviewIdx = 0;
+
+        async function _initDeckInlinePreview(scriptPath) {
+            _clearDeckInlinePreview();
+            const statusEl = document.getElementById('deck-inline-preview-status');
+            const wrap = document.getElementById('deck-inline-preview-wrap');
+            if (statusEl) statusEl.textContent = 'Connecting…';
+
+            // Look up the preview session for this script
+            let token;
+            try {
+                const r = await fetch(`api/preview/sessions?script=${encodeURIComponent(scriptPath)}`);
+                if (!r.ok) {
+                    if (statusEl) statusEl.textContent = 'No live preview — open Live Preview to render.';
+                    return;
+                }
+                const data = await r.json();
+                token = data.token;
+            } catch(_) {
+                if (statusEl) statusEl.textContent = 'No live preview — open Live Preview to render.';
+                return;
+            }
+
+            _inlinePreviewToken = token;
+            const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const ws = new WebSocket(`${proto}//${location.host}/ws/preview/${token}`);
+            _inlinePreviewWs = ws;
+
+            ws.onopen = async () => {
+                try {
+                    const stateResp = await fetch(`api/preview/sessions/${token}`);
+                    if (stateResp.ok) {
+                        const state = await stateResp.json();
+                        if (state.state?.pptx_url) {
+                            await _loadDeckInlineCanvas(state.state.pptx_url, token);
+                        } else {
+                            if (statusEl) statusEl.textContent = 'Rendering…';
+                            ws.send(JSON.stringify({action: 'force_render'}));
+                        }
+                    }
+                } catch(_) {}
+            };
+
+            ws.onmessage = async (evt) => {
+                try {
+                    const data = JSON.parse(evt.data);
+                    if (data.event === 'render_complete' && data.pptx_url) {
+                        await _loadDeckInlineCanvas(data.pptx_url, token);
+                    } else if (data.event === 'render_error') {
+                        if (statusEl) statusEl.textContent = 'Render error';
+                    }
+                } catch(_) {}
+            };
+
+            ws.onerror = () => {
+                if (statusEl) statusEl.textContent = 'Preview disconnected';
+            };
+        }
+
+        async function _loadDeckInlineCanvas(pptxUrl, token) {
+            const wrap = document.getElementById('deck-inline-preview-wrap');
+            const statusEl = document.getElementById('deck-inline-preview-status');
+            if (!wrap) return;
+
+            // Load pptx2json slide data
+            try {
+                const meta = await fetch(`api/preview/sessions/${token}`);
+                if (meta.ok) {
+                    const s = await meta.json();
+                    _inlinePreviewSlides = s.state?.slides || [];
+                    _inlinePreviewIdx = 0;
+                    _updatePreviewNav();
+                }
+            } catch(_) {}
+
+            _inlinePreviewPptxUrl = pptxUrl;
+            _renderInlineSlide();
+        }
+
+        let _inlinePptxViewer = null;
+
+        function _renderInlineSlide() {
+            const wrap = document.getElementById('deck-inline-preview-wrap');
+            if (!wrap || !_inlinePreviewPptxUrl) return;
+
+            if (!window.PptxViewJS || !window.PptxViewJS.PPTXViewer) {
+                wrap.innerHTML = '<span style="font-size:0.75rem; color:var(--pico-muted-color); position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);">PptxViewJS not loaded</span>';
+                return;
+            }
+
+            // Destroy previous viewer
+            if (_inlinePptxViewer) {
+                try { _inlinePptxViewer.destroy?.(); } catch(_) {}
+                _inlinePptxViewer = null;
+            }
+
+            wrap.innerHTML = '';
+            const canvas = document.createElement('canvas');
+            wrap.appendChild(canvas);
+
+            const doLoad = () => {
+                // Size canvas to the container's actual pixel dimensions
+                const rect = wrap.getBoundingClientRect();
+                const w = Math.round(rect.width) || 480;
+                const h = Math.round(rect.height) || Math.round(w * 9 / 16);
+                canvas.width = w;
+                canvas.height = h;
+
+                const { PPTXViewer } = window.PptxViewJS;
+                _inlinePptxViewer = new PPTXViewer({ canvas, fitMode: 'contain' });
+
+                _inlinePptxViewer.on('loadComplete', ({ slideCount }) => {
+                    _inlinePreviewSlides = Array.from({ length: slideCount }, (_, i) => i);
+                    _updatePreviewNav();
+                    if (_inlinePreviewIdx > 0) {
+                        try { _inlinePptxViewer.goToSlide(_inlinePreviewIdx); } catch(_) {}
+                    }
+                    _inlinePptxViewer.render();
+                });
+
+                _inlinePptxViewer.on('slideChanged', (index) => {
+                    _inlinePreviewIdx = index;
+                    _updatePreviewNav();
+                });
+
+                _inlinePptxViewer.loadFromUrl(_inlinePreviewPptxUrl + `?t=${Date.now()}`).catch(e => {
+                    wrap.innerHTML = `<span style="font-size:0.75rem; color:#f44336; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);">Load error: ${e.message}</span>`;
+                });
+            };
+
+            if (wrap.getBoundingClientRect().width > 0) {
+                doLoad();
+            } else {
+                const ro = new ResizeObserver(() => { ro.disconnect(); doLoad(); });
+                ro.observe(wrap);
+            }
+        }
+
+        function _updatePreviewNav() {
+            const pos = document.getElementById('deck-preview-pos');
+            const prev = document.getElementById('deck-preview-prev');
+            const next = document.getElementById('deck-preview-next');
+            const total = _inlinePreviewSlides.length;
+            const idx = _inlinePreviewIdx;
+            if (pos) pos.textContent = total > 0 ? `${idx + 1} / ${total}` : '';
+            if (prev) prev.disabled = !_inlinePptxViewer || idx <= 0;
+            if (next) next.disabled = !_inlinePptxViewer || idx >= total - 1;
+        }
+
+        function deckInlinePreviewPrev() {
+            if (!_inlinePptxViewer) return;
+            try { _inlinePptxViewer.previousSlide(); } catch(_) {}
+        }
+
+        function deckInlinePreviewNext() {
+            if (!_inlinePptxViewer) return;
+            try { _inlinePptxViewer.nextSlide(); } catch(_) {}
+        }
+
+        function _clearDeckInlinePreview() {
+            if (_inlinePptxViewer) { try { _inlinePptxViewer.destroy?.(); } catch(_) {} _inlinePptxViewer = null; }
+            if (_inlinePreviewWs) { try { _inlinePreviewWs.close(); } catch(_) {} _inlinePreviewWs = null; }
+            _inlinePreviewToken = null;
+            _inlinePreviewPptxUrl = null;
+            _inlinePreviewSlides = [];
+            _inlinePreviewIdx = 0;
+            const wrap = document.getElementById('deck-inline-preview-wrap');
+            if (wrap) wrap.innerHTML = '<span id="deck-inline-preview-status" style="font-size:0.8rem; color:var(--pico-muted-color);">No live preview</span>';
+            const pos = document.getElementById('deck-preview-pos');
+            if (pos) pos.textContent = '';
+            const prev = document.getElementById('deck-preview-prev');
+            const next = document.getElementById('deck-preview-next');
+            if (prev) prev.disabled = true;
+            if (next) next.disabled = true;
+        }
+
+        async function toggleDeckChat() {
+            // No-op: chat is now always inline in the right panel
+        }
+
+        async function loadDeckConversations() {
+            if (!currentDeckId) return;
+            let resp = await fetch(`api/chat/conversations?deck_id=${currentDeckId}`);
+            if (!resp.ok) return;
+            let convs = await resp.json();
+
+            // Auto-create a default conversation if none exist
+            if (convs.length === 0) {
+                const cr = await fetch('api/chat/conversations', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({deck_id: currentDeckId, title: 'Chat'}),
+                });
+                if (cr.ok) {
+                    const created = await cr.json();
+                    convs = [created];
+                }
+            }
+
+            const sel = document.getElementById('deck-chat-conv-select');
+            sel.innerHTML = '<option value="">— conversation —</option>';
+            for (const c of convs) {
+                const opt = document.createElement('option');
+                opt.value = c.id;
+                opt.textContent = c.title;
+                sel.appendChild(opt);
+            }
+            if (convs.length >= 1) {
+                sel.value = convs[0].id;
+                await onDeckConvChange();
+            }
+        }
+
+        async function onDeckConvChange() {
+            const sel = document.getElementById('deck-chat-conv-select');
+            const id = parseInt(sel.value);
+            document.getElementById('deck-chat-del-btn').style.display = id ? '' : 'none';
+            // Input row always visible in inline layout — only hide when no conv selected
+            if (!id) { _deckChatConvId = null; document.getElementById('deck-chat-history').innerHTML = ''; return; }
+            _deckChatConvId = id;
+            const resp = await fetch(`api/chat/conversations/${id}`);
+            if (!resp.ok) return;
+            const data = await resp.json();
+            const histEl = document.getElementById('deck-chat-history');
+            histEl.innerHTML = '';
+            for (const m of data.messages) {
+                const div = document.createElement('div');
+                div.className = `chat-msg chat-msg--${m.role}`;
+                div.textContent = m.content;
+                histEl.appendChild(div);
+                // Re-render patch block if this assistant message had a proposed patch
+                if (m.role === 'assistant' && m.patch_json) {
+                    let patches;
+                    try { patches = JSON.parse(m.patch_json); } catch { patches = null; }
+                    if (patches) {
+                        const applied = !!m.patch_applied_at;
+                        const reverted = !!m.patch_reverted_at;
+                        const patchDiv = document.createElement('div');
+                        patchDiv.className = 'chat-msg chat-msg--assistant';
+                        patchDiv.dataset.patchMsgId = m.id;
+                        let actionsHtml;
+                        if (reverted) {
+                            actionsHtml = '<span style="font-size:0.78rem; color:var(--pico-muted-color);">&#8635; Reverted</span>';
+                        } else if (applied) {
+                            actionsHtml = `<span style="font-size:0.78rem; color:#4caf50;">&#10003; Applied</span>
+                                <button class="outline" onclick="undoDeckPatch(${_deckChatConvId}, ${m.id})"
+                                    style="width:auto; padding:0.2rem 0.55rem; font-size:0.75rem; margin-left:0.4rem;">&#8635; Undo</button>`;
+                        } else {
+                            actionsHtml = `<button onclick="applyDeckPatch(${_deckChatConvId}, ${m.id})" style="width:auto; padding:0.25rem 0.7rem; font-size:0.78rem;">&#10003; Apply</button>
+                                <button class="outline" onclick="rejectDeckPatch(${m.id})" style="width:auto; padding:0.25rem 0.7rem; font-size:0.78rem;">&#10007; Reject</button>`;
+                        }
+                        patchDiv.innerHTML = `
+                            <div style="margin-bottom:0.4rem; font-size:0.8rem; font-weight:bold;">&#128196; Proposed edit${patches.length > 1 ? 's' : ''}:</div>
+                            ${_renderPatchDiff(patches)}
+                            <div id="deck-patch-actions-${m.id}" style="display:flex; gap:0.4rem; margin-top:0.5rem; flex-wrap:wrap;">${actionsHtml}</div>`;
+                        histEl.appendChild(patchDiv);
+                    }
+                }
+            }
+            histEl.scrollTop = histEl.scrollHeight;
+        }
+
+        async function newDeckConv() {
+            if (!currentDeckId) return;
+            const title = prompt('Conversation title:', 'Deck overview chat');
+            if (title === null) return;
+            const resp = await fetch('api/chat/conversations', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({deck_id: currentDeckId, title: title || 'Deck overview chat'}),
+            });
+            if (!resp.ok) { toast('Failed to create conversation'); return; }
+            const conv = await resp.json();
+            _deckChatConvId = conv.id;
+            await loadDeckConversations();
+            document.getElementById('deck-chat-conv-select').value = _deckChatConvId;
+            document.getElementById('deck-chat-del-btn').style.display = '';
+            document.getElementById('deck-chat-history').innerHTML = '';
+        }
+
+        async function deleteDeckConv() {
+            if (!_deckChatConvId || !confirm('Delete this conversation?')) return;
+            await fetch(`api/chat/conversations/${_deckChatConvId}`, {method: 'DELETE'});
+            _deckChatConvId = null;
+            document.getElementById('deck-chat-history').innerHTML = '';
+            document.getElementById('deck-chat-del-btn').style.display = 'none';
+            await loadDeckConversations();
+        }
+
+        async function sendDeckChat() {
+            if (!_deckChatConvId || _deckChatStreaming) return;
+            const input = document.getElementById('deck-chat-input');
+            const text = input.value.trim();
+            if (!text) return;
+            input.value = '';
+            input.disabled = true;
+            document.getElementById('deck-chat-send-btn').style.display = 'none';
+            document.getElementById('deck-chat-stop-btn').style.display = '';
+
+            const histEl = document.getElementById('deck-chat-history');
+            const userDiv = document.createElement('div');
+            userDiv.className = 'chat-msg chat-msg--user';
+            userDiv.textContent = text;
+            histEl.appendChild(userDiv);
+
+            _deckChatStreamBuf = '';
+            _deckChatStreamEl = document.createElement('div');
+            _deckChatStreamEl.className = 'chat-msg chat-msg--assistant chat-msg--streaming';
+            _deckChatStreamEl.textContent = '…';
+            histEl.appendChild(_deckChatStreamEl);
+            histEl.scrollTop = histEl.scrollHeight;
+
+            const ctrl = new AbortController();
+            _deckChatCancelFn = () => { ctrl.abort(); _finishDeckChat(); };
+            _deckChatStreaming = true;
+
+            const ntid = (localStorage.getItem('aippt_ntid') || '').trim();
+            const scopeSel = document.getElementById('deck-chat-slide-select');
+            const scopeSlideId = scopeSel ? (parseInt(scopeSel.value) || undefined) : undefined;
+            const chatMode = document.querySelector('input[name="deck-chat-mode"]:checked')?.value || 'ask';
+            try {
+                const resp = await fetch(`api/chat/conversations/${_deckChatConvId}/messages`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({message: text, slide_id: scopeSlideId, mode: chatMode, ntid: ntid || undefined}),
+                    signal: ctrl.signal,
+                });
+                if (!resp.ok) {
+                    const err = await resp.json().catch(() => ({error: 'Unknown error'}));
+                    _deckChatStreamEl.textContent = `Error: ${err.error || resp.status}`;
+                    _deckChatStreamEl.classList.remove('chat-msg--streaming');
+                    _finishDeckChat();
+                    return;
+                }
+                const reader = resp.body.getReader();
+                const decoder = new TextDecoder();
+                let partial = '';
+                while (true) {
+                    const {done, value} = await reader.read();
+                    if (done) break;
+                    partial += decoder.decode(value, {stream: true});
+                    const lines = partial.split('\n');
+                    partial = lines.pop();
+                    for (const line of lines) {
+                        if (!line.startsWith('data:')) continue;
+                        const raw = line.slice(5).trim();
+                        if (!raw) continue;
+                        let evt; try { evt = JSON.parse(raw); } catch { continue; }
+                        if (evt.type === 'chunk') {
+                            _deckChatStreamBuf += evt.text;
+                            _deckChatStreamEl.textContent = _deckChatStreamBuf;
+                            histEl.scrollTop = histEl.scrollHeight;
+                        } else if (evt.type === 'patch_proposed') {
+                            _deckChatStreamEl.classList.remove('chat-msg--streaming');
+                            _appendPatchBlock(histEl, evt.message_id, evt.patches, _deckChatConvId);
+                        } else if (evt.type === 'done') {
+                            _deckChatStreamEl.classList.remove('chat-msg--streaming');
+                        } else if (evt.type === 'error') {
+                            _deckChatStreamEl.textContent = `Error: ${evt.message}`;
+                            _deckChatStreamEl.classList.remove('chat-msg--streaming');
+                        }
+                    }
+                }
+            } catch(e) {
+                if (e.name !== 'AbortError' && _deckChatStreamEl) {
+                    _deckChatStreamEl.textContent = `Connection error: ${e.message}`;
+                }
+            }
+            _finishDeckChat();
+        }
+
+        function stopDeckChat() {
+            if (_deckChatCancelFn) {
+                fetch(`api/chat/conversations/${_deckChatConvId}/cancel`, {method: 'POST'}).catch(() => {});
+                _deckChatCancelFn();
+            }
+        }
+
+        function _finishDeckChat() {
+            _deckChatStreaming = false;
+            _deckChatCancelFn = null;
+            _deckChatStreamEl = null;
+            _deckChatStreamBuf = '';
+            const input = document.getElementById('deck-chat-input');
+            if (input) { input.disabled = false; input.focus(); }
+            const sendBtn = document.getElementById('deck-chat-send-btn');
+            if (sendBtn) sendBtn.style.display = '';
+            const stopBtn = document.getElementById('deck-chat-stop-btn');
+            if (stopBtn) stopBtn.style.display = 'none';
+        }
+
+        async function loadSlideScope(slides) {
+            const sel = document.getElementById('deck-chat-slide-select');
+            if (!sel) return;
+            sel.innerHTML = '<option value="">All slides</option>';
+            (slides || []).forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.id;
+                opt.textContent = `Slide ${s.position}: ${s.title || '(untitled)'}`;
+                sel.appendChild(opt);
+            });
+        }
+
+        function onDeckSlideScopeChange() {
+            // Scope label updates automatically via the select; no extra work needed.
+        }
+
+        function onChatModeChange() {
+            const mode = document.querySelector('input[name="deck-chat-mode"]:checked')?.value || 'ask';
+            const hint = document.getElementById('deck-chat-mode-hint');
+            const input = document.getElementById('deck-chat-input');
+            if (mode === 'edit') {
+                if (hint) hint.textContent = 'LLM may propose edits';
+                if (input) input.placeholder = 'Ask for an edit… (Ctrl+Enter to send)';
+            } else {
+                if (hint) hint.textContent = '';
+                if (input) input.placeholder = 'Ask about this deck… (Ctrl+Enter to send)';
+            }
+        }
+
+        function _renderPatchDiff(patches) {
+            return patches.map(p => {
+                const oldText = p.old ?? p.old_text ?? '';
+                const newText = p.new ?? p.new_text ?? '';
+                const label = p.summary || (p.script_path ? p.script_path.split('/').pop() : (p.field ? `slide ${p.slide_id} · ${p.field}` : 'edit'));
+                const oldLines = oldText.split('\n').map(l => `<span style="color:#f44336;">- ${esc(l)}</span>`).join('\n');
+                const newLines = newText.split('\n').map(l => `<span style="color:#4caf50;">+ ${esc(l)}</span>`).join('\n');
+                return `<div style="font-size:0.75rem; margin-bottom:0.3rem;">
+                    <em style="color:var(--pico-muted-color);">${esc(label)}</em>
+                    <pre style="margin:0.2rem 0; padding:0.4rem; border-radius:6px; overflow-x:auto;
+                                background:rgba(0,0,0,0.25); line-height:1.4;">${oldLines}\n${newLines}</pre></div>`;
+            }).join('');
+        }
+
+        function _appendPatchBlock(histEl, msgId, patches, convId) {
+            const patchDiv = document.createElement('div');
+            patchDiv.className = 'chat-msg chat-msg--assistant';
+            patchDiv.dataset.patchMsgId = msgId;
+            patchDiv.innerHTML = `
+                <div style="margin-bottom:0.4rem; font-size:0.8rem; font-weight:bold;">&#128196; Proposed edit${patches.length > 1 ? 's' : ''}:</div>
+                ${_renderPatchDiff(patches)}
+                <div id="deck-patch-actions-${msgId}" style="display:flex; gap:0.4rem; margin-top:0.5rem; flex-wrap:wrap;">
+                    <button onclick="applyDeckPatch(${convId}, ${msgId})" style="width:auto; padding:0.25rem 0.7rem; font-size:0.78rem;">&#10003; Apply</button>
+                    <button class="outline" onclick="rejectDeckPatch(${msgId})" style="width:auto; padding:0.25rem 0.7rem; font-size:0.78rem;">&#10007; Reject</button>
+                </div>`;
+            histEl.appendChild(patchDiv);
+            histEl.scrollTop = histEl.scrollHeight;
+        }
+
+        async function applyDeckPatch(convId, msgId) {
+            const actionsDiv = document.getElementById(`deck-patch-actions-${msgId}`);
+            if (actionsDiv) actionsDiv.innerHTML = '<em style="font-size:0.78rem;">Applying…</em>';
+            const resp = await fetch(`api/chat/conversations/${convId}/messages/${msgId}/apply`, {method: 'POST'});
+            if (resp.ok) {
+                if (actionsDiv) actionsDiv.innerHTML = `
+                    <span style="font-size:0.78rem; color:#4caf50;">&#10003; Applied</span>
+                    <button class="outline" onclick="undoDeckPatch(${convId}, ${msgId})"
+                        style="width:auto; padding:0.2rem 0.55rem; font-size:0.75rem; margin-left:0.4rem;">&#8635; Undo</button>
+                    <span id="preview-update-badge-${msgId}" style="font-size:0.72rem; color:var(--pico-muted-color); margin-left:0.4rem;">&#8987; Preview updating…</span>`;
+                await _refreshSlideGrid();
+                // Wait for the live preview to re-render and update the badge
+                _waitForPreviewUpdate(msgId);
+            } else {
+                const err = await resp.json().catch(() => ({error: 'unknown'}));
+                if (actionsDiv) actionsDiv.innerHTML = `<span style="font-size:0.78rem; color:#f44336;">&#10007; ${esc(err.error || 'Apply failed')}</span>`;
+            }
+        }
+
+        function _waitForPreviewUpdate(msgId) {
+            // If no active inline preview WS, nothing to wait for
+            if (!_inlinePreviewWs || _inlinePreviewWs.readyState !== WebSocket.OPEN) {
+                const badge = document.getElementById(`preview-update-badge-${msgId}`);
+                if (badge) badge.textContent = '(open Live Preview to see changes)';
+                return;
+            }
+            const t0 = Date.now();
+            const tid = setTimeout(() => {
+                const badge = document.getElementById(`preview-update-badge-${msgId}`);
+                if (badge) badge.textContent = '';
+            }, 15000);
+            const origOnMessage = _inlinePreviewWs.onmessage;
+            _inlinePreviewWs.onmessage = async (evt) => {
+                // Call the original handler so the canvas still re-renders
+                if (origOnMessage) origOnMessage(evt);
+                try {
+                    const data = JSON.parse(evt.data);
+                    if (data.event === 'render_complete') {
+                        clearTimeout(tid);
+                        _inlinePreviewWs.onmessage = origOnMessage;
+                        // Refresh grid now that SQLite was updated by the patch apply
+                        await _refreshSlideGrid();
+                        const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+                        const badge = document.getElementById(`preview-update-badge-${msgId}`);
+                        if (badge) {
+                            badge.style.color = '#4caf50';
+                            badge.innerHTML = `&#9654; Preview updated in ${elapsed}s`;
+                        }
+                    }
+                } catch(_) {}
+            };
+        }
+
+        async function undoDeckPatch(convId, msgId) {
+            const actionsDiv = document.getElementById(`deck-patch-actions-${msgId}`);
+            if (actionsDiv) actionsDiv.innerHTML = '<em style="font-size:0.78rem;">Reverting…</em>';
+            const resp = await fetch(`api/chat/conversations/${convId}/messages/${msgId}/revert`, {method: 'POST'});
+            if (resp.ok) {
+                if (actionsDiv) actionsDiv.innerHTML = '<span style="font-size:0.78rem; color:var(--pico-muted-color);">&#8635; Reverted</span>';
+                await _refreshSlideGrid();
+            } else {
+                const err = await resp.json().catch(() => ({error: 'unknown'}));
+                if (actionsDiv) actionsDiv.innerHTML = `<span style="font-size:0.78rem; color:#f44336;">&#10007; ${esc(err.error || 'Revert failed')}</span>`;
+            }
+        }
+
+        async function _refreshSlideGrid() {
+            if (!currentDeckId) return;
+            const resp = await fetch(`api/decks/${currentDeckId}/slides`);
+            if (!resp.ok) return;
+            const slides = await resp.json();
+            renderSlideGrid('slide-grid', slides);
+        }
+
+        function rejectDeckPatch(msgId) {
+            const actionsDiv = document.getElementById(`deck-patch-actions-${msgId}`);
+            if (actionsDiv) actionsDiv.innerHTML = '<span style="font-size:0.78rem; color:var(--pico-muted-color);">Rejected</span>';
+        }
+
+        function _chatScopeToSlide(slideId) {
+            const sel = document.getElementById('deck-chat-slide-select');
+            if (sel) sel.value = slideId;
         }
 
         async function showSearch() {
@@ -1971,6 +2793,7 @@
             hide('deck-list');
             hide('slide-browser');
             hide('settings-view');
+            hide('preview-view');
             hide('tag-results');
             show('search-view');
             document.getElementById('search-results').innerHTML = '';
@@ -1992,13 +2815,20 @@
         }
 
         function renderSlideGrid(containerId, slides) {
-            // Capture slide IDs for prev/next navigation
             const ids = slides.map(s => s.id);
             const container = document.getElementById(containerId);
             container.innerHTML = slides.map((s, idx) => {
-                const imgHtml = s.image_path
-                    ? `<img src="slide-image/${s.id}" alt="Slide ${s.position}" loading="lazy">`
-                    : `<div class="no-image">No image</div>`;
+                let imgHtml;
+                if (s.image_path) {
+                    imgHtml = `<img src="slide-image/${s.id}" alt="Slide ${s.position}" loading="lazy">`;
+                } else {
+                    const bodyPreview = (s.content_text || '').replace(/<[^>]+>/g, '').slice(0, 80);
+                    imgHtml = `<div class="no-image">
+                        <span class="ni-num">${s.position}</span>
+                        <span class="ni-title">${esc(s.title || 'Untitled')}</span>
+                        ${bodyPreview ? `<span class="ni-body">${esc(bodyPreview)}</span>` : ''}
+                    </div>`;
+                }
                 const tags = (s.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join(' ');
                 return `
                     <div class="slide-card" tabindex="0" role="button" onclick="openSlideFromGrid(${JSON.stringify(ids)}, ${idx})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openSlideFromGrid(${JSON.stringify(ids)}, ${idx})}">
@@ -2054,6 +2884,8 @@
             updateNavButtons();
             document.getElementById('slide-dialog').showModal();
             applyViewOnlyToSlideDialog();
+            // Auto-scope the floating chat widget to this slide
+            if (!viewOnly) _chatScopeToSlide(slideId);
         }
 
         async function refreshTags(slideId) {
@@ -2159,6 +2991,7 @@
             hide('deck-list');
             hide('slide-browser');
             hide('search-view');
+            hide('preview-view');
             hide('tag-results');
             show('settings-view');
             await Promise.all([loadSettings(), loadTaxonomyView(), loadTemplateSettings()]);
@@ -3501,5 +4334,6 @@
 
         function toggleTheme() { toggleThemeDropdown(); }
     </script>
+
 </body>
 </html>

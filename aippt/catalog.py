@@ -57,7 +57,7 @@ class _CatalogConnection(sqlite3.Connection):
 
 def get_db(db_path: str = "slides.db") -> sqlite3.Connection:
     """Open database connection, create schema if needed."""
-    conn = sqlite3.connect(db_path, timeout=30, factory=_CatalogConnection)
+    conn = sqlite3.connect(db_path, timeout=30, factory=_CatalogConnection, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode = WAL")
     conn.execute("PRAGMA foreign_keys = ON")
@@ -99,6 +99,68 @@ def get_db(db_path: str = "slides.db") -> sqlite3.Connection:
         if col_name not in existing_slide_cols:
             conn.execute(f"ALTER TABLE slides ADD COLUMN {col_ddl}")
             logger.debug("Migration: added slides.%s", col_name)
+
+    existing_chat_conv_cols = {
+        row[1]
+        for row in conn.execute("PRAGMA table_info(chat_conversations)").fetchall()
+    }
+    for col_ddl, col_name in (
+        ("scope TEXT NOT NULL DEFAULT 'deck'", "scope"),
+        ("model TEXT NOT NULL DEFAULT ''", "model"),
+        ("script_path TEXT DEFAULT NULL", "script_path"),
+    ):
+        if col_name not in existing_chat_conv_cols:
+            conn.execute(f"ALTER TABLE chat_conversations ADD COLUMN {col_ddl}")
+            logger.debug("Migration: added chat_conversations.%s", col_name)
+
+    existing_chat_msg_cols = {
+        row[1]
+        for row in conn.execute("PRAGMA table_info(chat_messages)").fetchall()
+    }
+    for col_ddl, col_name in (
+        ("mode TEXT DEFAULT 'ask'", "mode"),
+        ("patch_json TEXT DEFAULT NULL", "patch_json"),
+        ("patch_applied_at TEXT DEFAULT NULL", "patch_applied_at"),
+        ("patch_reverted_at TEXT DEFAULT NULL", "patch_reverted_at"),
+        ("tokens_in INTEGER DEFAULT NULL", "tokens_in"),
+        ("tokens_out INTEGER DEFAULT NULL", "tokens_out"),
+        ("edit_history_id INTEGER DEFAULT NULL", "edit_history_id"),
+    ):
+        if col_name not in existing_chat_msg_cols:
+            conn.execute(f"ALTER TABLE chat_messages ADD COLUMN {col_ddl}")
+            logger.debug("Migration: added chat_messages.%s", col_name)
+
+    # Idempotent migration: relax edit_history.slide_id from NOT NULL to nullable.
+    # Script-file patches (field='script') record slide_id=NULL, which the original
+    # NOT NULL constraint rejected. SQLite can't drop a column constraint in place,
+    # so rebuild the table when the old constraint is still present.
+    slide_id_info = next(
+        (row for row in conn.execute("PRAGMA table_info(edit_history)").fetchall()
+         if row[1] == "slide_id"),
+        None,
+    )
+    if slide_id_info is not None and slide_id_info[3] == 1:  # notnull flag set
+        logger.debug("Migration: relaxing edit_history.slide_id to nullable")
+        # Rebuild inside the schema-setup connection. foreign_keys is ON, but no
+        # table references edit_history, so a plain rebuild is safe.
+        conn.execute("""
+            CREATE TABLE edit_history_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                slide_id INTEGER REFERENCES slides(id) ON DELETE CASCADE,
+                field TEXT NOT NULL,
+                old_value TEXT,
+                new_value TEXT,
+                source TEXT NOT NULL DEFAULT 'web',
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        conn.execute(
+            "INSERT INTO edit_history_new (id, slide_id, field, old_value, new_value, source, created_at) "
+            "SELECT id, slide_id, field, old_value, new_value, source, created_at FROM edit_history"
+        )
+        conn.execute("DROP TABLE edit_history")
+        conn.execute("ALTER TABLE edit_history_new RENAME TO edit_history")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_edit_history_slide ON edit_history(slide_id)")
 
     conn.commit()
     # Schema setup is done committing; arm snapshot-on-commit so only real
