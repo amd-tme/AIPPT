@@ -21,7 +21,7 @@ from aippt.patch import (
     revert_last,
     PATCHABLE_FIELDS,
 )
-from aippt.chat import ChatService, CancelToken
+from aippt.chat import ChatService, CancelToken, _system_prompt
 
 
 # ---------------------------------------------------------------------------
@@ -440,6 +440,59 @@ class TestChatService:
         assert not tok.is_cancelled
         tok.cancel()
         assert tok.is_cancelled
+
+    def test_edit_mode_upload_deck_proposes_slide_patch(self, conn, deck_id, slide_id, tmp_path):
+        """An upload deck (no script_path) must round-trip a slide-field patch.
+
+        Regression: edit mode used to steer the LLM toward a ```json script
+        patch even when the conversation had no script, so Apply always failed
+        validation with 'script file not found'. Upload decks should use the
+        legacy slide-field patch path instead.
+        """
+        mock_llm = MagicMock()
+        mock_llm.model_config.supports_vision = False
+        reply = (
+            "Renaming the slide.\n"
+            f"```patch\nslide: {slide_id}\nfield: title\n---\nIntro\n===\nIntroduction\n```"
+        )
+        mock_llm.stream_text.return_value = iter([reply])
+        svc = ChatService(conn, mock_llm, db_cwd=str(tmp_path))
+        conv_id = svc.create_conversation(deck_id)  # no script_path
+
+        events = list(svc.stream_reply(conv_id, "Rename the first slide", mode="edit"))
+        patch_events = [e for e in events if e.startswith("[PATCH_PROPOSED:")]
+        assert len(patch_events) == 1
+
+        # The proposed patch is a legacy slide patch, not a script patch.
+        rest = patch_events[0][len("[PATCH_PROPOSED:"):]
+        msg_id, _, payload = rest.partition(":")
+        payload = payload[:-1] if payload.endswith("]") else payload
+        proposed = json.loads(payload)
+        assert proposed[0]["slide_id"] == slide_id
+        assert "script_path" not in proposed[0]
+
+        ok, reason = svc.apply_message_patch(int(msg_id))
+        assert ok, reason
+        row = conn.execute("SELECT title FROM slides WHERE id = ?", (slide_id,)).fetchone()
+        assert row["title"] == "Introduction"
+
+
+class TestEditModeSystemPrompt:
+    def test_script_deck_prompt_asks_for_json_script_patch(self):
+        prompt = _system_prompt("edit", script_path="/app/examples/foo/foo.mjs")
+        assert "/app/examples/foo/foo.mjs" in prompt
+        assert "```json" in prompt
+
+    def test_upload_deck_prompt_asks_for_slide_patch(self):
+        prompt = _system_prompt("edit", script_path=None)
+        # Steers to the legacy slide-field ```patch format, not a script patch.
+        assert "```patch" in prompt
+        assert "field:" in prompt
+        assert "no source script" in prompt.lower()
+
+    def test_ask_mode_forbids_patches(self):
+        prompt = _system_prompt("ask", script_path=None)
+        assert "read-only" in prompt.lower()
 
 
 # ---------------------------------------------------------------------------

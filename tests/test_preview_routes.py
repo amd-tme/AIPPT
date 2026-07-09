@@ -136,6 +136,45 @@ class TestPreviewAPI:
         assert data["ws_url"].startswith("/ws/preview/")
         assert data["script"] == str(script_file.resolve())
 
+    def test_ws_url_includes_base_path_prefix(self, client, app, script_file, monkeypatch):
+        """Under a path mount the ws_url must carry the BASE_PATH prefix.
+
+        Regression: the client opens ``wss://{host}{ws_url}`` against the
+        origin, so a root-relative ``/ws/preview/<tok>`` 404s behind the
+        ``/aippt/`` ingress. The URL must be ``/aippt/ws/preview/<tok>``.
+        """
+        monkeypatch.setenv("BASE_PATH", "/aippt/")
+
+        async def _fake_start(self):
+            pass
+
+        with patch.object(PreviewSession, "start", _fake_start):
+            resp = client.post(
+                "/api/preview/sessions",
+                json={"script": str(script_file)},
+            )
+
+        assert resp.status_code == 200
+        assert resp.json()["ws_url"].startswith("/aippt/ws/preview/")
+
+    def test_ws_url_apex_mount_has_no_prefix(self, client, app, script_file, monkeypatch):
+        """Apex mount (BASE_PATH unset or '/') keeps the bare ws_url."""
+        monkeypatch.delenv("BASE_PATH", raising=False)
+
+        async def _fake_start(self):
+            pass
+
+        with patch.object(PreviewSession, "start", _fake_start):
+            resp = client.post(
+                "/api/preview/sessions",
+                json={"script": str(script_file)},
+            )
+
+        assert resp.status_code == 200
+        ws_url = resp.json()["ws_url"]
+        assert ws_url.startswith("/ws/preview/")
+        assert not ws_url.startswith("/aippt/")
+
     def test_get_session_not_found_returns_404(self, client):
         resp = client.get("/api/preview/sessions/badtoken")
         assert resp.status_code == 404
