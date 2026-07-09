@@ -48,6 +48,19 @@ router = APIRouter()
 STATIC_DIR = Path(__file__).parent / "static"
 
 
+def _base_prefix() -> str:
+    """Return the mount prefix (no trailing slash) the app is served under.
+
+    Mirrors the ``BASE_PATH`` convention used to inject ``<base href>`` into
+    index.html. Apex mount (``/`` or unset) yields ``""``; a path mount such
+    as ``/aippt/`` yields ``/aippt``. Used to build absolute URLs the browser
+    resolves against the origin (not the document base) — notably the preview
+    WebSocket URL, which the client opens as ``wss://{host}{ws_url}``.
+    """
+    base = os.environ.get("BASE_PATH", "/").strip()
+    return "/" + base.strip("/") if base.strip("/") else ""
+
+
 @router.get("/healthz")
 async def healthz():
     """Health check for Kubernetes liveness/readiness probes."""
@@ -2158,7 +2171,7 @@ async def create_preview_session(request: Request):
 
     return {
         "token": session.token,
-        "ws_url": f"/ws/preview/{session.token}",
+        "ws_url": f"{_base_prefix()}/ws/preview/{session.token}",
         "script": session.script_path,
     }
 
@@ -2174,7 +2187,7 @@ async def find_preview_session_by_script(request: Request, script: str = None):
         if str(Path(session.script_path).resolve()) == resolved:
             return {
                 "token": session.token,
-                "ws_url": f"/ws/preview/{session.token}",
+                "ws_url": f"{_base_prefix()}/ws/preview/{session.token}",
                 "script": session.script_path,
             }
     return JSONResponse({"error": "No active preview session for that script"}, status_code=404)

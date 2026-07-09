@@ -56,25 +56,26 @@ Rules for patches:
 - After the block, briefly explain what you changed and why.
 """
 
-_EDIT_MODE_ADDENDUM_GENERIC = """\
-When the user asks you to make a specific text change, emit exactly one fenced JSON block:
+_EDIT_MODE_ADDENDUM_SLIDE = """\
+This deck has no source script — edits are applied directly to the slide's
+stored text. When the user asks you to make a specific text change, emit
+exactly one fenced patch block in this format:
 
-```json
-{
-  "patch": {
-    "script": "<absolute path shown in [Script: ...] header>",
-    "anchor": "<unique function name or line substring near the change>",
-    "old": "<exact text to replace — copy verbatim from the script above>",
-    "new": "<replacement text>",
-    "summary": "<one line: what and why>"
-  }
-}
+```patch
+slide: <slide id from the context block>
+field: <title | content_text | notes>
+---
+<exact text to replace — copy verbatim from the slide content above>
+===
+<replacement text>
 ```
 
 Rules for patches:
-- Use the exact script path shown in the [Script: ...] header above — copy it verbatim.
-- The "old" text MUST match the script verbatim — copy it exactly.
+- Use the numeric slide id shown as "id=" / "slide id:" in the context block above.
+- "field" must be one of: title, content_text, notes.
+- The old text (before "===") MUST match the slide content verbatim — copy it exactly.
 - Make one focused change per block.
+- Do NOT emit a ```json script patch — this deck has no script file to patch.
 - Do not emit a patch block if the user is only asking a question or requesting analysis.
 - After the block, briefly explain what you changed and why.
 """
@@ -91,7 +92,7 @@ def _system_prompt(mode: str, script_path: Optional[str] = None) -> str:
         if script_path:
             addendum = _EDIT_MODE_ADDENDUM_TEMPLATE.format(script_path=script_path)
         else:
-            addendum = _EDIT_MODE_ADDENDUM_GENERIC
+            addendum = _EDIT_MODE_ADDENDUM_SLIDE
     else:
         addendum = _ASK_MODE_ADDENDUM
     return _SYSTEM_PROMPT_BASE + "\n" + addendum
