@@ -312,6 +312,108 @@ class TestScriptPatch:
             apply_patch(p, conn, cwd=str(tmp_path))
 
 
+class TestThumbnailInvalidationOnEdit:
+    """Applying / reverting a chat patch must invalidate the affected slide's
+    thumbnail so the UI never shows a stale image after a content change."""
+
+    def _seed_script_deck(self, conn, tmp_path, body):
+        script = tmp_path / "deck.js"
+        script.write_text(body, encoding="utf-8")
+        cur = conn.execute(
+            "INSERT INTO decks (name, file_path, file_hash, source_script_path) VALUES (?,?,?,?)",
+            ("script-deck", "/tmp/script-deck.pptx", "shash", str(script)),
+        )
+        return str(script), cur.lastrowid
+
+    def test_slides_touched_by_script_patch(self, conn, tmp_path):
+        from aippt.patch import slides_touched_by_patch
+
+        script, deck_id = self._seed_script_deck(conn, tmp_path, "t = 'Alpha';\n")
+        c1 = conn.execute(
+            "INSERT INTO slides (deck_id, position, title, content_text, content_hash) VALUES (?,?,?,?,?)",
+            (deck_id, 1, "Alpha", "has Alpha inside", "sh1"),
+        )
+        conn.execute(
+            "INSERT INTO slides (deck_id, position, title, content_text, content_hash) VALUES (?,?,?,?,?)",
+            (deck_id, 2, "Beta", "no match", "sh2"),
+        )
+        conn.commit()
+        p = Patch(script_path=script, old="Alpha", new="Gamma", summary="s")
+        touched = slides_touched_by_patch(p, conn)
+        assert touched == [c1.lastrowid]
+
+    def test_slides_touched_by_legacy_patch(self, conn, slide_id, tmp_path):
+        from aippt.patch import slides_touched_by_patch
+
+        p = Patch(slide_id=slide_id, field="title", old_text="Intro", new_text="Introduction")
+        assert slides_touched_by_patch(p, conn) == [slide_id]
+
+    def test_apply_invalidates_thumbnail(self, conn, tmp_path):
+        script, deck_id = self._seed_script_deck(conn, tmp_path, "t = 'Alpha';\n")
+        c1 = conn.execute(
+            "INSERT INTO slides (deck_id, position, title, content_text, content_hash, "
+            "image_path, image_content_hash) VALUES (?,?,?,?,?,?,?)",
+            (deck_id, 1, "Alpha", "body", "sh1", "images/x/Slide1.png", "sh1"),
+        )
+        slide_id = c1.lastrowid
+        conn.commit()
+
+        mock_llm = MagicMock()
+        mock_llm.model_config.supports_vision = False
+        svc = ChatService(conn, mock_llm, db_cwd=str(tmp_path))
+        conv_id = svc.create_conversation(deck_id, script_path=script)
+        msg_id = svc._save_message(
+            conv_id, "assistant", "ok", mode="edit",
+            patch_json=json.dumps([
+                {"script_path": script, "old": "Alpha", "new": "Beta", "summary": "s"}
+            ]),
+        )
+        ok, reason = svc.apply_message_patch(msg_id)
+        assert ok, reason
+
+        row = conn.execute(
+            "SELECT image_path, image_content_hash FROM slides WHERE id = ?", (slide_id,)
+        ).fetchone()
+        assert row["image_path"] is None
+        assert row["image_content_hash"] is None
+
+    def test_revert_invalidates_thumbnail(self, conn, tmp_path):
+        script, deck_id = self._seed_script_deck(conn, tmp_path, "t = 'Alpha';\n")
+        c1 = conn.execute(
+            "INSERT INTO slides (deck_id, position, title, content_text, content_hash, "
+            "image_path, image_content_hash) VALUES (?,?,?,?,?,?,?)",
+            (deck_id, 1, "Alpha", "body", "sh1", "images/x/Slide1.png", "sh1"),
+        )
+        slide_id = c1.lastrowid
+        conn.commit()
+
+        mock_llm = MagicMock()
+        mock_llm.model_config.supports_vision = False
+        svc = ChatService(conn, mock_llm, db_cwd=str(tmp_path))
+        conv_id = svc.create_conversation(deck_id, script_path=script)
+        msg_id = svc._save_message(
+            conv_id, "assistant", "ok", mode="edit",
+            patch_json=json.dumps([
+                {"script_path": script, "old": "Alpha", "new": "Beta", "summary": "s"}
+            ]),
+        )
+        assert svc.apply_message_patch(msg_id)[0]
+        # A re-capture would repopulate the image; simulate that before revert.
+        conn.execute(
+            "UPDATE slides SET image_path = ?, image_content_hash = ? WHERE id = ?",
+            ("images/x/Slide1.png", "sh-beta", slide_id),
+        )
+        conn.commit()
+
+        ok, reason = svc.revert_message_patch(msg_id)
+        assert ok, reason
+        row = conn.execute(
+            "SELECT image_path, image_content_hash FROM slides WHERE id = ?", (slide_id,)
+        ).fetchone()
+        assert row["image_path"] is None
+        assert row["image_content_hash"] is None
+
+
 class TestEditHistoryMigration:
     def test_legacy_notnull_slide_id_is_relaxed(self, tmp_path):
         """A pre-existing DB with edit_history.slide_id NOT NULL is migrated to

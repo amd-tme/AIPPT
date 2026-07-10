@@ -130,6 +130,55 @@ class TestDatabase:
         assert result[0] == 1
         conn.close()
 
+    def test_image_content_hash_column_present(self, db_path):
+        conn = get_db(db_path)
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(slides)").fetchall()}
+        assert "image_content_hash" in cols
+        conn.close()
+
+    def test_migration_image_content_hash_idempotent(self, db_path):
+        # Running get_db() twice must add image_content_hash exactly once and
+        # never raise a "duplicate column" error on the second open.
+        conn = get_db(db_path)
+        conn.close()
+        conn = get_db(db_path)
+        count = sum(
+            1
+            for r in conn.execute("PRAGMA table_info(slides)").fetchall()
+            if r[1] == "image_content_hash"
+        )
+        assert count == 1
+        conn.close()
+
+    def test_migration_adds_column_to_legacy_db(self, tmp_path):
+        # A pre-existing DB whose slides table lacks image_content_hash must
+        # gain the column when reopened through get_db().
+        import sqlite3
+
+        legacy = str(tmp_path / "legacy.db")
+        raw = sqlite3.connect(legacy)
+        raw.executescript(
+            """
+            CREATE TABLE slides (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                deck_id INTEGER NOT NULL,
+                position INTEGER NOT NULL,
+                title TEXT NOT NULL DEFAULT '',
+                content_text TEXT NOT NULL DEFAULT '',
+                content_hash TEXT NOT NULL,
+                notes TEXT NOT NULL DEFAULT '',
+                image_path TEXT
+            );
+            """
+        )
+        raw.commit()
+        raw.close()
+
+        conn = get_db(legacy)
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(slides)").fetchall()}
+        assert "image_content_hash" in cols
+        conn.close()
+
 
 class TestCatalogDeck:
     @pytest.fixture

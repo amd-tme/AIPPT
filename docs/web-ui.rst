@@ -236,6 +236,17 @@ Slide Browser
 Clicking a deck shows its slides as a grid of thumbnail cards. Each card
 displays the slide image (if available), title, and tags.
 
+Decks cataloged from **Live Preview → Save to Library** now include real
+per-slide thumbnails: when you save, the browser captures each rendered slide
+and stores it with the deck, so the grid shows actual slide previews rather
+than the flat *no-image* placeholder card (slide number + title). When a slide
+has no stored image -- generation was skipped, or the slide's content changed
+and its thumbnail was invalidated -- the card falls back to the placeholder,
+and it is replaced automatically once a fresh thumbnail is captured on the next
+save. Editing a slide through **Chat → Edit** (apply or revert) invalidates
+that slide's thumbnail so you never see a preview that disagrees with the
+slide's current text.
+
 **Detail modal**: Click any slide card to open a full-size detail view
 showing:
 

@@ -39,6 +39,7 @@ from aippt.catalog import (
 from aippt.export import export_csv
 from aippt import graph
 from aippt.ingest import ingest_deck
+from aippt.thumbnails import store_client_images
 from aippt.web.asset_sync import persist_file, persist_tree, materialize_file
 import aippt.pipeline as _pipeline_module
 from aippt.pipeline import PipelineConfig
@@ -345,6 +346,21 @@ async def regenerate_deck(deck_id: int, request: Request):
 
             _conn = get_db(db_path)
             try:
+                # Preserve each old slide's thumbnail state keyed by its content
+                # hash. A regenerated slide may reuse a prior canvas-captured
+                # image only if its content is unchanged (hash matches); slides
+                # whose text changed drop to a placeholder rather than showing a
+                # stale thumbnail. Keyed on content_hash, not position, so a
+                # reordered/inserted slide doesn't inherit a neighbor's image.
+                _old_thumbs = {
+                    r["image_content_hash"]: r["image_path"]
+                    for r in _conn.execute(
+                        "SELECT image_path, image_content_hash FROM slides "
+                        "WHERE deck_id = ? AND image_path IS NOT NULL "
+                        "AND image_content_hash IS NOT NULL",
+                        (deck_id,),
+                    ).fetchall()
+                }
                 # Remove old slides (CASCADE would also work but be explicit)
                 _conn.execute("DELETE FROM slides WHERE deck_id = ?", (deck_id,))
                 # Re-catalog the new PPTX into the existing deck row
@@ -368,18 +384,19 @@ async def regenerate_deck(deck_id: int, request: Request):
                     notes = ""
                     if slide.has_notes_slide:
                         notes = slide.notes_slide.notes_text_frame.text.strip()
-                    images_dir_for_regen = _per_deck_images_dir(request, output_path)
-                    image_path = None
-                    for ext in (".png", ".PNG", ".jpg", ".jpeg"):
-                        candidate = os.path.join(images_dir_for_regen, f"Slide{i}{ext}")
-                        if os.path.exists(candidate):
-                            image_path = os.path.relpath(os.path.abspath(candidate), project_root)
-                            break
+                    # Canvas-only: reuse a prior thumbnail only when the slide's
+                    # content is byte-for-byte the same (content_hash match).
+                    # Changed slides get NULL image_path → placeholder card,
+                    # never a stale image. A fresh capture repopulates on the
+                    # next Live Preview → Save.
+                    image_path = _old_thumbs.get(chash)
+                    image_content_hash = chash if image_path else None
                     _conn.execute(
                         """INSERT INTO slides (deck_id, position, title, content_text,
-                           content_hash, notes, image_path)
-                           VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                        (deck_id, i, title, content_text, chash, notes, image_path),
+                           content_hash, notes, image_path, image_content_hash)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                        (deck_id, i, title, content_text, chash, notes,
+                         image_path, image_content_hash),
                     )
                 # Update the deck row (keep same id)
                 _conn.execute(
@@ -2309,6 +2326,20 @@ async def catalog_preview_session(token: str, request: Request):
     if not pptx_path or not Path(pptx_path).exists():
         return JSONResponse({"error": "No rendered .pptx available yet — force a render first"}, status_code=404)
 
+    # Optional client-captured slide images (Approach B): the browser renders
+    # each slide via PptxViewJS and posts them so cataloged preview decks get
+    # per-slide thumbnails without a Microsoft Graph render at catalog time.
+    # Absent/empty body is fine — the deck just keeps placeholder cards.
+    images_payload = []
+    try:
+        body = await request.json()
+        if isinstance(body, dict):
+            payload = body.get("images")
+            if isinstance(payload, list):
+                images_payload = payload
+    except Exception:
+        images_payload = []
+
     db_path = request.app.state.db_path
     try:
         deck_id = catalog_deck(
@@ -2342,7 +2373,25 @@ async def catalog_preview_session(token: str, request: Request):
         logger.error("catalog_preview_session error: %s", exc)
         return JSONResponse({"error": str(exc)}, status_code=500)
 
-    return {"deck_id": deck_id, "script_path": staged_script}
+    # Best-effort thumbnail generation: never turns a successful catalog into a
+    # 500. On any failure the deck keeps placeholder cards, exactly as before.
+    thumb_count = 0
+    if images_payload:
+        try:
+            images_dir = _per_deck_images_dir(request, pptx_path)
+            thumb_count = store_client_images(
+                deck_id,
+                images_payload,
+                out_dir=images_dir,
+                db_path=db_path,
+                base_dir=project_root,
+            )
+            # Write-through to durable object storage (no-op in fs mode).
+            persist_tree(request.app.state, images_dir)
+        except Exception:
+            logger.exception("Thumbnail generation failed for deck %s", deck_id)
+
+    return {"deck_id": deck_id, "script_path": staged_script, "thumbnails": thumb_count}
 
 
 @router.get("/api/preview/scripts")

@@ -1848,8 +1848,22 @@
                 document.body.appendChild(a); a.click(); a.remove();
                 URL.revokeObjectURL(dlUrl);
 
-                // 2. Catalog into the deck library
-                const catResp = await fetch(`api/preview/sessions/${token}/catalog`, {method: 'POST'});
+                // 2. Capture per-slide thumbnails from the rendered canvas so
+                //    the cataloged deck shows real slide previews (best-effort;
+                //    empty on failure → server catalogs with placeholder cards).
+                let images = [];
+                try {
+                    images = await preview.captureSlideImages();
+                } catch (e) {
+                    console.warn('Thumbnail capture failed; cataloging without images:', e);
+                }
+
+                // 3. Catalog into the deck library (with captured thumbnails)
+                const catResp = await fetch(`api/preview/sessions/${token}/catalog`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({images}),
+                });
                 if (!catResp.ok) {
                     const err = await catResp.json().catch(() => ({}));
                     toast('Downloaded but catalog failed: ' + (err.error || catResp.statusText));
@@ -1858,7 +1872,7 @@
                 const catData = await catResp.json();
                 const deckId = catData.deck_id;
 
-                // 3. Notify user with a link to go browse the deck
+                // 4. Notify user with a link to go browse the deck
                 const statusBar = document.getElementById('preview-status');
                 if (statusBar) {
                     const orig = statusBar.outerHTML;
@@ -2820,7 +2834,11 @@
             container.innerHTML = slides.map((s, idx) => {
                 let imgHtml;
                 if (s.image_path) {
-                    imgHtml = `<img src="slide-image/${s.id}" alt="Slide ${s.position}" loading="lazy">`;
+                    // Cache-bust on updated_at so a regenerated thumbnail replaces
+                    // a stale one (and an invalidated slide re-fetches) without a
+                    // hard reload.
+                    const v = encodeURIComponent(s.updated_at || '');
+                    imgHtml = `<img src="slide-image/${s.id}${v ? `?v=${v}` : ''}" alt="Slide ${s.position}" loading="lazy">`;
                 } else {
                     const bodyPreview = (s.content_text || '').replace(/<[^>]+>/g, '').slice(0, 80);
                     imgHtml = `<div class="no-image">
@@ -2860,8 +2878,9 @@
                 `Slide ${slide.position}: ${slide.title || 'Untitled'}`;
 
             const imgDiv = document.getElementById('detail-image');
+            const detailV = encodeURIComponent(slide.updated_at || '');
             imgDiv.innerHTML = slide.image_path
-                ? `<img src="slide-image/${slideId}" alt="Slide">`
+                ? `<img src="slide-image/${slideId}${detailV ? `?v=${detailV}` : ''}" alt="Slide">`
                 : '<p>No image available</p>';
 
             // Metadata row

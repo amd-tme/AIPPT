@@ -87,6 +87,65 @@ class TestSaveNotesWithHistory:
         assert after >= before
 
 
+class TestSlideThumbnailServe:
+    """GET /slide-image/{id} 404s until a thumbnail exists, then 200s.
+
+    Exercises the downstream contract the thumbnail feature closes: a
+    script/preview deck starts with NULL image_path (placeholder + 404); after
+    store_client_images wires an image, the same endpoint serves it.
+    """
+
+    @pytest.fixture
+    def thumb_client(self, tmp_path, deck_path):
+        db_path = str(tmp_path / "test.db")
+        uploads_dir = str(tmp_path / "uploads")
+        images_dir = str(tmp_path / "images")
+        catalog_deck(deck_path, db_path=db_path, base_dir=str(tmp_path))
+        app = create_app(
+            db_path=db_path,
+            uploads_dir=uploads_dir,
+            images_dir=images_dir,
+            project_root=str(tmp_path),
+        )
+        return TestClient(app), db_path, images_dir, str(tmp_path)
+
+    def test_404_before_generation(self, thumb_client):
+        client, _db, _img, _root = thumb_client
+        resp = client.get("/slide-image/1")
+        assert resp.status_code == 404
+
+    def test_200_after_store_client_images(self, thumb_client):
+        import base64
+        import io
+
+        from PIL import Image
+
+        from aippt.thumbnails import store_client_images
+
+        client, db_path, images_dir, root = thumb_client
+
+        buf = io.BytesIO()
+        Image.new("RGB", (64, 36), (12, 34, 56)).save(buf, format="PNG")
+        data_url = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+
+        conn = get_db(db_path)
+        deck_id = conn.execute("SELECT id FROM decks LIMIT 1").fetchone()["id"]
+        conn.close()
+
+        written = store_client_images(
+            deck_id,
+            [{"position": 1, "data": data_url}],
+            out_dir=os.path.join(images_dir, "test"),
+            db_path=db_path,
+            base_dir=root,
+        )
+        assert written == 1
+
+        resp = client.get("/slide-image/1")
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("image/")
+
+
 class TestSaveNotesSameValue:
     """Saving identical notes should not create a history row."""
 

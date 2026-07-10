@@ -376,6 +376,68 @@ export function prevSlide() { pptxViewer?.previousSlide?.(); }
 export function nextSlide() { pptxViewer?.nextSlide?.(); }
 export function getSessionToken() { return session?.token ?? null; }
 
+/**
+ * Capture each rendered slide as a PNG data URL for Save-to-Library.
+ *
+ * Renders every slide to an offscreen canvas via PptxViewJS
+ * `renderSlide(index, canvas)` and reads it back with `toBlob`. Returns
+ * `[{position, data}]` where `data` is a base64 data URL, ready to POST to the
+ * catalog endpoint. Best-effort: any per-slide failure is skipped; if the
+ * viewer isn't ready or the API is missing, returns [] so the caller falls back
+ * to cataloging with placeholder cards (current behavior).
+ *
+ * PptxViewJS `render` mutates `currentSlideIndex` even when drawing to an
+ * offscreen canvas, so the visible viewer is restored to its prior slide after
+ * capture to avoid a surprise jump in the panel.
+ *
+ * @param {number} width  Target capture width in px (default 1280).
+ */
+export async function captureSlideImages(width = 1280) {
+    try {
+        if (!pptxViewer || typeof pptxViewer.renderSlide !== 'function') return [];
+        const count = pptxViewer.slideCount || 0;
+        if (!count) return [];
+
+        const height = Math.round(width * 9 / 16);
+        const offscreen = document.createElement('canvas');
+        offscreen.width = width;
+        offscreen.height = height;
+
+        const restoreIndex = pptxViewer.currentSlideIndex ?? 0;
+        const images = [];
+        try {
+            for (let i = 0; i < count; i++) {
+                try {
+                    // renderSlide(index, canvas, opts) — draw slide `i` to the
+                    // offscreen canvas.
+                    await pptxViewer.renderSlide(i, offscreen);
+                    const blob = await new Promise((resolve) => {
+                        offscreen.toBlob(resolve, 'image/png');
+                    });
+                    if (!blob) continue;
+                    // Blob → base64 without FileReader (which is unavailable in
+                    // some embedded/webview contexts). The server accepts a bare
+                    // base64 string or a data URL.
+                    const buf = new Uint8Array(await blob.arrayBuffer());
+                    let bin = '';
+                    for (let b = 0; b < buf.length; b++) bin += String.fromCharCode(buf[b]);
+                    const b64 = btoa(bin);
+                    images.push({ position: i + 1, data: b64 });
+                } catch (e) {
+                    console.warn(`Slide ${i + 1} thumbnail capture failed:`, e);
+                }
+            }
+        } finally {
+            // Restore the visible viewer to the slide the user was on.
+            try { await pptxViewer.goToSlide(restoreIndex); } catch { /* ignore */ }
+        }
+        return images;
+    } catch (e) {
+        console.warn('captureSlideImages failed:', e);
+        return [];
+    }
+}
+
 // ── Error display ─────────────────────────────────────────────────────────────
 
 function showError(data) {
