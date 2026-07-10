@@ -240,3 +240,54 @@ class TestViewOnlyPreview:
         )
         assert resp.status_code == 403
         assert "view-only" in resp.json()["error"].lower()
+
+
+class TestPreviewOutDirConfig:
+    """create_app must wire the preview output base to a writable path."""
+
+    def test_preview_out_dir_param_flows_to_registry(self, tmp_path):
+        out = tmp_path / "data" / ".preview"
+        app = create_app(
+            db_path=str(tmp_path / "test.db"),
+            uploads_dir=str(tmp_path / "uploads"),
+            images_dir=str(tmp_path / "images"),
+            project_root=str(tmp_path),
+            preview_allow_dirs=[str(tmp_path / "output")],
+            preview_out_dir=str(out),
+        )
+        assert app.state.preview_registry._out_base == str(out)
+
+    def test_preview_out_dir_env_fallback(self, tmp_path, monkeypatch):
+        out = tmp_path / "envdata" / ".preview"
+        monkeypatch.setenv("AIPPT_PREVIEW_OUT_DIR", str(out))
+        app = create_app(
+            db_path=str(tmp_path / "test.db"),
+            uploads_dir=str(tmp_path / "uploads"),
+            images_dir=str(tmp_path / "images"),
+            project_root=str(tmp_path),
+            preview_allow_dirs=[str(tmp_path / "output")],
+        )
+        assert app.state.preview_registry._out_base == str(out)
+
+    def test_preview_out_dir_default_under_project_root(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("AIPPT_PREVIEW_OUT_DIR", raising=False)
+        app = create_app(
+            db_path=str(tmp_path / "test.db"),
+            uploads_dir=str(tmp_path / "uploads"),
+            images_dir=str(tmp_path / "images"),
+            project_root=str(tmp_path),
+            preview_allow_dirs=[str(tmp_path / "output")],
+        )
+        assert app.state.preview_registry._out_base == str(tmp_path / "output" / ".preview")
+
+    def test_param_wins_over_env(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("AIPPT_PREVIEW_OUT_DIR", str(tmp_path / "env"))
+        app = create_app(
+            db_path=str(tmp_path / "test.db"),
+            uploads_dir=str(tmp_path / "uploads"),
+            images_dir=str(tmp_path / "images"),
+            project_root=str(tmp_path),
+            preview_allow_dirs=[str(tmp_path / "output")],
+            preview_out_dir=str(tmp_path / "param"),
+        )
+        assert app.state.preview_registry._out_base == str(tmp_path / "param")

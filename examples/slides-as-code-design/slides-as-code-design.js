@@ -1173,9 +1173,13 @@ history:
     "From manual chaos to a repeatable, traceable workflow",
   ], slideNum);
 
-  // Save
-  await pptx.writeFile({ fileName: "output/slides-as-code-design.pptx" });
-  console.log(`Deck saved: output/slides-as-code-design.pptx (${TOTAL} slides)`);
+  // Save. Honor AIPPT_PREVIEW_OUT (set by the live-preview renderer) so the
+  // deck lands on a writable path under a read-only root filesystem; fall back
+  // to the repo-relative output/ dir for standalone CLI runs.
+  const _outDir = process.env.AIPPT_PREVIEW_OUT || "output";
+  const _outPath = `${_outDir}/slides-as-code-design.pptx`;
+  await pptx.writeFile({ fileName: _outPath });
+  console.log(`Deck saved: ${_outPath} (${TOTAL} slides)`);
 }
 
 buildDeck().catch(console.error);

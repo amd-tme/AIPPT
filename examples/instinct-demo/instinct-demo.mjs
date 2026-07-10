@@ -235,4 +235,8 @@ curl http://localhost:8000/v1/chat/completions \\
 // ═══════════════════════════════════════════════════════
 addClosingSlide(deck, sn++);
 
-await deck.save('examples/instinct-demo/instinct-demo.pptx');
+// Honor AIPPT_PREVIEW_OUT (set by the live-preview renderer) so the deck lands
+// on a writable path under a read-only root filesystem; fall back to the
+// repo-relative path for standalone CLI runs.
+const _outDir = process.env.AIPPT_PREVIEW_OUT || 'examples/instinct-demo';
+await deck.save(`${_outDir}/instinct-demo.pptx`);

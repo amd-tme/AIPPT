@@ -267,6 +267,61 @@ class TestSessionRegistry:
 
         asyncio.run(_run())
 
+    def test_out_base_places_artifacts_on_configured_path(self, tmp_path):
+        """Session out_dir must derive from the registry's configured out_base.
+
+        Regression: out_base was hardcoded cwd-relative ('output/.preview'),
+        which is read-only under a container's readOnlyRootFilesystem. It must
+        be configurable so deploys can point it at the writable data volume.
+        """
+        script = tmp_path / "deck.js"
+        script.write_text("// ok")
+        out_base = tmp_path / "data" / ".preview"
+
+        registry = SessionRegistry(allow_dirs=[str(tmp_path)], out_base=str(out_base))
+
+        async def _run():
+            async def _noop_start(self):
+                pass
+            with patch.object(PreviewSession, "start", _noop_start):
+                session = await registry.create(str(script))
+                assert session.out_dir == str(out_base / "deck")
+                await registry.shutdown()
+
+        asyncio.run(_run())
+
+    def test_out_base_defaults_to_cwd_relative(self, tmp_path):
+        """Unset out_base keeps the historical cwd-relative default."""
+        script = tmp_path / "deck.js"
+        script.write_text("// ok")
+        registry = SessionRegistry(allow_dirs=[str(tmp_path)])
+
+        async def _run():
+            async def _noop_start(self):
+                pass
+            with patch.object(PreviewSession, "start", _noop_start):
+                session = await registry.create(str(script))
+                assert session.out_dir == str(Path("output/.preview") / "deck")
+                await registry.shutdown()
+
+        asyncio.run(_run())
+
+    def test_create_out_base_arg_overrides_registry_default(self, tmp_path):
+        """Per-call out_base still overrides the registry-configured base."""
+        script = tmp_path / "deck.js"
+        script.write_text("// ok")
+        registry = SessionRegistry(allow_dirs=[str(tmp_path)], out_base=str(tmp_path / "reg"))
+
+        async def _run():
+            async def _noop_start(self):
+                pass
+            with patch.object(PreviewSession, "start", _noop_start):
+                session = await registry.create(str(script), out_base=str(tmp_path / "override"))
+                assert session.out_dir == str(tmp_path / "override" / "deck")
+                await registry.shutdown()
+
+        asyncio.run(_run())
+
     def test_get_returns_none_for_unknown_token(self, tmp_path):
         registry = SessionRegistry(allow_dirs=[str(tmp_path)])
         assert registry.get("nonexistent") is None
