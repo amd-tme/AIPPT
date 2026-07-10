@@ -147,35 +147,87 @@ def _parse_legacy_patch_block(body: str) -> Patch:
     )
 
 
+# Quoted string literals inside a code snippet: 'x', "x", or `x`.
+_QUOTED_LITERAL_RE = re.compile(r"""(['"`])(.*?)\1""", re.DOTALL)
+
+
+def _extract_literals(text: Optional[str]) -> set[str]:
+    """Return the non-empty quoted string literals in *text*."""
+    if not text:
+        return set()
+    return {
+        m.group(2).strip()
+        for m in _QUOTED_LITERAL_RE.finditer(text)
+        if m.group(2).strip()
+    }
+
+
 def slides_touched_by_patch(patch: Patch, conn: sqlite3.Connection) -> List[int]:
     """Return the slide ids whose rendered content this patch changes.
 
-    Used to invalidate exactly those slides' thumbnails (precise, per-slide)
-    after an apply/revert, so the deck view falls back to a placeholder card
-    instead of showing a stale image.
+    Used to invalidate exactly those slides' thumbnails after an apply/revert,
+    so the deck view falls back to a placeholder card instead of showing a
+    stale image.
 
-    - Script patches: every slide of any deck whose ``source_script_path``
-      matches, where the ``old`` text appears in title / content_text / notes —
-      the same rows ``_sync_script_patch_to_slides`` rewrites. Computed before
-      the write while the ``old`` text is still present to match.
     - Legacy field patches: just the patch's ``slide_id``.
+    - Script patches: real LLM patches wrap the changed text in code, e.g.
+      ``addBulletSlide(deck, 'Benefits', [``, so the raw ``old`` string is
+      almost never a substring of a rendered slide field. We therefore build a
+      set of candidate text fragments — the string *literals* that differ
+      between ``old`` and ``new`` (the actual changed values), plus the raw
+      ``old``/``new`` to still catch bare-text patches — and match those against
+      title / content_text / notes for the decks sourced from this script
+      (**precise**, option B). When nothing matches (structural edits, or decks
+      whose rendered text isn't captured in any field), we fall back to
+      invalidating every slide of those decks (**coarse**, option A) so a script
+      edit never leaves a stale thumbnail behind.
+
+    Over-matching within the script's own deck is safe (an extra placeholder
+    that repopulates on the next Save); only a *miss* would show a stale image,
+    and the coarse fallback prevents that.
 
     Always safe: any query error yields an empty list rather than raising.
     """
     try:
         if patch.is_script_patch:
-            if not patch.old:
-                return []
-            like = f"%{patch.old}%"
-            rows = conn.execute(
-                """SELECT DISTINCT s.id
-                   FROM slides s JOIN decks d ON s.deck_id = d.id
-                   WHERE d.source_script_path = ?
-                     AND (s.title LIKE ? OR s.content_text LIKE ? OR s.notes LIKE ?)
-                   ORDER BY s.id""",
-                (patch.script_path, like, like, like),
+            deck_rows = conn.execute(
+                "SELECT id FROM decks WHERE source_script_path = ?",
+                (patch.script_path,),
             ).fetchall()
-            return [r[0] for r in rows]
+            deck_ids = [r[0] for r in deck_rows]
+            if not deck_ids:
+                return []
+            deck_ph = ",".join("?" for _ in deck_ids)
+
+            # Candidate fragments: changed string literals (symmetric difference
+            # so unchanged shared literals don't over-match) + raw old/new.
+            changed = _extract_literals(patch.old) ^ _extract_literals(patch.new)
+            candidates = {c for c in changed if c}
+            for raw in (patch.old, patch.new):
+                if raw and raw.strip():
+                    candidates.add(raw.strip())
+
+            matched: set[int] = set()
+            for frag in candidates:
+                like = f"%{frag}%"
+                rows = conn.execute(
+                    f"SELECT s.id FROM slides s "  # noqa: S608
+                    f"WHERE s.deck_id IN ({deck_ph}) "
+                    f"AND (s.title LIKE ? OR s.content_text LIKE ? OR s.notes LIKE ?)",
+                    (*deck_ids, like, like, like),
+                ).fetchall()
+                matched.update(r[0] for r in rows)
+
+            if matched:
+                return sorted(matched)
+
+            # Coarse fallback: can't locate the changed slide → invalidate the
+            # whole deck so we never show a stale thumbnail after a script edit.
+            rows = conn.execute(
+                f"SELECT id FROM slides WHERE deck_id IN ({deck_ph})",  # noqa: S608
+                deck_ids,
+            ).fetchall()
+            return sorted(r[0] for r in rows)
         if patch.slide_id is not None:
             return [int(patch.slide_id)]
     except sqlite3.Error:

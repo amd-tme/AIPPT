@@ -95,6 +95,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Thumbnail invalidation never fired for script-origin decks.** Real chat
+  Edit patches wrap the changed text in code (e.g.
+  `addBulletSlide(deck, 'Title', [`), so the raw patch text was never a
+  substring of a rendered slide field and `slides_touched_by_patch` matched
+  nothing — leaving stale thumbnails after an apply/revert on exactly the decks
+  the feature targets. It now extracts the changed string *literals* from the
+  patch and matches those (precise), falling back to invalidating the whole
+  deck when the changed text can't be located in any field (e.g. structural
+  edits or slides with empty `content_text`), so a script edit never leaves a
+  stale thumbnail.
 - **No-image placeholder cards (and `/slide-image/{id}` 404s) for preview decks.**
   Decks cataloged via Live Preview → Save-to-Library landed every slide with
   `image_path = NULL`, so the deck and chat grids rendered placeholder cards and
