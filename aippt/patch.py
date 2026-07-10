@@ -269,7 +269,16 @@ def apply_patch(
         script = Path(patch.script_path)
         content = script.read_text(encoding="utf-8")
         new_content = content.replace(patch.old, patch.new, 1)
-        script.write_text(new_content, encoding="utf-8")
+        try:
+            script.write_text(new_content, encoding="utf-8")
+        except OSError as exc:
+            # e.g. the script lives on a read-only filesystem. Surface a clean
+            # ValueError (→ 400) instead of an uncaught 500. Preview-cataloged
+            # decks stage a writable copy (see _stage_writable_script); this
+            # guards decks whose source_script_path is still read-only.
+            raise ValueError(
+                f"Cannot write patch to script (is it on a read-only path?): {exc}"
+            ) from exc
 
         # Mirror the change into SQLite so the slide grid updates immediately.
         _sync_script_patch_to_slides(patch, conn)
@@ -349,7 +358,11 @@ def revert_by_id(
             script = Path(msg_row["script_path"])
             if script.exists():
                 content = script.read_text(encoding="utf-8")
-                script.write_text(content.replace(new_value, old_value, 1), encoding="utf-8")
+                try:
+                    script.write_text(content.replace(new_value, old_value, 1), encoding="utf-8")
+                except OSError as exc:
+                    # Read-only script path — report cleanly instead of 500ing.
+                    return False, f"Cannot revert patch (script on a read-only path?): {exc}"
             # Mirror the revert into SQLite so the slide grid updates immediately.
             _sync_script_revert_to_slides(old_value, new_value, msg_row["script_path"], conn)
         conn.execute("DELETE FROM edit_history WHERE id = ?", (history_id,))
