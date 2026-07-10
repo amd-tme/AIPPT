@@ -36,10 +36,37 @@ SYSTEM_PROMPT = (
     "structural parallel: before/after, pros/cons, problem/solution, "
     "input/output. Do NOT use for general lists.\n"
     "- basic: title + simple body text, no bullet formatting\n"
-    "- diagram: title + AI-generated image (only when image gen is enabled)\n\n"
+    "- diagram: title + AI-generated image (only when image gen is enabled)\n"
+    "- title_alt: alternate title slide with large title, subtitle, and slide number. "
+    "Use as a section-break title card or chapter opener — not the deck's opening slide.\n"
+    "- section_content: left panel with short section label (1-3 words, can use \\n), "
+    "right panel with 3-5 bullet points. Use to open a major topic with a brief summary.\n"
+    "- two_col_numbered: left panel with section label, right panel with numbered items (up to 5). "
+    "Use when items are a ranked or prioritized list under a single theme.\n"
+    "- picture_caption: full-width image with title and paragraph caption beneath. "
+    "Use for hardware showcases, architecture diagrams, or any single-image highlight.\n"
+    "- four_image_gallery: 2×2 grid of images, each with a caption. "
+    "Use when showcasing 4 parallel use cases, products, or screenshots.\n"
+    "- three_col_content: three equal columns with a bold heading and body paragraph each. "
+    "Use for 3-pillar frameworks, triads, or three-way comparisons.\n"
+    "- three_col_image_text: three equal columns with image placeholder + heading + body. "
+    "Use when each of 3 columns benefits from a visual (hardware tiers, solution components).\n"
+    "- three_image_gallery: three side-by-side images with captions. "
+    "Use for customer stories, case studies, or environments at scale (3 examples).\n"
+    "- two_image_gallery: two side-by-side images with captions. "
+    "Use for before/after comparisons, two-product highlights, or dual case studies.\n"
+    "- cinematic: full-bleed image slide with a single large centered title. "
+    "Use as a dramatic section opener, quote slide, or transition moment. No bullets.\n"
+    "- split_image_content: left side image, right side title + bullet list. "
+    "Use when hardware or product imagery reinforces the bullet content (feature + visual).\n"
+    "- title_with_image: large two-line title on the left, image on the right. "
+    "Use for product highlight slides where the name and visual share equal billing.\n\n"
     "LAYOUT VARIETY IS REQUIRED. In a typical 10-15 slide deck:\n"
     "- Use two_column when content has natural pairs, contrasts, or parallel structure — expect 2-4 two_column slides\n"
     "- Use numbered when content describes sequential steps or ordered processes\n"
+    "- Use section_content or title_alt at chapter breaks to provide visual pacing\n"
+    "- Use gallery layouts (two_image_gallery, three_image_gallery, four_image_gallery) "
+    "when the outline provides 2-4 parallel items — never force bullets when a gallery fits\n"
     "- Use bullet as the default for general content\n\n"
     "Constraints:\n"
     "- Fonts, colors, and backgrounds are inherited from the corporate "
@@ -82,7 +109,13 @@ AUDIENCE_PROMPTS = {
 }
 
 
-VALID_LAYOUTS = {'bullet', 'two_column', 'numbered', 'basic', 'diagram'}
+VALID_LAYOUTS = {
+    'bullet', 'two_column', 'numbered', 'basic', 'diagram',
+    'title_alt', 'section_content', 'two_col_numbered',
+    'picture_caption', 'four_image_gallery', 'three_col_content',
+    'three_col_image_text', 'three_image_gallery', 'two_image_gallery',
+    'cinematic', 'split_image_content', 'title_with_image',
+}
 
 
 def _repair_truncated_json(json_str: str) -> str:
