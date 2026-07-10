@@ -24,6 +24,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Set
 
+from aippt.config import base_path_prefix
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -371,11 +373,14 @@ class PreviewSession:
 
         if result.success:
             self.last_pptx_path = result.pptx_path
+            # Prefix with BASE_PATH so PptxViewJS fetches the PPTX against the
+            # correct origin path — under the /aippt/ ingress a root-relative
+            # /api/... URL 404s (same class of bug as the preview ws_url).
             payload = {
                 "event": "render_complete",
                 "ts": time.time(),
                 "duration_ms": result.duration_ms,
-                "pptx_url": f"/api/preview/sessions/{self.token}/pptx",
+                "pptx_url": f"{base_path_prefix()}/api/preview/sessions/{self.token}/pptx",
                 "warnings": result.warnings,
             }
             self._state = _SessionState(event="render_complete", payload=payload)

@@ -333,3 +333,51 @@ class TestSessionRegistry:
             await registry.delete("nonexistent")  # should not raise
 
         asyncio.run(_run())
+
+
+# ---------------------------------------------------------------------------
+# render_complete pptx_url — must carry the BASE_PATH prefix
+# ---------------------------------------------------------------------------
+
+class TestPptxUrlPrefix:
+    def _run_one_render(self, tmp_path):
+        """Drive one render and return the broadcast render_complete payload."""
+        script = tmp_path / "deck.js"
+        script.write_text("// ok")
+
+        renderer = MagicMock()
+        renderer.render.return_value = RenderResult(
+            success=True, pptx_path=str(tmp_path / "deck.pptx"), duration_ms=5
+        )
+        session = PreviewSession(
+            script_path=str(script),
+            token="tok123",
+            out_dir=str(tmp_path / "out"),
+            renderer=renderer,
+            semaphore=asyncio.Semaphore(1),
+        )
+
+        captured = {}
+
+        class _FakeWS:
+            async def send_text(self, text):
+                import json
+                msg = json.loads(text)
+                if msg.get("event") == "render_complete":
+                    captured["payload"] = msg
+
+        session.add_client(_FakeWS())
+        asyncio.run(session._run_render(trigger="test"))
+        return captured.get("payload")
+
+    def test_pptx_url_prefixed_under_base_path(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("BASE_PATH", "/aippt/")
+        payload = self._run_one_render(tmp_path)
+        assert payload is not None
+        assert payload["pptx_url"] == "/aippt/api/preview/sessions/tok123/pptx"
+
+    def test_pptx_url_bare_at_apex(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("BASE_PATH", raising=False)
+        payload = self._run_one_render(tmp_path)
+        assert payload is not None
+        assert payload["pptx_url"] == "/api/preview/sessions/tok123/pptx"
