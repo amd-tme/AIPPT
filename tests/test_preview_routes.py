@@ -291,3 +291,59 @@ class TestPreviewOutDirConfig:
             preview_out_dir=str(tmp_path / "param"),
         )
         assert app.state.preview_registry._out_base == str(tmp_path / "param")
+
+
+class TestStageWritableScript:
+    """_stage_writable_script copies preview scripts off the read-only tree."""
+
+    def _make_project(self, tmp_path):
+        # Simulate the repo layout: <root>/examples/<name>/script.mjs + <root>/lib/
+        root = tmp_path / "app"
+        script_dir = root / "examples" / "demo"
+        script_dir.mkdir(parents=True)
+        script = script_dir / "demo.mjs"
+        script.write_text("import x from '../../lib/helpers.mjs';\n", encoding="utf-8")
+        lib = root / "lib"
+        lib.mkdir()
+        (lib / "helpers.mjs").write_text("export default 1;\n", encoding="utf-8")
+        uploads = tmp_path / "data" / "uploads"
+        uploads.mkdir(parents=True)
+        return str(root), str(script), str(uploads)
+
+    def test_stages_script_and_lib_preserving_import_depth(self, tmp_path):
+        from aippt.web.routes import _stage_writable_script
+
+        root, script, uploads = self._make_project(tmp_path)
+        staged = _stage_writable_script(script, 7, uploads, root)
+
+        # Copy lives under the writable uploads tree, not the original examples dir.
+        assert staged != script
+        assert str(Path(uploads)) in staged
+        assert Path(staged).is_file()
+        # ../../lib from the staged script resolves to the copied lib/helpers.mjs.
+        resolved_lib = (Path(staged).parent / ".." / ".." / "lib" / "helpers.mjs").resolve()
+        assert resolved_lib.is_file()
+
+    def test_staged_script_is_writable(self, tmp_path):
+        from aippt.web.routes import _stage_writable_script
+
+        root, script, uploads = self._make_project(tmp_path)
+        staged = _stage_writable_script(script, 7, uploads, root)
+        # The whole point: writing to the staged copy must succeed.
+        Path(staged).write_text("patched\n", encoding="utf-8")
+        assert Path(staged).read_text() == "patched\n"
+
+    def test_idempotent_restage(self, tmp_path):
+        from aippt.web.routes import _stage_writable_script
+
+        root, script, uploads = self._make_project(tmp_path)
+        first = _stage_writable_script(script, 7, uploads, root)
+        second = _stage_writable_script(script, 7, uploads, root)
+        assert first == second  # same deterministic path, no error on re-stage
+
+    def test_missing_script_returns_original(self, tmp_path):
+        from aippt.web.routes import _stage_writable_script
+
+        root, _, uploads = self._make_project(tmp_path)
+        missing = str(tmp_path / "nope.mjs")
+        assert _stage_writable_script(missing, 7, uploads, root) == missing

@@ -162,6 +162,50 @@ class TestRenderer:
         assert result.pptx_path == str(pptx.resolve())
         assert result.duration_ms is not None
 
+    def test_render_sets_node_path_to_project_node_modules(self, tmp_path):
+        """Staged scripts live outside project_root, so the render env must point
+        NODE_PATH at the repo's node_modules for bare specifiers to resolve."""
+        (tmp_path / "node_modules").mkdir()
+        r = Renderer(project_root=str(tmp_path))
+        script = tmp_path / "deck.js"
+        script.write_text("// ok")
+        out = tmp_path / "out"
+        out.mkdir()
+
+        captured = {}
+
+        def fake_run(cmd, cwd=None, env=None):
+            captured["env"] = env
+            (out / "deck.pptx").write_bytes(b"PK")
+            return MagicMock(returncode=0, stderr="", stdout="")
+
+        with patch.object(r, "_run", side_effect=fake_run):
+            r.render(str(script), str(out))
+
+        node_path = captured["env"]["NODE_PATH"]
+        assert str(tmp_path / "node_modules") in node_path
+        assert str(tmp_path) in captured["env"]["PYTHONPATH"]
+
+    def test_render_skips_node_path_when_no_node_modules(self, tmp_path):
+        """No node_modules under project_root → NODE_PATH not injected."""
+        r = Renderer(project_root=str(tmp_path))
+        script = tmp_path / "deck.js"
+        script.write_text("// ok")
+        out = tmp_path / "out"
+        out.mkdir()
+
+        captured = {}
+
+        def fake_run(cmd, cwd=None, env=None):
+            captured["env"] = env
+            (out / "deck.pptx").write_bytes(b"PK")
+            return MagicMock(returncode=0, stderr="", stdout="")
+
+        with patch.object(r, "_run", side_effect=fake_run):
+            r.render(str(script), str(out))
+
+        assert "NODE_PATH" not in captured["env"]
+
 
 # ---------------------------------------------------------------------------
 # discover_local_imports tests

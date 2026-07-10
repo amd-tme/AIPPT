@@ -88,6 +88,17 @@ class Renderer:
         # --- Step 1: run the script from the project root ---
         cmd, stage = self._build_command(script)
         env = {**os.environ, "AIPPT_PREVIEW_OUT": str(out)}
+        # Staged (writable-copy) scripts live outside project_root, so Node's
+        # upward node_modules walk never reaches the repo's. Point NODE_PATH at
+        # it explicitly so bare specifiers (e.g. "pptxgenjs") resolve wherever
+        # the script sits. Same idea for Python scripts via PYTHONPATH.
+        if self.project_root:
+            node_modules = os.path.join(self.project_root, "node_modules")
+            if os.path.isdir(node_modules):
+                existing = env.get("NODE_PATH", "")
+                env["NODE_PATH"] = node_modules + (os.pathsep + existing if existing else "")
+            existing_py = env.get("PYTHONPATH", "")
+            env["PYTHONPATH"] = str(self.project_root) + (os.pathsep + existing_py if existing_py else "")
         result = self._run(cmd, cwd=self.project_root, env=env)
         if result.returncode != 0:
             return RenderResult(

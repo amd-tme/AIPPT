@@ -292,6 +292,25 @@ class TestScriptPatch:
         assert not ok
         assert "not found" in reason
 
+    def test_readonly_script_write_raises_clean_valueerror(self, conn, tmp_path, monkeypatch):
+        """A read-only script path must surface a ValueError (→ 400), not an
+        uncaught OSError (→ 500). Regression for the container read-only-fs
+        crash on script-patch apply."""
+        script, _ = self._seed_script_deck(conn, tmp_path, "title = 'Alpha';\n")
+        conn.commit()
+        p = Patch(script_path=script, old="Alpha", new="Beta", summary="s")
+
+        real_write_text = Path.write_text
+
+        def _deny_write(self, *args, **kwargs):
+            if str(self) == script:
+                raise OSError(30, "Read-only file system")
+            return real_write_text(self, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "write_text", _deny_write)
+        with pytest.raises(ValueError, match="read-only"):
+            apply_patch(p, conn, cwd=str(tmp_path))
+
 
 class TestEditHistoryMigration:
     def test_legacy_notnull_slide_id_is_relaxed(self, tmp_path):

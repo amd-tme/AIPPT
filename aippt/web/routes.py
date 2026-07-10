@@ -1074,6 +1074,65 @@ def _sources_dir(uploads_dir: str, deck_id: int) -> str:
     return path
 
 
+def _stage_writable_script(script_path: str, deck_id: int, uploads_dir: str, project_root: str) -> str:
+    """Copy a preview script to a writable per-deck location and return the copy's path.
+
+    Chat "edit" patches (and their reverts) write the modified source back to
+    ``source_script_path`` in place. Scripts discovered from the bundled
+    ``examples/`` tree live on the container's read-only ``/app`` filesystem, so
+    an in-place write raises ``OSError: [Errno 30]``. Staging a copy onto the
+    writable data volume makes the patch/revert path work.
+
+    The copy preserves the script's path *relative to ``project_root``* under a
+    per-deck staging base, and copies the repo ``lib/`` alongside, so relative
+    imports of any depth resolve exactly as they do in the repo::
+
+        <uploads>/preview-scripts/<deck_id>/examples/<name>/<script>.mjs  # copy
+        <uploads>/preview-scripts/<deck_id>/lib/                         # repo lib/
+
+    e.g. from a staged ``examples/demo/demo.mjs`` the script's own
+    ``../../lib/...`` import resolves to the copied ``lib/``. Theme files (read
+    relative to the render cwd, which stays ``project_root``) are unaffected.
+    Idempotent: re-staging refreshes the copy in place.
+
+    Returns the staged script path, or the original ``script_path`` unchanged if
+    staging fails for any reason (the caller then falls back to in-place —
+    correct for local dev where the tree is already writable).
+    """
+    import shutil
+
+    try:
+        src = Path(script_path).resolve()
+        if not src.is_file():
+            return script_path
+        base = Path(uploads_dir) / "preview-scripts" / str(deck_id)
+
+        # Preserve the script's path relative to project_root so its relative
+        # imports (../../lib, etc.) resolve after the copy. If the script sits
+        # outside project_root, fall back to just its basename.
+        root = Path(project_root).resolve()
+        try:
+            rel = src.relative_to(root)
+        except ValueError:
+            rel = Path(src.name)
+        dst = base / rel
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dst)
+
+        # Copy the repo lib/ so relative "../../lib/..." imports resolve.
+        lib_src = root / "lib"
+        if lib_src.is_dir():
+            # dirs_exist_ok keeps re-staging idempotent (Python 3.8+).
+            shutil.copytree(lib_src, base / "lib", dirs_exist_ok=True)
+        return str(dst)
+    except OSError as exc:
+        logger.warning(
+            "Could not stage writable copy of %s for deck %s (%s); using in-place path",
+            script_path, deck_id, exc,
+        )
+        return script_path
+
+
 def _per_deck_images_dir(request: Request, deck_path: str) -> str:
     """Resolve the per-deck images directory under app.state.images_dir.
 
@@ -2258,13 +2317,23 @@ async def catalog_preview_session(token: str, request: Request):
             source_script_path=session.script_path,
             source_engine="pptxgenjs",
         )
+        # Stage a writable copy of the script so chat "edit" patches (which write
+        # the source back in place) don't hit the read-only /app filesystem when
+        # the script came from the bundled examples/ tree. Falls back to the
+        # original path if staging fails (local dev / already-writable trees).
+        uploads_dir = getattr(request.app.state, "uploads_dir", "uploads")
+        project_root = getattr(request.app.state, "project_root", os.getcwd())
+        staged_script = _stage_writable_script(
+            session.script_path, deck_id, uploads_dir, project_root
+        )
         # catalog_deck early-returns on hash match without updating source_script_path.
-        # Always ensure it's set so the chat conversation gets the correct script path.
+        # Always ensure it points at the staged (writable) path so the chat
+        # conversation and its patch/revert writes target the copy.
         conn = get_db(db_path)
         try:
             conn.execute(
                 "UPDATE decks SET source_script_path = ? WHERE id = ? AND (source_script_path IS NULL OR source_script_path != ?)",
-                (session.script_path, deck_id, session.script_path),
+                (staged_script, deck_id, staged_script),
             )
             conn.commit()
         finally:
@@ -2273,7 +2342,7 @@ async def catalog_preview_session(token: str, request: Request):
         logger.error("catalog_preview_session error: %s", exc)
         return JSONResponse({"error": str(exc)}, status_code=500)
 
-    return {"deck_id": deck_id, "script_path": session.script_path}
+    return {"deck_id": deck_id, "script_path": staged_script}
 
 
 @router.get("/api/preview/scripts")
