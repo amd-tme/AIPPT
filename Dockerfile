@@ -118,4 +118,4 @@ RUN mkdir -p /app/data/uploads /app/data/images /app/data/backups && \
 
 EXPOSE 8000
 
-ENTRYPOINT ["python", "aippt.py", "serve", "--host", "0.0.0.0", "--port", "8000", "--db", "/app/data/slides.db", "--uploads-dir", "/app/data/uploads", "--images-dir", "/app/data/images", "--data-dir", "/app/data"]
+ENTRYPOINT ["python", "aippt.py", "serve", "--host", "0.0.0.0", "--port", "8000", "--db", "/app/data/slides.db", "--uploads-dir", "/app/data/uploads", "--images-dir", "/app/data/images", "--data-dir", "/app/data", "--preview-out-dir", "/app/data/.preview"]

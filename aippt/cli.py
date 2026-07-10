@@ -479,7 +479,8 @@ def cmd_serve(args):
     data_dir = getattr(args, 'data_dir', None)
     allow_dirs = getattr(args, 'allow_dirs', None) or None
     preview_concurrency = getattr(args, 'preview_concurrency', 2)
-    app = create_app(db_path=db_path, gateway_config=gateway_config, uploads_dir=uploads_dir, images_dir=images_dir, project_root=base, view_only=view_only, max_upload_mb=max_upload_mb, storage_backend=storage_backend, data_dir=data_dir, preview_allow_dirs=allow_dirs, preview_concurrency=preview_concurrency)
+    preview_out_dir = getattr(args, 'preview_out_dir', None)
+    app = create_app(db_path=db_path, gateway_config=gateway_config, uploads_dir=uploads_dir, images_dir=images_dir, project_root=base, view_only=view_only, max_upload_mb=max_upload_mb, storage_backend=storage_backend, data_dir=data_dir, preview_allow_dirs=allow_dirs, preview_concurrency=preview_concurrency, preview_out_dir=preview_out_dir)
     mode = "view-only" if app.state.view_only else "full"
     print(f"Starting AIPPT web UI on http://{args.host}:{args.port} ({mode} mode)")
     uvicorn.run(app, host=args.host, port=args.port)
@@ -1793,6 +1794,8 @@ def build_parser():
                          help="Add a directory to the preview runner allow-list. Repeatable. Defaults to output/ and examples/ under the project root.")
     p_serve.add_argument("--preview-concurrency", type=int, default=2, metavar="N",
                          help="Maximum simultaneous preview renders (default: 2).")
+    p_serve.add_argument("--preview-out-dir", default=None, metavar="DIR",
+                         help="Base directory for live-preview render artifacts (also settable via AIPPT_PREVIEW_OUT_DIR). Must be writable — set this to the data volume (e.g. /app/data/.preview) under a read-only root filesystem. Defaults to output/.preview under the project root.")
 
     # preview (live slides-as-code rendering)
     p_preview = sub.add_parser("preview", help="Live-render a slides-as-code script to a .pptx")

@@ -422,11 +422,17 @@ class SessionRegistry:
         allow_dirs: Iterable[str],
         max_parallel: int = 2,
         renderer: Optional[Renderer] = None,
+        out_base: str = "output/.preview",
     ):
         self._allow_dirs = [str(Path(d).resolve()) for d in allow_dirs]
         self._semaphore = asyncio.Semaphore(max_parallel)
         self._renderer = renderer or Renderer()
         self._sessions: Dict[str, PreviewSession] = {}
+        # Base dir for per-script preview artifacts. Must be writable — under a
+        # read-only root filesystem (container deploys) point this at the data
+        # volume, e.g. ``/app/data/.preview``. Default is cwd-relative for
+        # local dev.
+        self._out_base = out_base
 
     # --- allow-list --------------------------------------------------------
 
@@ -439,14 +445,18 @@ class SessionRegistry:
 
     # --- CRUD --------------------------------------------------------------
 
-    async def create(self, script_path: str, out_base: str = "output/.preview") -> PreviewSession:
+    async def create(self, script_path: str, out_base: Optional[str] = None) -> PreviewSession:
         """Create (or return existing) session for *script_path*.
+
+        *out_base* overrides the registry's configured base for this session;
+        when omitted it falls back to ``self._out_base``.
 
         Raises:
             ValueError: script path is outside the allow-list.
             FileNotFoundError: script does not exist.
         """
         resolved = str(Path(script_path).resolve())
+        out_base = out_base if out_base is not None else self._out_base
 
         if not self._check_allowed(resolved):
             raise ValueError(
