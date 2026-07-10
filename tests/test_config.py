@@ -13,6 +13,7 @@ from aippt.config import (
     get_model_registry,
     get_model_default,
     init_model_config,
+    base_path_prefix,
 )
 
 
@@ -62,6 +63,28 @@ def write_minimal_config(path: str) -> None:
 # ---------------------------------------------------------------------------
 # TestValidOperations
 # ---------------------------------------------------------------------------
+
+class TestBasePathPrefix:
+    def test_unset_yields_empty(self, monkeypatch):
+        monkeypatch.delenv("BASE_PATH", raising=False)
+        assert base_path_prefix() == ""
+
+    def test_apex_slash_yields_empty(self, monkeypatch):
+        monkeypatch.setenv("BASE_PATH", "/")
+        assert base_path_prefix() == ""
+
+    def test_path_mount_yields_prefix(self, monkeypatch):
+        monkeypatch.setenv("BASE_PATH", "/aippt/")
+        assert base_path_prefix() == "/aippt"
+
+    def test_strips_trailing_and_leading(self, monkeypatch):
+        monkeypatch.setenv("BASE_PATH", "aippt")
+        assert base_path_prefix() == "/aippt"
+
+    def test_nested_mount(self, monkeypatch):
+        monkeypatch.setenv("BASE_PATH", "/apps/aippt/")
+        assert base_path_prefix() == "/apps/aippt"
+
 
 class TestValidOperations:
     def test_improve_in_valid_operations(self):

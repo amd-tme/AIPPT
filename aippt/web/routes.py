@@ -42,23 +42,19 @@ from aippt.ingest import ingest_deck
 from aippt.web.asset_sync import persist_file, persist_tree, materialize_file
 import aippt.pipeline as _pipeline_module
 from aippt.pipeline import PipelineConfig
-from aippt.config import get_template_default, TemplateConfigError
+from aippt.config import get_template_default, TemplateConfigError, base_path_prefix
 
 router = APIRouter()
 STATIC_DIR = Path(__file__).parent / "static"
 
 
 def _base_prefix() -> str:
-    """Return the mount prefix (no trailing slash) the app is served under.
+    """Mount prefix (no trailing slash) for origin-resolved absolute URLs.
 
-    Mirrors the ``BASE_PATH`` convention used to inject ``<base href>`` into
-    index.html. Apex mount (``/`` or unset) yields ``""``; a path mount such
-    as ``/aippt/`` yields ``/aippt``. Used to build absolute URLs the browser
-    resolves against the origin (not the document base) — notably the preview
-    WebSocket URL, which the client opens as ``wss://{host}{ws_url}``.
+    Thin wrapper over :func:`aippt.config.base_path_prefix` — kept as a
+    module-local name for the preview session/WS URL builders below.
     """
-    base = os.environ.get("BASE_PATH", "/").strip()
-    return "/" + base.strip("/") if base.strip("/") else ""
+    return base_path_prefix()
 
 
 @router.get("/healthz")

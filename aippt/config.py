@@ -22,6 +22,23 @@ except ImportError:
 VALID_OPERATIONS = {"enhance", "feedback", "notes", "tags", "image", "improve", "reverse"}
 VALID_PROVIDERS = {"anthropic", "openai", "google"}
 
+
+def base_path_prefix() -> str:
+    """Return the mount prefix (no trailing slash) the app is served under.
+
+    Mirrors the ``BASE_PATH`` convention used to inject ``<base href>`` into
+    index.html. Apex mount (``/`` or unset) yields ``""``; a path mount such as
+    ``/aippt/`` yields ``/aippt``.
+
+    Use this for any absolute URL the browser resolves against the *origin*
+    rather than the document ``<base>`` — e.g. the preview WebSocket URL
+    (opened as ``wss://{host}{ws_url}``) and the preview PPTX fetch URL (loaded
+    by PptxViewJS). Relative asset/fetch URLs in the SPA don't need it; the
+    ``<base href>`` already handles those.
+    """
+    base = os.environ.get("BASE_PATH", "/").strip()
+    return "/" + base.strip("/") if base.strip("/") else ""
+
 # Default config file path (project root, alongside gateway.yaml).
 DEFAULT_CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "models.yaml")
 EXAMPLE_CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "models.yaml.example")
