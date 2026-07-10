@@ -147,6 +147,42 @@ def _parse_legacy_patch_block(body: str) -> Patch:
     )
 
 
+def slides_touched_by_patch(patch: Patch, conn: sqlite3.Connection) -> List[int]:
+    """Return the slide ids whose rendered content this patch changes.
+
+    Used to invalidate exactly those slides' thumbnails (precise, per-slide)
+    after an apply/revert, so the deck view falls back to a placeholder card
+    instead of showing a stale image.
+
+    - Script patches: every slide of any deck whose ``source_script_path``
+      matches, where the ``old`` text appears in title / content_text / notes —
+      the same rows ``_sync_script_patch_to_slides`` rewrites. Computed before
+      the write while the ``old`` text is still present to match.
+    - Legacy field patches: just the patch's ``slide_id``.
+
+    Always safe: any query error yields an empty list rather than raising.
+    """
+    try:
+        if patch.is_script_patch:
+            if not patch.old:
+                return []
+            like = f"%{patch.old}%"
+            rows = conn.execute(
+                """SELECT DISTINCT s.id
+                   FROM slides s JOIN decks d ON s.deck_id = d.id
+                   WHERE d.source_script_path = ?
+                     AND (s.title LIKE ? OR s.content_text LIKE ? OR s.notes LIKE ?)
+                   ORDER BY s.id""",
+                (patch.script_path, like, like, like),
+            ).fetchall()
+            return [r[0] for r in rows]
+        if patch.slide_id is not None:
+            return [int(patch.slide_id)]
+    except sqlite3.Error:
+        logger.exception("slides_touched_by_patch failed")
+    return []
+
+
 def _sync_script_patch_to_slides(patch: Patch, conn: sqlite3.Connection) -> None:
     """Mirror a script-file patch into the SQLite slides table.
 

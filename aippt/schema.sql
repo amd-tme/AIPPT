@@ -34,7 +34,8 @@ CREATE TABLE IF NOT EXISTS slides (
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     author TEXT NOT NULL DEFAULT '',
     slide_created_date TEXT DEFAULT NULL,
-    layout_type TEXT DEFAULT NULL
+    layout_type TEXT DEFAULT NULL,
+    image_content_hash TEXT DEFAULT NULL
 );
 
 CREATE TABLE IF NOT EXISTS tags (

@@ -20,7 +20,15 @@ from typing import Generator, Iterator, List, Optional
 import sqlite3
 
 from aippt.llm import LLMClient
-from aippt.patch import extract_patches, apply_patch, revert_by_id, revert_last, Patch
+from aippt.patch import (
+    extract_patches,
+    apply_patch,
+    revert_by_id,
+    revert_last,
+    slides_touched_by_patch,
+    Patch,
+)
+from aippt.thumbnails import invalidate_slides
 
 logger = logging.getLogger(__name__)
 
@@ -230,9 +238,13 @@ class ChatService:
         patches = [Patch(**p) for p in json.loads(row["patch_json"])]
         errors = []
         history_ids = []
+        touched: list[int] = []
         for patch in patches:
             patch.conversation_id = row["conversation_id"]
             patch.message_id = message_id
+            # Collect affected slide ids *before* the write, while the old text
+            # is still present to match, so we can invalidate their thumbnails.
+            touched.extend(slides_touched_by_patch(patch, self.conn))
             try:
                 history_id = apply_patch(patch, self.conn, source="chat", cwd=self.db_cwd)
                 history_ids.append(history_id)
@@ -248,6 +260,10 @@ class ChatService:
             (history_ids[0] if history_ids else None, message_id),
         )
         self.conn.commit()
+
+        # Invalidate the changed slides' thumbnails so the UI falls back to a
+        # placeholder instead of a stale image. Best-effort: never fails apply.
+        self._invalidate_thumbnails(touched)
         return True, "ok"
 
     def revert_message_patch(self, message_id: int) -> tuple[bool, str]:
@@ -267,6 +283,21 @@ class ChatService:
             return False, "Patch has not been applied yet"
         if not row["patch_json"]:
             return False, "No patch on this message"
+
+        # Collect the slides this revert will change *before* the write. After
+        # apply, the slide content holds the patch's ``new`` text; matching on
+        # that finds the same rows the revert rewrites back to ``old``.
+        touched: list[int] = []
+        try:
+            for p in json.loads(row["patch_json"]):
+                patch = Patch(**p)
+                if patch.is_script_patch:
+                    probe = Patch(script_path=patch.script_path, old=patch.new, new=patch.old)
+                    touched.extend(slides_touched_by_patch(probe, self.conn))
+                elif patch.slide_id is not None:
+                    touched.append(int(patch.slide_id))
+        except (ValueError, TypeError, json.JSONDecodeError):
+            touched = []
 
         history_id = row["edit_history_id"]
         if history_id is not None:
@@ -292,7 +323,23 @@ class ChatService:
             (message_id,),
         )
         self.conn.commit()
+
+        # Invalidate the reverted slides' thumbnails (best-effort).
+        self._invalidate_thumbnails(touched)
         return True, "ok"
+
+    def _invalidate_thumbnails(self, slide_ids: list[int]) -> None:
+        """Null image_path/hash for changed slides so the UI drops to a
+        placeholder rather than showing a stale thumbnail. Never raises."""
+        if not slide_ids:
+            return
+        try:
+            db_file = self.conn.execute("PRAGMA database_list").fetchone()[2]
+        except sqlite3.Error:
+            return
+        if not db_file:
+            return
+        invalidate_slides(slide_ids, db_path=db_file)
 
     # ------------------------------------------------------------------
     # Slide / deck context helpers
