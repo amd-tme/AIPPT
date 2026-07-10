@@ -348,6 +348,61 @@ class TestThumbnailInvalidationOnEdit:
         p = Patch(slide_id=slide_id, field="title", old_text="Intro", new_text="Introduction")
         assert slides_touched_by_patch(p, conn) == [slide_id]
 
+    def test_slides_touched_by_code_anchored_patch(self, conn, tmp_path):
+        """Real LLM script patches wrap the changed text in code, e.g.
+        ``addBulletSlide(deck, 'Benefits', [``. The raw ``old`` is never a
+        substring of a rendered slide field, so matching must extract the
+        changed *string literal* ('Benefits') and match that. Regression for the
+        Check-3 prod failure where invalidation never fired on script decks."""
+        from aippt.patch import slides_touched_by_patch
+
+        script, deck_id = self._seed_script_deck(
+            conn, tmp_path, "addBulletSlide(deck, 'Benefits', ['a','b']);\n"
+        )
+        c1 = conn.execute(
+            "INSERT INTO slides (deck_id, position, title, content_text, content_hash) VALUES (?,?,?,?,?)",
+            (deck_id, 1, "Benefits", "", "sh1"),
+        )
+        conn.execute(
+            "INSERT INTO slides (deck_id, position, title, content_text, content_hash) VALUES (?,?,?,?,?)",
+            (deck_id, 2, "Other", "", "sh2"),
+        )
+        conn.commit()
+        p = Patch(
+            script_path=script,
+            old="addBulletSlide(deck, 'Benefits', [",
+            new="addBulletSlide(deck, 'Why It Rocks', [",
+            summary="rename",
+        )
+        # Precise: only the slide whose title matches the changed literal.
+        assert slides_touched_by_patch(p, conn) == [c1.lastrowid]
+
+    def test_slides_touched_coarse_fallback_when_no_literal_matches(self, conn, tmp_path):
+        """When the changed text can't be located in any rendered slide field
+        (e.g. content_text is empty and the edit is structural), fall back to
+        invalidating every slide of the script's deck(s) — never stale."""
+        from aippt.patch import slides_touched_by_patch
+
+        script, deck_id = self._seed_script_deck(
+            conn, tmp_path, "addImageSlide(deck, 'diagram.png');\n"
+        )
+        ids = []
+        for pos in (1, 2, 3):
+            c = conn.execute(
+                "INSERT INTO slides (deck_id, position, title, content_text, content_hash) VALUES (?,?,?,?,?)",
+                (deck_id, pos, f"Title {pos}", "", f"h{pos}"),
+            )
+            ids.append(c.lastrowid)
+        conn.commit()
+        # The literal 'diagram.png' / 'chart.png' appears in no slide field.
+        p = Patch(
+            script_path=script,
+            old="addImageSlide(deck, 'diagram.png')",
+            new="addImageSlide(deck, 'chart.png')",
+            summary="swap image",
+        )
+        assert slides_touched_by_patch(p, conn) == sorted(ids)
+
     def test_apply_invalidates_thumbnail(self, conn, tmp_path):
         script, deck_id = self._seed_script_deck(conn, tmp_path, "t = 'Alpha';\n")
         c1 = conn.execute(
@@ -412,6 +467,54 @@ class TestThumbnailInvalidationOnEdit:
         ).fetchone()
         assert row["image_path"] is None
         assert row["image_content_hash"] is None
+
+    def test_apply_invalidates_thumbnail_code_anchored(self, conn, tmp_path):
+        """End-to-end at the service level with a realistic code-anchored patch
+        and a title-only slide (empty content_text) — the exact prod scenario
+        from the Check-3 failure. Apply must invalidate the renamed slide's
+        thumbnail via literal extraction."""
+        body = "addBulletSlide(deck, 'Benefits of Code-Driven Decks', ['a','b']);\n"
+        script, deck_id = self._seed_script_deck(conn, tmp_path, body)
+        c1 = conn.execute(
+            "INSERT INTO slides (deck_id, position, title, content_text, content_hash, "
+            "image_path, image_content_hash) VALUES (?,?,?,?,?,?,?)",
+            (deck_id, 1, "Benefits of Code-Driven Decks", "", "sh1",
+             "images/x/Slide1.png", "sh1"),
+        )
+        # A second, unrelated slide whose thumbnail must survive.
+        c2 = conn.execute(
+            "INSERT INTO slides (deck_id, position, title, content_text, content_hash, "
+            "image_path, image_content_hash) VALUES (?,?,?,?,?,?,?)",
+            (deck_id, 2, "Other Slide", "", "sh2", "images/x/Slide2.png", "sh2"),
+        )
+        conn.commit()
+
+        mock_llm = MagicMock()
+        mock_llm.model_config.supports_vision = False
+        svc = ChatService(conn, mock_llm, db_cwd=str(tmp_path))
+        conv_id = svc.create_conversation(deck_id, script_path=script)
+        msg_id = svc._save_message(
+            conv_id, "assistant", "ok", mode="edit",
+            patch_json=json.dumps([{
+                "script_path": script,
+                "old": "addBulletSlide(deck, 'Benefits of Code-Driven Decks', [",
+                "new": "addBulletSlide(deck, 'Why Code-Driven Decks Rock', [",
+                "summary": "rename",
+            }]),
+        )
+        ok, reason = svc.apply_message_patch(msg_id)
+        assert ok, reason
+
+        r1 = conn.execute(
+            "SELECT image_path, image_content_hash FROM slides WHERE id = ?", (c1.lastrowid,)
+        ).fetchone()
+        r2 = conn.execute(
+            "SELECT image_path FROM slides WHERE id = ?", (c2.lastrowid,)
+        ).fetchone()
+        # Renamed slide invalidated; the unrelated slide keeps its thumbnail.
+        assert r1["image_path"] is None
+        assert r1["image_content_hash"] is None
+        assert r2["image_path"] == "images/x/Slide2.png"
 
 
 class TestEditHistoryMigration:
