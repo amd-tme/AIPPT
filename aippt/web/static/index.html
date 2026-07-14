@@ -2738,30 +2738,59 @@
         }
 
         function _waitForPreviewUpdate(msgId) {
-            // If no active inline preview WS, nothing to wait for
-            if (!_inlinePreviewWs || _inlinePreviewWs.readyState !== WebSocket.OPEN) {
-                const badge = document.getElementById(`preview-update-badge-${msgId}`);
-                if (badge) badge.textContent = '(open Live Preview to see changes)';
+            const badge = document.getElementById(`preview-update-badge-${msgId}`);
+
+            // Prefer the inline preview WS; fall back to the full Live Preview panel.
+            const ws = (_inlinePreviewWs && _inlinePreviewWs.readyState === WebSocket.OPEN)
+                ? _inlinePreviewWs
+                : null;
+
+            if (!ws) {
+                // Try to trigger the full Live Preview panel's re-render if it's open.
+                const token = typeof window.previewGetToken === 'function' ? window.previewGetToken() : null;
+                if (!token) {
+                    if (badge) badge.textContent = '(open Live Preview to see changes)';
+                    return;
+                }
+                // Force re-render via the global handle and watch for render_complete.
+                if (typeof window.previewForce === 'function') window.previewForce();
+                const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const listenWs = new WebSocket(`${proto}//${location.host}/ws/preview/${token}`);
+                const t0 = Date.now();
+                const tid = setTimeout(() => { listenWs.close(); if (badge) badge.textContent = ''; }, 15000);
+                listenWs.onmessage = async (evt) => {
+                    try {
+                        const data = JSON.parse(evt.data);
+                        if (data.event === 'render_complete') {
+                            clearTimeout(tid);
+                            listenWs.close();
+                            await _refreshSlideGrid();
+                            const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+                            if (badge) {
+                                badge.style.color = '#4caf50';
+                                badge.innerHTML = `&#9654; Preview updated in ${elapsed}s`;
+                            }
+                        }
+                    } catch(_) {}
+                };
+                listenWs.onerror = () => { clearTimeout(tid); if (badge) badge.textContent = '(open Live Preview to see changes)'; };
                 return;
             }
+
             const t0 = Date.now();
             const tid = setTimeout(() => {
-                const badge = document.getElementById(`preview-update-badge-${msgId}`);
                 if (badge) badge.textContent = '';
             }, 15000);
-            const origOnMessage = _inlinePreviewWs.onmessage;
-            _inlinePreviewWs.onmessage = async (evt) => {
-                // Call the original handler so the canvas still re-renders
+            const origOnMessage = ws.onmessage;
+            ws.onmessage = async (evt) => {
                 if (origOnMessage) origOnMessage(evt);
                 try {
                     const data = JSON.parse(evt.data);
                     if (data.event === 'render_complete') {
                         clearTimeout(tid);
-                        _inlinePreviewWs.onmessage = origOnMessage;
-                        // Refresh grid now that SQLite was updated by the patch apply
+                        ws.onmessage = origOnMessage;
                         await _refreshSlideGrid();
                         const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
-                        const badge = document.getElementById(`preview-update-badge-${msgId}`);
                         if (badge) {
                             badge.style.color = '#4caf50';
                             badge.innerHTML = `&#9654; Preview updated in ${elapsed}s`;
