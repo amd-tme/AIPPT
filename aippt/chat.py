@@ -236,10 +236,24 @@ class ChatService:
             return False, "No patch on this message"
 
         patches = [Patch(**p) for p in json.loads(row["patch_json"])]
+
+        # If the conversation has an authoritative script path, redirect any
+        # script patch that targets the wrong file. LLMs occasionally hallucinate
+        # a wrong deck number in the path (e.g. /1/ instead of /3/) while getting
+        # the old/new text exactly right — correcting the path silently is safe
+        # because the old text match is the real integrity check.
+        conv_row = self.conn.execute(
+            "SELECT script_path FROM chat_conversations WHERE id = ?",
+            (row["conversation_id"],),
+        ).fetchone()
+        authoritative_script = conv_row["script_path"] if conv_row else None
+
         errors = []
         history_ids = []
         touched: list[int] = []
         for patch in patches:
+            if authoritative_script and patch.is_script_patch:
+                patch.script_path = authoritative_script
             patch.conversation_id = row["conversation_id"]
             patch.message_id = message_id
             # Collect affected slide ids *before* the write, while the old text
@@ -352,7 +366,11 @@ class ChatService:
             content = Path(script_path).read_text(encoding="utf-8")
         except OSError:
             return ""
-        return f"[Script: {script_path}]\n```javascript\n{content}\n```\n"
+        return (
+            f"[CURRENT SCRIPT STATE — authoritative, overrides any prior context]\n"
+            f"[Script: {script_path}]\n"
+            f"```javascript\n{content}\n```\n"
+        )
 
     def _build_deck_context(self, deck_id: int) -> str:
         """Return a compact summary of every slide in *deck_id* for deck-level chat."""
@@ -444,10 +462,15 @@ class ChatService:
         conv = self.get_conversation(conversation_id)
         conv_script_path = conv.get("script_path") if conv else None
 
-        if slide_id:
-            context = self._build_slide_context(slide_id)
-        elif conv_script_path:
+        if conv_script_path:
+            # Script-origin deck: always lead with the full script so the LLM
+            # can produce verbatim patches. Append slide context on top when a
+            # specific slide is scoped — don't let slide_id replace the script.
             context = self._build_script_context(conv_script_path)
+            if slide_id:
+                context = context + "\n\n" + self._build_slide_context(slide_id)
+        elif slide_id:
+            context = self._build_slide_context(slide_id)
         else:
             context = self._build_deck_context(conv["deck_id"]) if conv else ""
         full_user_content = (
