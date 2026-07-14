@@ -2242,6 +2242,12 @@
 
             if (currentDeckScriptPath) {
                 _initDeckInlinePreview(currentDeckScriptPath);
+                // Pre-populate the Live Preview path field so the user only
+                // needs to click Open — no manual path entry required.
+                const pathInput = document.getElementById('preview-script-path');
+                if (pathInput && !pathInput.value) {
+                    pathInput.value = currentDeckScriptPath;
+                }
             } else {
                 _clearDeckInlinePreview();
             }
