@@ -41,6 +41,35 @@ _JSON_PATCH_BLOCK_RE = re.compile(
     re.DOTALL,
 )
 
+
+def _sanitize_json_capture(s: str) -> str:
+    """Escape literal control characters that LLMs sometimes emit inside JSON strings.
+
+    JSON spec forbids unescaped U+0000–U+001F inside string values. LLMs
+    occasionally emit a literal newline (e.g. in the "new" field) instead of
+    the \\n escape sequence, causing json.loads to raise. This pass fixes that
+    without touching structural characters outside strings.
+    """
+    _CTRL_MAP = {"\n": "\\n", "\r": "\\r", "\t": "\\t"}
+    result: list[str] = []
+    in_string = False
+    skip_next = False
+    for ch in s:
+        if skip_next:
+            result.append(ch)
+            skip_next = False
+        elif ch == "\\" and in_string:
+            result.append(ch)
+            skip_next = True
+        elif ch == '"':
+            result.append(ch)
+            in_string = not in_string
+        elif in_string and ch in _CTRL_MAP:
+            result.append(_CTRL_MAP[ch])
+        else:
+            result.append(ch)
+    return "".join(result)
+
 _EDIT_HISTORY_DIR = ".aippt"
 _EDIT_HISTORY_FILE = "edit-history.jsonl"
 
@@ -78,8 +107,18 @@ def extract_patches(text: str) -> List[Patch]:
 
     # New JSON format
     for m in _JSON_PATCH_BLOCK_RE.finditer(text):
+        raw = m.group(1)
         try:
-            data = json.loads(m.group(1))
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            # LLMs sometimes emit literal newlines inside JSON strings. Try once
+            # more after escaping control characters within string values.
+            try:
+                data = json.loads(_sanitize_json_capture(raw))
+            except json.JSONDecodeError as exc:
+                logger.warning("Skipping malformed JSON patch block: %s", exc)
+                continue
+        try:
             p_data = data.get("patch", {})
             if not p_data.get("script") or not p_data.get("old") or "new" not in p_data:
                 logger.warning("Skipping JSON patch block: missing required keys")
@@ -91,7 +130,7 @@ def extract_patches(text: str) -> List[Patch]:
                 new=p_data["new"],
                 summary=p_data.get("summary", ""),
             ))
-        except (json.JSONDecodeError, KeyError) as exc:
+        except (KeyError, AttributeError) as exc:
             logger.warning("Skipping malformed JSON patch block: %s", exc)
 
     # Legacy ```patch format (fallback)
