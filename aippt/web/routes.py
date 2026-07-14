@@ -2255,8 +2255,19 @@ async def find_preview_session_by_script(request: Request, script: str = None):
         return JSONResponse({"error": "script query param required"}, status_code=400)
     registry = _preview_registry(request)
     resolved = str(Path(script).resolve())
-    for session in list(registry._sessions.values()):
+    script_name = Path(script).name
+    sessions = list(registry._sessions.values())
+    # Exact resolved-path match first.
+    for session in sessions:
         if str(Path(session.script_path).resolve()) == resolved:
+            return {
+                "token": session.token,
+                "ws_url": f"{_base_prefix()}/ws/preview/{session.token}",
+                "script": session.script_path,
+            }
+    # Fallback: same filename (handles uploads copy vs output copy mismatch).
+    for session in sessions:
+        if Path(session.script_path).name == script_name:
             return {
                 "token": session.token,
                 "ws_url": f"{_base_prefix()}/ws/preview/{session.token}",

@@ -120,10 +120,13 @@ def create_app(db_path: str = "slides.db", gateway_config: str = None, uploads_d
             await _app.state.preview_registry.shutdown()
 
     app = FastAPI(title="AIPPT", version="2.0.0", lifespan=_lifespan)
-    # Preview session registry — allow-list defaults to output/ and examples/
+    # Preview session registry — allow-list defaults to output/, examples/, and
+    # uploads/preview-scripts/ (scripts staged by the Save-to-Library pipeline).
+    _uploads_preview = os.path.join(os.path.abspath(uploads_dir), "preview-scripts")
     _default_allow = [
         os.path.join(resolved_root, "output"),
         os.path.join(resolved_root, "examples"),
+        _uploads_preview,
     ]
     allow_dirs = [os.path.abspath(d) for d in (preview_allow_dirs or [])] or _default_allow
     # Preview artifacts must land on a writable path. Under readOnlyRootFilesystem
