@@ -991,8 +991,29 @@
         .ai-actions button {
             width: auto;
             margin: 0;
-            padding: 0.4rem 0.9rem;
-            font-size: 0.85rem;
+            padding: 0.35rem 0.8rem;
+            font-size: 0.8rem;
+            font-family: var(--font-sans);
+            background: transparent;
+            border: 1px solid var(--pico-muted-border-color);
+            color: var(--pico-muted-color);
+            border-radius: 6px;
+            transition: border-color 0.15s, color 0.15s, background 0.15s;
+        }
+        .ai-actions button:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: rgba(0,194,222,0.06);
+        }
+        .ai-actions button#btn-slide-chat {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #131416;
+            font-weight: 600;
+        }
+        .ai-actions button#btn-slide-chat:hover {
+            background: rgba(0,194,222,0.85);
+            color: #131416;
         }
         #ai-result-panel {
             margin-top: 1rem;
@@ -1150,6 +1171,7 @@
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            font-family: var(--font-sans);
         }
         .slide-position {
             font-size: 0.8rem;
@@ -1160,12 +1182,23 @@
             flex-shrink: 0;
             width: auto;
             margin: 0;
-            padding: 0.3rem 0.7rem;
+            padding: 0.3rem 0.8rem;
             font-size: 0.8rem;
+            font-family: var(--font-sans);
             white-space: nowrap;
+            background: transparent;
+            border: 1px solid var(--pico-muted-border-color);
+            color: var(--pico-muted-color);
+            border-radius: 6px;
+            transition: border-color 0.15s, color 0.15s;
+        }
+        .slide-nav-btn:hover:not(:disabled) {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: rgba(0,194,222,0.06);
         }
         .slide-nav-btn:disabled {
-            opacity: 0.35;
+            opacity: 0.3;
             cursor: not-allowed;
         }
         /* Tag browsing sidebar */
@@ -1989,33 +2022,86 @@
             <span class="eyebrow" style="margin-bottom:0.25rem; font-family:var(--font-sans);">Live Preview</span>
             <h2 style="margin:0 0 0.75rem; font-family:var(--font-sans);">Script Preview</h2>
             <div class="preview-toolbar">
-                <select id="preview-script-select"><option value="">— pick a script —</option></select>
-                <input id="preview-script-path" type="text" placeholder="or paste an absolute path…" style="flex:2 1 300px;">
+                <div style="flex:2 1 300px; display:flex; align-items:center; position:relative; min-width:0;">
+                    <select id="preview-script-select"
+                        style="position:absolute; left:0; top:0; width:100%; height:100%; opacity:0; cursor:pointer; z-index:2;"
+                        title="Pick a recent or discovered script">
+                        <option value="">— pick a script —</option>
+                    </select>
+                    <input id="preview-script-path" type="text" placeholder="Pick or paste a script path…"
+                        style="flex:1; margin:0; padding-right:4rem; min-width:0;">
+                    <span style="position:absolute; right:0.5rem; display:flex; gap:0.3rem; z-index:1; pointer-events:none;">
+                        <span style="font-size:0.7rem; color:var(--pico-muted-color); opacity:0.6;" title="Click field to pick from list">▾</span>
+                        <button onclick="navigator.clipboard.writeText(document.getElementById('preview-script-path').value)"
+                            title="Copy path" style="width:auto; padding:0.1rem 0.4rem; font-size:0.68rem; margin:0;
+                            background:transparent; border:1px solid var(--pico-muted-border-color); color:var(--pico-muted-color);
+                            pointer-events:all; border-radius:3px; line-height:1;">copy</button>
+                    </span>
+                </div>
                 <button id="preview-open-btn" onclick="previewOpen()">Open</button>
-                <button id="preview-force-btn" onclick="previewForce()" disabled>Force render</button>
-                <button id="preview-stop-btn" class="outline" onclick="previewStop()" disabled>Stop</button>
-                <button id="preview-save-btn" class="outline" onclick="previewSaveDeck()" disabled title="Download PPTX and add to Cataloged Decks">&#128190; Save to Library</button>
+                <button id="preview-force-btn" class="outline" onclick="previewForce()" disabled>↻ Force render</button>
+                <button id="preview-stop-btn" class="outline" onclick="previewStop()" disabled style="color:#e53935; border-color:#e53935;">■ Stop</button>
+                <button id="preview-save-btn" class="outline" onclick="previewSaveDeck()" disabled title="Download PPTX and add to Cataloged Decks" style="color:#4caf50; border-color:#4caf50;">↓ Save to Library</button>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.5rem;">
+                <p class="preview-disclaimer" style="margin:0; font-size:0.72rem; opacity:0.45; font-family:var(--font-sans);">&#9888; Rendered via PptxViewJS — effects may differ from PowerPoint export.</p>
                 <span id="preview-status" class="preview-status preview-status--idle">Idle</span>
             </div>
-            <p class="preview-disclaimer">&#9888; Rendered in-browser via PptxViewJS — fonts and complex effects may differ slightly from PowerPoint export.</p>
             <div id="preview-error" class="preview-error" style="display:none;"></div>
             <!-- PptxViewJS viewer: main canvas + nav controls + thumbnail strip -->
             <div id="preview-viewer" style="display:none;">
-                <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.5rem;">
-                    <button id="preview-prev-btn" onclick="window.__previewModule?.prevSlide()" style="width:auto; padding:0.25rem 0.75rem;">&#8592;</button>
-                    <span id="preview-slide-counter" style="font-size:0.85rem; color:var(--pico-muted-color);">—</span>
-                    <button id="preview-next-btn" onclick="window.__previewModule?.nextSlide()" style="width:auto; padding:0.25rem 0.75rem;">&#8594;</button>
+                <!-- View mode toggle -->
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.6rem;">
+                    <div style="display:inline-flex; align-items:center; background:var(--bg-card);
+                                border:1px solid var(--pico-muted-border-color); border-radius:6px; overflow:hidden;">
+                        <button id="preview-mode-viewer-btn" onclick="setPreviewMode('viewer')"
+                            style="width:auto; padding:0.25rem 0.75rem; margin:0; font-size:0.78rem;
+                                   font-family:var(--font-sans); border:none; border-radius:0;
+                                   background:var(--accent); color:#131416; font-weight:600;">⬛ Viewer</button>
+                        <button id="preview-mode-grid-btn" onclick="setPreviewMode('grid')"
+                            style="width:auto; padding:0.25rem 0.75rem; margin:0; font-size:0.78rem;
+                                   font-family:var(--font-sans); border:none; border-left:1px solid var(--pico-muted-border-color);
+                                   border-radius:0; background:transparent; color:var(--pico-muted-color);">⊞ Grid</button>
+                    </div>
                 </div>
-                <div id="preview-canvas-wrap" style="width:100%; overflow:hidden; border:1px solid var(--pico-border-color); border-radius:4px;">
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.5rem;">
+                    <div style="display:inline-flex; align-items:center; background:var(--bg-card);
+                                border:1px solid var(--pico-muted-border-color); border-radius:6px; overflow:hidden;">
+                        <button id="preview-prev-btn" onclick="window.__previewModule?.prevSlide()"
+                            style="width:auto; padding:0.3rem 0.8rem; margin:0; background:transparent;
+                                   border:none; border-right:1px solid var(--pico-muted-border-color);
+                                   border-radius:0; font-size:0.9rem; color:var(--text-primary);">&#8592;</button>
+                        <span id="preview-slide-counter"
+                            style="padding:0.3rem 0.9rem; font-size:0.8rem; font-family:var(--font-sans);
+                                   color:var(--pico-muted-color); white-space:nowrap; user-select:none;">—</span>
+                        <button id="preview-next-btn" onclick="window.__previewModule?.nextSlide()"
+                            style="width:auto; padding:0.3rem 0.8rem; margin:0; background:transparent;
+                                   border:none; border-left:1px solid var(--pico-muted-border-color);
+                                   border-radius:0; font-size:0.9rem; color:var(--text-primary);">&#8594;</button>
+                    </div>
+                </div>
+                <div id="preview-canvas-wrap" style="width:100%; overflow:hidden; border:1px solid var(--pico-muted-border-color); border-radius:6px; box-shadow:0 8px 32px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.04);">
                     <canvas id="preview-canvas" style="display:block;"></canvas>
                 </div>
                 <div id="preview-thumb-strip" style="display:flex; gap:0.5rem; overflow-x:auto; margin-top:0.75rem; padding-bottom:0.25rem;"></div>
             </div>
             <div id="preview-grid" class="preview-grid" style="display:none;"></div>
-            <details id="preview-log-details" style="margin-top:1rem;">
-                <summary style="cursor:pointer; color:var(--pico-muted-color); font-size:0.85rem;">Event log</summary>
-                <pre id="preview-log" style="max-height:10rem;overflow:auto;font-size:0.75rem;margin-top:0.5rem;"></pre>
-            </details>
+            <div style="margin-top:1rem; border:1px solid var(--pico-muted-border-color); border-radius:6px; overflow:hidden;">
+                <div style="display:flex; align-items:center; justify-content:space-between;
+                            padding:0.35rem 0.65rem; background:var(--bg-card); cursor:pointer;"
+                     onclick="(function(){const log=document.getElementById('preview-log-body');const btn=document.getElementById('preview-log-toggle');const open=log.style.display!=='none';log.style.display=open?'none':'block';btn.textContent=open?'▸ Show':'▾ Hide';})()">
+                    <span style="font-size:0.78rem; color:var(--pico-muted-color); font-family:var(--font-sans); display:flex; align-items:center; gap:0.4rem;">
+                        <span style="width:5px; height:5px; border-radius:50%; background:var(--pico-muted-color); opacity:0.4;"></span>
+                        Event log
+                    </span>
+                    <span id="preview-log-toggle" style="font-size:0.72rem; color:var(--pico-muted-color); font-family:var(--font-sans);">▸ Show</span>
+                </div>
+                <div id="preview-log-body" style="display:none;">
+                    <pre id="preview-log" style="max-height:10rem; overflow:auto; font-size:0.72rem; margin:0;
+                                                 padding:0.6rem 0.75rem; border-top:1px solid var(--pico-muted-border-color);
+                                                 background:rgba(0,0,0,0.2); border-radius:0;"></pre>
+                </div>
+            </div>
         </section>
 
         </div><!-- /.layout-content -->
@@ -2080,7 +2166,13 @@
         <dialog id="slide-dialog">
             <article style="max-width:800px; max-height:90vh; overflow-y:auto;">
                 <header>
-                    <button aria-label="Close" rel="prev" onclick="closeSlideDialog()"></button>
+                    <button aria-label="Close" rel="prev" onclick="closeSlideDialog()"
+                        style="width:2rem; height:2rem; padding:0; margin:0; display:flex; align-items:center;
+                               justify-content:center; border-radius:6px; font-size:1rem; flex-shrink:0;
+                               background:transparent; border:1px solid var(--pico-muted-border-color);
+                               color:var(--pico-muted-color); transition:border-color 0.15s,color 0.15s;"
+                        onmouseover="this.style.borderColor='#e53935';this.style.color='#e53935'"
+                        onmouseout="this.style.borderColor='var(--pico-muted-border-color)';this.style.color='var(--pico-muted-color)'">✕</button>
                     <div class="slide-nav-header">
                         <button class="slide-nav-btn" id="nav-prev" onclick="navigateSlide(-1)" title="Previous slide (Left arrow)" disabled>&larr; Prev</button>
                         <div class="slide-nav-center">
@@ -2092,13 +2184,15 @@
                 </header>
                 <div id="detail-image"></div>
 
-                <div id="detail-meta" style="margin-top:0.75rem; font-size:0.85rem; color:var(--pico-muted-color); display:flex; gap:1.5rem; flex-wrap:wrap;"></div>
+                <div id="detail-meta" style="margin-top:0.75rem; font-size:0.78rem; color:var(--pico-muted-color);
+                     display:flex; gap:0; flex-wrap:wrap; font-family:var(--font-sans);
+                     border-top:1px solid var(--pico-muted-border-color); padding-top:0.6rem;"></div>
 
                 <div class="ai-actions">
-                    <button class="outline" id="btn-analyze" onclick="runAiAction('analyze')">Analyze</button>
-                    <button class="outline" id="btn-notes" onclick="runAiAction('notes')">Suggest Notes</button>
-                    <button class="outline" id="btn-improvements" onclick="runAiAction('improvements')">Suggest Improvements</button>
-                    <button class="outline" id="btn-slide-chat" onclick="openSlideChat()">&#128172; Chat</button>
+                    <button id="btn-analyze" onclick="runAiAction('analyze')">Analyze</button>
+                    <button id="btn-notes" onclick="runAiAction('notes')">Suggest Notes</button>
+                    <button id="btn-improvements" onclick="runAiAction('improvements')">Suggest Improvements</button>
+                    <button id="btn-slide-chat" onclick="openSlideChat()">&#128172; Chat</button>
                 </div>
 
                 <div id="ai-spinner"><div class="spinner-icon"></div><span id="ai-spinner-label">Analyzing slide...</span></div>
@@ -2112,27 +2206,42 @@
                     <button class="outline hidden" id="save-notes-btn" onclick="saveNotes()">Save to Slide Notes</button>
                 </div>
 
-                <div style="margin-top:1rem;">
-                    <strong>Tags:</strong>
-                    <span id="detail-tags"></span>
-                </div>
-                <div style="margin-top:0.5rem; display:flex; gap:0.5rem; align-items:start;">
-                    <div class="autocomplete-wrapper" style="flex:1;">
-                        <input type="text" id="new-tag-input" placeholder="Add tag..." style="margin-bottom:0;" oninput="onTagInput(this.value)" onkeydown="onTagKeydown(event)">
-                        <div class="autocomplete-list" id="tag-autocomplete"></div>
+                <div style="margin-top:1rem; border-top:1px solid var(--pico-muted-border-color); padding-top:0.6rem;">
+                    <span style="font-size:0.72rem; text-transform:uppercase; letter-spacing:0.05em; opacity:0.5; font-family:var(--font-sans);">Tags</span>
+                    <div style="margin-top:0.35rem; display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap;">
+                        <span id="detail-tags"></span>
+                        <div class="autocomplete-wrapper" style="flex:1; min-width:120px;">
+                            <input type="text" id="new-tag-input" placeholder="Add a tag…"
+                                style="margin:0; padding:0.25rem 0.5rem; font-size:0.8rem; font-family:var(--font-sans); height:auto;"
+                                oninput="onTagInput(this.value)" onkeydown="onTagKeydown(event)">
+                            <div class="autocomplete-list" id="tag-autocomplete"></div>
+                        </div>
+                        <button onclick="addTag()"
+                            style="width:auto; margin:0; padding:0.25rem 0.6rem; font-size:0.8rem;
+                                   font-family:var(--font-sans); background:transparent;
+                                   border:1px solid var(--pico-muted-border-color); color:var(--pico-muted-color);
+                                   border-radius:6px; white-space:nowrap; transition:border-color 0.15s,color 0.15s;"
+                            onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
+                            onmouseout="this.style.borderColor='var(--pico-muted-border-color)';this.style.color='var(--pico-muted-color)'">+ Add</button>
                     </div>
-                    <button class="outline" onclick="addTag()" style="width:auto; white-space:nowrap;">Add Tag</button>
                 </div>
-                <div style="margin-top:1rem;">
-                    <div style="display:flex; align-items:center; justify-content:space-between;">
-                        <strong>Speaker Notes</strong>
-                        <button class="outline" id="notes-history-btn" onclick="toggleNotesHistory()" style="width:auto; padding:0.2rem 0.6rem; font-size:0.75rem;">History</button>
+                <div style="margin-top:1rem; border-top:1px solid var(--pico-muted-border-color); padding-top:0.6rem;">
+                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.4rem;">
+                        <span style="font-size:0.72rem; text-transform:uppercase; letter-spacing:0.05em; opacity:0.5; font-family:var(--font-sans);">Speaker Notes</span>
+                        <button id="notes-history-btn" onclick="toggleNotesHistory()"
+                            style="width:auto; padding:0.15rem 0.5rem; font-size:0.72rem; font-family:var(--font-sans);
+                                   background:transparent; border:1px solid var(--pico-muted-border-color);
+                                   color:var(--pico-muted-color); border-radius:4px; margin:0;">↺ History</button>
                     </div>
-                    <div id="notes-history-panel" class="hidden" style="margin-top:0.5rem; margin-bottom:0.5rem; max-height:200px; overflow-y:auto; border:1px solid var(--pico-muted-border-color); border-radius:4px; padding:0.5rem; font-size:0.8rem;"></div>
-                    <textarea id="detail-notes" rows="5" style="width:100%; font-size:0.85rem; margin-top:0.5rem; resize:vertical;" oninput="updateNotesDirtyState()"></textarea>
-                    <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:0.25rem;">
-                        <button class="outline" id="notes-cancel-btn" onclick="cancelNotesEdit()" style="width:auto; padding:0.3rem 0.7rem; font-size:0.8rem;" disabled>Cancel</button>
-                        <button id="notes-save-btn" onclick="saveEditedNotes()" style="width:auto; padding:0.3rem 0.7rem; font-size:0.8rem;" disabled>Save Notes</button>
+                    <div id="notes-history-panel" class="hidden" style="margin-bottom:0.5rem; max-height:200px; overflow-y:auto; border:1px solid var(--pico-muted-border-color); border-radius:4px; padding:0.5rem; font-size:0.8rem;"></div>
+                    <textarea id="detail-notes" rows="5" style="width:100%; font-size:0.85rem; font-family:var(--font-sans); margin:0; resize:vertical;" oninput="updateNotesDirtyState()"></textarea>
+                    <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:0.35rem;">
+                        <button id="notes-cancel-btn" onclick="cancelNotesEdit()"
+                            style="width:auto; padding:0.3rem 0.7rem; font-size:0.8rem; font-family:var(--font-sans);
+                                   background:transparent; border:1px solid var(--pico-muted-border-color);
+                                   color:var(--pico-muted-color); border-radius:6px; margin:0;" disabled>Cancel</button>
+                        <button id="notes-save-btn" onclick="saveEditedNotes()"
+                            style="width:auto; padding:0.3rem 0.7rem; font-size:0.8rem; font-family:var(--font-sans); margin:0;" disabled>Save Notes</button>
                     </div>
                 </div>
             </article>
@@ -2232,8 +2341,82 @@
     <script type="module">
         import * as preview from './static/preview.js';
         window.__previewModule = preview;
-        window.previewOpen  = () => preview.openFromUI();
-        window.previewForce = () => preview.forceRender();
+        window.previewOpen    = () => preview.openFromUI();
+        window.previewForce   = () => preview.forceRender();
+        window.__previewGoTo  = (i) => preview.goToSlide(i);
+
+        let _previewMode = 'viewer';
+        window.setPreviewMode = async function(mode) {
+            _previewMode = mode;
+            const viewerBtn = document.getElementById('preview-mode-viewer-btn');
+            const gridBtn   = document.getElementById('preview-mode-grid-btn');
+            const canvasWrap = document.getElementById('preview-canvas-wrap');
+            const counter    = canvasWrap?.previousElementSibling;
+            const thumbStrip = document.getElementById('preview-thumb-strip');
+            const gridEl     = document.getElementById('preview-grid');
+
+            const activeStyle  = 'background:var(--accent); color:#131416; font-weight:600;';
+            const inactiveStyle = 'background:transparent; color:var(--pico-muted-color);';
+
+            if (mode === 'grid') {
+                if (viewerBtn) viewerBtn.style.cssText += inactiveStyle;
+                if (gridBtn)   gridBtn.style.cssText   += activeStyle;
+                if (canvasWrap) canvasWrap.style.display = 'none';
+                if (thumbStrip) thumbStrip.style.display = 'none';
+                if (gridEl) { gridEl.style.display = ''; await _buildPreviewGrid(); }
+            } else {
+                if (viewerBtn) viewerBtn.style.cssText += activeStyle;
+                if (gridBtn)   gridBtn.style.cssText   += inactiveStyle;
+                if (canvasWrap) canvasWrap.style.display = '';
+                if (thumbStrip) thumbStrip.style.display = 'flex';
+                if (gridEl) gridEl.style.display = 'none';
+            }
+        };
+
+        async function _buildPreviewGrid() {
+            const viewer = window.__previewModule;
+            const gridEl = document.getElementById('preview-grid');
+            if (!gridEl) return;
+
+            const pptxViewer = preview.getPptxViewer();
+            const slideCount = pptxViewer?.slideCount || 0;
+
+            if (!slideCount || typeof pptxViewer?.renderSlide !== 'function') {
+                gridEl.innerHTML = '<p style="color:var(--pico-muted-color); font-size:0.85rem; grid-column:1/-1;">No slides to display — open a script first.</p>';
+                return;
+            }
+
+            gridEl.innerHTML = '<p style="color:var(--pico-muted-color); font-size:0.85rem; grid-column:1/-1;">Rendering thumbnails…</p>';
+
+            const offscreen = document.createElement('canvas');
+            offscreen.width  = 640;
+            offscreen.height = 360;
+            const restoreIndex = pptxViewer.currentSlideIndex ?? 0;
+            const cards = [];
+
+            for (let i = 0; i < slideCount; i++) {
+                try {
+                    await pptxViewer.renderSlide(i, offscreen);
+                    const dataUrl = offscreen.toDataURL('image/jpeg', 0.82);
+                    cards.push({ index: i, dataUrl });
+                } catch {
+                    cards.push({ index: i, dataUrl: null });
+                }
+            }
+
+            try { await pptxViewer.goToSlide(restoreIndex); } catch { /* ignore */ }
+
+            gridEl.innerHTML = cards.map(({ index, dataUrl }) => `
+                <div class="preview-thumb" onclick="setPreviewMode('viewer'); setTimeout(()=>window.__previewGoTo(${index}),50);"
+                     title="Slide ${index + 1}">
+                    <figure>
+                        ${dataUrl
+                            ? `<img src="${dataUrl}" alt="Slide ${index + 1}" loading="lazy">`
+                            : `<div style="height:120px; background:var(--bg-card); display:flex; align-items:center; justify-content:center; color:var(--pico-muted-color); font-size:0.75rem;">No preview</div>`}
+                        <figcaption>${index + 1}</figcaption>
+                    </figure>
+                </div>`).join('');
+        }
         window.previewStop  = () => preview.closeSession();
         window.previewGetToken = () => preview.getSessionToken();
 
@@ -3460,9 +3643,9 @@
             const metaCreated = fmtDate(slide.slide_created_date) || '&mdash;';
             const metaUpdated = fmtDate(slide.updated_at) || '&mdash;';
             metaDiv.innerHTML =
-                `<span><strong>Author:</strong> ${metaAuthor}</span>` +
-                `<span><strong>Created:</strong> ${metaCreated}</span>` +
-                `<span><strong>Last Updated:</strong> ${metaUpdated}</span>`;
+                `<span style="display:flex;align-items:center;gap:0.3rem;padding-right:1rem;margin-right:1rem;border-right:1px solid var(--pico-muted-border-color);"><span style="opacity:0.5;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.05em;">Author</span> ${metaAuthor}</span>` +
+                `<span style="display:flex;align-items:center;gap:0.3rem;padding-right:1rem;margin-right:1rem;border-right:1px solid var(--pico-muted-border-color);"><span style="opacity:0.5;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.05em;">Created</span> ${metaCreated}</span>` +
+                `<span style="display:flex;align-items:center;gap:0.3rem;"><span style="opacity:0.5;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.05em;">Updated</span> ${metaUpdated}</span>`;
 
             // Fetch tags
             await refreshTags(slideId);

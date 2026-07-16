@@ -231,3 +231,31 @@
     font-size: 0.875rem;
     color: var(--pico-muted-color, #888);
 }
+
+/* ── Slide thumb strip buttons ───────────────────────────────────────── */
+.preview-thumb-btn {
+    min-width: 2rem;
+    padding: 0.2rem 0.4rem;
+    font-size: 0.75rem;
+    font-family: var(--font-sans, 'DM Sans', system-ui, sans-serif);
+    width: auto;
+    margin: 0;
+    background: transparent;
+    border: 1px solid var(--pico-muted-border-color, #444);
+    color: var(--pico-muted-color, #888);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
+    flex-shrink: 0;
+}
+.preview-thumb-btn:hover {
+    border-color: var(--accent, #00c2de);
+    color: var(--accent, #00c2de);
+    background: rgba(0, 194, 222, 0.06);
+}
+.preview-thumb-btn.active {
+    background: var(--accent, #00c2de);
+    border-color: var(--accent, #00c2de);
+    color: #131416;
+    font-weight: 600;
+}
