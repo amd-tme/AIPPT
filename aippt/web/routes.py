@@ -142,11 +142,37 @@ async def list_decks(request: Request):
         "outline_path, source_script_path, source_engine, source_theme, "
         "source_generated_at FROM decks ORDER BY updated_at DESC"
     ).fetchall()
+    # First slide id per deck for thumbnail
+    first_slides = {
+        row["deck_id"]: row["slide_id"]
+        for row in conn.execute(
+            "SELECT deck_id, MIN(id) AS slide_id FROM slides GROUP BY deck_id"
+        ).fetchall()
+    }
+    first_slide_updated = {}
+    if first_slides:
+        placeholders = ",".join("?" * len(first_slides))
+        rows = conn.execute(
+            f"SELECT id, image_path, updated_at FROM slides WHERE id IN ({placeholders})",
+            list(first_slides.values()),
+        ).fetchall()
+        for row in rows:
+            first_slide_updated[row["id"]] = (row["image_path"], row["updated_at"])
     conn.close()
     result = []
     for d in decks:
         deck = dict(d)
         deck["display_name"] = display_name(deck["name"])
+        sid = first_slides.get(deck["id"])
+        if sid:
+            img_path, img_updated = first_slide_updated.get(sid, (None, None))
+            if img_path:
+                v = img_updated or ""
+                deck["thumbnail_url"] = f"slide-image/{sid}?v={v}"
+            else:
+                deck["thumbnail_url"] = None
+        else:
+            deck["thumbnail_url"] = None
         # Derive origin block inline (avoid per-row DB query)
         outline_path = deck.pop("outline_path", None)
         script_path = deck.pop("source_script_path", None)

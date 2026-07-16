@@ -294,15 +294,7 @@
             color: var(--accent);
         }
 
-        /* Full-page circuit grid — ported from dcgpu-hub */
-        html {
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Cline x1='0' y1='40' x2='80' y2='40' stroke='%2300C2DE' stroke-width='0.4' opacity='0.1'/%3E%3Cline x1='40' y1='0' x2='40' y2='80' stroke='%2300C2DE' stroke-width='0.4' opacity='0.1'/%3E%3Ccircle cx='40' cy='40' r='1.5' fill='%2300C2DE' opacity='0.2'/%3E%3Ccircle cx='0' cy='0' r='1' fill='%2300C2DE' opacity='0.12'/%3E%3Ccircle cx='80' cy='0' r='1' fill='%2300C2DE' opacity='0.12'/%3E%3Ccircle cx='0' cy='80' r='1' fill='%2300C2DE' opacity='0.12'/%3E%3Ccircle cx='80' cy='80' r='1' fill='%2300C2DE' opacity='0.12'/%3E%3Crect x='18' y='18' width='4' height='4' rx='0.5' fill='none' stroke='%2300C2DE' stroke-width='0.3' opacity='0.08'/%3E%3Crect x='58' y='58' width='4' height='4' rx='0.5' fill='none' stroke='%2300C2DE' stroke-width='0.3' opacity='0.08'/%3E%3C/svg%3E");
-            background-size: 80px 80px;
-            background-repeat: repeat;
-        }
-        .theme-amd-light html {
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Cline x1='0' y1='40' x2='80' y2='40' stroke='%23999999' stroke-width='0.4' opacity='0.25'/%3E%3Cline x1='40' y1='0' x2='40' y2='80' stroke='%23999999' stroke-width='0.4' opacity='0.25'/%3E%3Ccircle cx='40' cy='40' r='1.5' fill='%23999999' opacity='0.3'/%3E%3Ccircle cx='0' cy='0' r='1' fill='%23999999' opacity='0.15'/%3E%3Ccircle cx='80' cy='0' r='1' fill='%23999999' opacity='0.15'/%3E%3Ccircle cx='0' cy='80' r='1' fill='%23999999' opacity='0.15'/%3E%3Ccircle cx='80' cy='80' r='1' fill='%23999999' opacity='0.15'/%3E%3Crect x='18' y='18' width='4' height='4' rx='0.5' fill='none' stroke='%23999999' stroke-width='0.3' opacity='0.1'/%3E%3Crect x='58' y='58' width='4' height='4' rx='0.5' fill='none' stroke='%23999999' stroke-width='0.3' opacity='0.1'/%3E%3C/svg%3E");
-        }
+        /* Full-page circuit grid removed — plain dark surface */
 
         .no-transitions,
         .no-transitions *,
@@ -368,6 +360,135 @@
             color: var(--pico-primary-inverse);
             font-size: 0.8rem;
         }
+        /* ── Deck card grid ───────────────────────────────────────────────── */
+        .deck-card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 1rem;
+            margin-top: 1.25rem;
+        }
+        .deck-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            cursor: pointer;
+            transition: border-color 0.18s, box-shadow 0.18s;
+            position: relative;
+        }
+        .deck-card:hover {
+            border-color: var(--accent);
+            box-shadow: 0 8px 32px rgba(0,194,222,0.10);
+        }
+        .deck-card-thumb {
+            width: 100%;
+            aspect-ratio: 16/9;
+            background: #1a1a2e;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+        .deck-card-thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .deck-card-thumb-placeholder {
+            font-size: 2rem;
+            opacity: 0.18;
+            user-select: none;
+        }
+        .deck-card-body {
+            padding: 0.75rem 0.85rem 0.65rem;
+        }
+        .deck-card-title {
+            font-weight: 600;
+            font-size: 0.9rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-bottom: 0.3rem;
+        }
+        .deck-card-meta {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .deck-card-badge {
+            font-size: 0.7rem;
+            font-weight: 600;
+            background: rgba(0,194,222,0.12);
+            color: var(--accent);
+            border-radius: var(--radius-full);
+            padding: 0.1rem 0.5rem;
+        }
+        .deck-card-actions {
+            padding: 0.5rem 0.85rem 0.65rem;
+            border-top: 1px solid var(--border-subtle);
+            display: flex;
+            gap: 0.4rem;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .deck-card-action-btn {
+            font-size: 0.75rem;
+            padding: 0.2rem 0.55rem;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border-subtle);
+            background: transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: border-color 0.15s, color 0.15s;
+            width: auto;
+            margin: 0;
+        }
+        .deck-card-action-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+        .deck-card-action-btn.danger:hover {
+            border-color: #ED1C24;
+            color: #ED1C24;
+        }
+        /* "Create new" card */
+        .deck-card-new {
+            border-style: dashed;
+            border-color: var(--border-subtle);
+            background: transparent;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            min-height: 180px;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            transition: border-color 0.18s, color 0.18s, background 0.18s;
+        }
+        .deck-card-new:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: rgba(0,194,222,0.04);
+            box-shadow: none;
+        }
+        .deck-card-new-icon {
+            font-size: 1.75rem;
+            opacity: 0.5;
+        }
+        .deck-card-origin-badge {
+            font-size: 0.65rem;
+            background: var(--pico-primary-background, rgba(0,194,222,0.15));
+            color: var(--accent);
+            padding: 0.1rem 0.4rem;
+            border-radius: var(--radius-full);
+            margin-left: 0.3rem;
+            vertical-align: middle;
+        }
+
         .deck-table-wrap {
             border: 1px solid var(--border-subtle);
             border-radius: var(--radius-md);
@@ -1363,21 +1484,7 @@
                     <span class="step-detail"></span>
                 </div>
             </div>
-            <div class="deck-table-wrap">
-                <table class="deck-table">
-                    <thead>
-                        <tr>
-                            <th>Name</th>
-                            <th>Slides</th>
-                            <th>Author</th>
-                            <th>Created</th>
-                            <th>Updated</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="deck-tbody"></tbody>
-                </table>
-            </div>
+            <div class="deck-card-grid" id="deck-card-grid"></div>
         </section>
 
         <!-- Slide browser view -->
@@ -2173,34 +2280,56 @@
             const resp = await fetch('api/decks');
             if (!resp.ok) { toast('Error loading decks'); return; }
             const decks = await resp.json();
-            const tbody = document.getElementById('deck-tbody');
-            tbody.innerHTML = decks.map(d => {
+            const grid = document.getElementById('deck-card-grid');
+
+            // "Create new" card always first
+            const newCard = `
+                <div class="deck-card deck-card-new" onclick="document.getElementById('create-panel').open = true; document.getElementById('create-panel').scrollIntoView({behavior:'smooth'});">
+                    <div class="deck-card-new-icon">＋</div>
+                    <span>Create Deck from Outline</span>
+                </div>`;
+
+            const deckCards = decks.map(d => {
                 const origin = d.origin || {};
                 const hasSource = origin.kind === 'outline' || origin.kind === 'script';
                 const originBadge = origin.kind && origin.kind !== 'upload'
-                    ? `<span title="Origin: ${esc(origin.kind)} → ${esc(origin.engine || '?')}" style="font-size:0.7rem; background:var(--pico-primary-background); color:var(--pico-primary-inverse); padding:0.1rem 0.4rem; border-radius:1rem; margin-left:0.4rem; vertical-align:middle;">${esc(origin.kind)}</span>`
+                    ? `<span class="deck-card-origin-badge" title="Origin: ${esc(origin.kind)} → ${esc(origin.engine || '?')}">${esc(origin.kind)}</span>`
                     : '';
+                const thumb = d.thumbnail_url
+                    ? `<img src="${esc(d.thumbnail_url)}" alt="" loading="lazy">`
+                    : `<span class="deck-card-thumb-placeholder">▦</span>`;
                 const regenBtn = hasSource && !viewOnly
-                    ? `<button class="outline" style="width:auto; padding:0.3rem 0.7rem; font-size:0.8rem; margin-left:0.3rem;" onclick="showRegenConfirm(${d.id}, '${escAttr(d.display_name || d.name)}', ${JSON.stringify(origin).replace(/"/g, '&quot;')})">&#x21BB; Regenerate</button>`
+                    ? `<button class="deck-card-action-btn" onclick="event.stopPropagation(); showRegenConfirm(${d.id}, '${escAttr(d.display_name || d.name)}', ${JSON.stringify(origin).replace(/"/g, '&quot;')})">↻ Regen</button>`
+                    : '';
+                const chatBtn = !viewOnly
+                    ? `<button class="deck-card-action-btn" onclick="event.stopPropagation(); browseDeckAndChat(${d.id}, '${escAttr(d.display_name || d.name)}')">💬 Chat</button>`
+                    : '';
+                const deleteBtn = !viewOnly
+                    ? `<button class="deck-card-action-btn danger" onclick="event.stopPropagation(); promptDeleteDeck(${d.id}, '${escAttr(d.display_name || d.name)}', ${d.slide_count})">Delete</button>`
                     : '';
                 return `
-                <tr class="deck-row-reveal" style="cursor:pointer" onclick="browseDeck(${d.id}, '${escAttr(d.display_name || d.name)}')">
-                    <td><strong>${esc(d.display_name || d.name)}</strong>${originBadge}</td>
-                    <td><span class="stat-number">${d.slide_count}</span></td>
-                    <td>${esc(d.author || '')}</td>
-                    <td>${fmtDate(d.created_date || d.cataloged_at)}</td>
-                    <td>${fmtDate(d.updated_at)}</td>
-                    <td onclick="event.stopPropagation()">
-                        <button class="outline" style="width:auto; padding:0.3rem 0.7rem; font-size:0.8rem;" onclick="downloadDeck(${d.id})">Download</button>
-                        <button class="outline" style="width:auto; padding:0.3rem 0.7rem; font-size:0.8rem; margin-left:0.3rem;" onclick="writeNotesToDeck(${d.id})">Write Notes to Deck</button>
-                        ${!viewOnly ? `<button class="outline" style="width:auto; padding:0.3rem 0.7rem; font-size:0.8rem; margin-left:0.3rem;" onclick="event.stopPropagation(); browseDeckAndChat(${d.id}, '${escAttr(d.display_name || d.name)}')">&#128172; Chat</button>` : ''}
+                <div class="deck-card deck-row-reveal" onclick="browseDeck(${d.id}, '${escAttr(d.display_name || d.name)}')">
+                    <div class="deck-card-thumb">${thumb}</div>
+                    <div class="deck-card-body">
+                        <div class="deck-card-title">${esc(d.display_name || d.name)}${originBadge}</div>
+                        <div class="deck-card-meta">
+                            <span class="deck-card-badge">${d.slide_count} slides</span>
+                            <span>${fmtDate(d.updated_at)}</span>
+                        </div>
+                    </div>
+                    <div class="deck-card-actions" onclick="event.stopPropagation()">
+                        <button class="deck-card-action-btn" onclick="downloadDeck(${d.id})">↓ Download</button>
+                        <button class="deck-card-action-btn" onclick="writeNotesToDeck(${d.id})">✎ Notes</button>
+                        ${chatBtn}
                         ${regenBtn}
-                        ${!viewOnly ? `<button class="outline admin-delete-btn" style="width:auto; padding:0.3rem 0.7rem; font-size:0.8rem; margin-left:0.3rem;" onclick="promptDeleteDeck(${d.id}, '${escAttr(d.display_name || d.name)}', ${d.slide_count})">Delete</button>` : ''}
-                    </td>
-                </tr>`;
+                        ${deleteBtn}
+                    </div>
+                </div>`;
             }).join('');
+
+            grid.innerHTML = newCard + deckCards;
             requestAnimationFrame(() => {
-                tbody.querySelectorAll('.deck-row-reveal').forEach(row => row.classList.add('visible'));
+                grid.querySelectorAll('.deck-row-reveal').forEach(card => card.classList.add('visible'));
             });
         }
 
