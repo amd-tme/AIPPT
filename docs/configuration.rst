@@ -346,7 +346,22 @@ cache and MinIO is the source of truth. The catalog is restored from the
 ``catalog/slides.db`` snapshot on startup and a debounced snapshot is pushed
 back after catalog writes; blob assets (decks, slide images, sources, output)
 are uploaded after they are written and fetched back on a cold pod before
-serving. The ``fs`` backend keeps everything on the local volume as before.
+serving. The corporate template is also restored on startup from
+``templates/corp.pptx`` (see the template path setting below). The ``fs``
+backend keeps everything on the local volume as before.
+
+Template Path
+^^^^^^^^^^^^^
+
+- ``AIPPT_TEMPLATE_PATH`` -- Absolute path to the default corporate template.
+  When set (and non-blank) it takes precedence over the ``default_template``
+  key in ``templates.yaml``, so container deployments can point at the template
+  restored into the writable data volume (e.g.
+  ``/app/data/templates/corp.pptx``) while local development keeps using the
+  committed ``templates.yaml`` default. The corporate template is proprietary
+  and gitignored, so in ``s3`` deployments it is stored in MinIO under
+  ``templates/corp.pptx`` and restored to this path on startup (best-effort — a
+  miss leaves a clear 404 on deck creation rather than blocking startup).
 
 To seed object storage from an existing local data directory (one-time
 cutover), use ``aippt storage backfill`` (``--dry-run`` to preview)::

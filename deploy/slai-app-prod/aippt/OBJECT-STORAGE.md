@@ -44,6 +44,30 @@ python aippt.py storage backfill --data-dir /app/data             # upload
 This uploads `uploads/`, `images/`, `output/` and snapshots the catalog to
 `catalog/slides.db`. `backups/` and the `$HOME` cache stay node-local.
 
+### 4. Upload the corporate template (one-time)
+
+The corporate template is proprietary and gitignored, so `backfill` does not
+cover it (it lives under `templates/`, not the `uploads/`/`images/`/`output/`
+data dirs). Upload it once to `templates/corp.pptx` under the prefix so the pod
+can restore it on startup:
+
+```bash
+# With MINIO_* env set (same as backfill above) and the template on disk:
+python - <<'PY'
+from aippt.config import load_storage_config
+from aippt.storage import build_storage
+from aippt.templates_store import TEMPLATE_SNAPSHOT_KEY
+storage = build_storage(load_storage_config("s3"), fs_root=".")
+with open("templates/corp.pptx", "rb") as fh:
+    storage.put(TEMPLATE_SNAPSHOT_KEY, fh,
+                content_type="application/vnd.openxmlformats-officedocument.presentationml.presentation")
+print("uploaded", TEMPLATE_SNAPSHOT_KEY)
+PY
+```
+
+To swap the template later, re-upload to the same key — no image rebuild needed;
+the next pod start restores the new copy.
+
 ## TLS trust
 
 The image bakes the AMD Corporate Root CA + `AMD-com Issuing CA` (from
@@ -55,7 +79,11 @@ chain, update `deploy/ca/amd-root-ca.pem` and rebuild.
 ## Runtime behavior
 
 - **Startup:** the catalog is restored from `catalog/slides.db` into
-  `/app/data/slides.db` before the server opens it (empty start if absent).
+  `/app/data/slides.db` before the server opens it (empty start if absent). The
+  corporate template is restored from `templates/corp.pptx` into
+  `/app/data/templates/corp.pptx` (the path `AIPPT_TEMPLATE_PATH` points at);
+  best-effort, so a miss leaves a clear 404 on deck creation rather than
+  blocking startup.
 - **Writes:** decks, images, sources, and output are uploaded after they are
   produced; catalog mutations trigger a debounced snapshot (single-writer —
   keep `replicas: 1`).
