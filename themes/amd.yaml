@@ -12,26 +12,26 @@ description: Black/white/gray with teal accent, matching corp.pptx template
 colors:
   background: "000000"
   background_alt: "000000"
-  surface: "636466"
+  surface: "404040"
   text_primary: "FFFFFF"
-  text_secondary: "9D9FA2"
-  text_body: "D5D5D5"
+  text_secondary: "A6A6A6"
+  text_body: "D9D9D9"
   accent: "00C2DE"
   accent_alt: "C1A968"
   warning: "ED1C24"
 
 fonts:
-  heading: "Arial"
+  heading: "Klavika"
   body: "Arial"
   mono: "Consolas"
 
 logo:
   path: "themes/assets/amd-wordmark.png"
-  position: "bottom-right"
-  width_inches: 1.26
-  height_inches: 0.36
-  x_inches: 11.83           # SW(13.33) - 1.5
-  y_inches: 7.0             # SH(7.5) - 0.5
+  position: "top-left"
+  width_inches: 0.9
+  height_inches: 0.26
+  x_inches: 0.46            # top-left margin
+  y_inches: 0.4             # top-left margin
 
 slide:
   layout: "LAYOUT_WIDE"      # 13.33" × 7.5" — all guide coordinates use this size
@@ -44,10 +44,10 @@ footer:
 
 typography:
   title_size: 36
-  heading_size: 28
+  heading_size: 32
   subtitle_size: 18
-  body_size: 18
-  small_size: 14
+  body_size: 14
+  small_size: 11
   eyebrow_size: 8
   eyebrow_bold: false
   eyebrow_char_spacing: 6
@@ -56,7 +56,7 @@ typography:
   stat_label_size: 16
   stat_desc_size: 13
   code_size: 14
-  footer_size: 10
+  footer_size: 8
 
 data_colors:
   series_1: ""

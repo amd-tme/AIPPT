@@ -48,7 +48,13 @@ _LAYOUT_RE = re.compile(r'^LAYOUT:\s*(.+)$')
 _IMAGE_RE = re.compile(r'^IMAGE:\s*(.+)$')
 
 # Valid layout types (imported from layouts to avoid circular dep at module level)
-_VALID_LAYOUT_TYPES = {'bullet', 'two_column', 'numbered', 'basic', 'diagram'}
+_VALID_LAYOUT_TYPES = {
+    'bullet', 'two_column', 'numbered', 'basic', 'diagram',
+    'title_alt', 'section_content', 'two_col_numbered',
+    'picture_caption', 'four_image_gallery', 'three_col_content',
+    'three_col_image_text', 'three_image_gallery', 'two_image_gallery',
+    'cinematic', 'split_image_content', 'title_with_image',
+}
 
 
 def _extract_directives(content_lines: List[str]) -> tuple:
