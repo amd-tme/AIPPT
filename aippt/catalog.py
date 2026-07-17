@@ -95,6 +95,7 @@ def get_db(db_path: str = "slides.db") -> sqlite3.Connection:
         ("author TEXT NOT NULL DEFAULT ''", "author"),
         ("slide_created_date TEXT DEFAULT NULL", "slide_created_date"),
         ("layout_type TEXT DEFAULT NULL", "layout_type"),
+        ("image_content_hash TEXT DEFAULT NULL", "image_content_hash"),
     ):
         if col_name not in existing_slide_cols:
             conn.execute(f"ALTER TABLE slides ADD COLUMN {col_ddl}")

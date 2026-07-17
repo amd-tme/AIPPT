@@ -24,6 +24,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Set
 
+from aippt.config import base_path_prefix
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -86,6 +88,17 @@ class Renderer:
         # --- Step 1: run the script from the project root ---
         cmd, stage = self._build_command(script)
         env = {**os.environ, "AIPPT_PREVIEW_OUT": str(out)}
+        # Staged (writable-copy) scripts live outside project_root, so Node's
+        # upward node_modules walk never reaches the repo's. Point NODE_PATH at
+        # it explicitly so bare specifiers (e.g. "pptxgenjs") resolve wherever
+        # the script sits. Same idea for Python scripts via PYTHONPATH.
+        if self.project_root:
+            node_modules = os.path.join(self.project_root, "node_modules")
+            if os.path.isdir(node_modules):
+                existing = env.get("NODE_PATH", "")
+                env["NODE_PATH"] = node_modules + (os.pathsep + existing if existing else "")
+            existing_py = env.get("PYTHONPATH", "")
+            env["PYTHONPATH"] = str(self.project_root) + (os.pathsep + existing_py if existing_py else "")
         result = self._run(cmd, cwd=self.project_root, env=env)
         if result.returncode != 0:
             return RenderResult(
@@ -371,11 +384,14 @@ class PreviewSession:
 
         if result.success:
             self.last_pptx_path = result.pptx_path
+            # Prefix with BASE_PATH so PptxViewJS fetches the PPTX against the
+            # correct origin path — under the /aippt/ ingress a root-relative
+            # /api/... URL 404s (same class of bug as the preview ws_url).
             payload = {
                 "event": "render_complete",
                 "ts": time.time(),
                 "duration_ms": result.duration_ms,
-                "pptx_url": f"/api/preview/sessions/{self.token}/pptx",
+                "pptx_url": f"{base_path_prefix()}/api/preview/sessions/{self.token}/pptx",
                 "warnings": result.warnings,
             }
             self._state = _SessionState(event="render_complete", payload=payload)
@@ -422,11 +438,17 @@ class SessionRegistry:
         allow_dirs: Iterable[str],
         max_parallel: int = 2,
         renderer: Optional[Renderer] = None,
+        out_base: str = "output/.preview",
     ):
         self._allow_dirs = [str(Path(d).resolve()) for d in allow_dirs]
         self._semaphore = asyncio.Semaphore(max_parallel)
         self._renderer = renderer or Renderer()
         self._sessions: Dict[str, PreviewSession] = {}
+        # Base dir for per-script preview artifacts. Must be writable — under a
+        # read-only root filesystem (container deploys) point this at the data
+        # volume, e.g. ``/app/data/.preview``. Default is cwd-relative for
+        # local dev.
+        self._out_base = out_base
 
     # --- allow-list --------------------------------------------------------
 
@@ -439,14 +461,18 @@ class SessionRegistry:
 
     # --- CRUD --------------------------------------------------------------
 
-    async def create(self, script_path: str, out_base: str = "output/.preview") -> PreviewSession:
+    async def create(self, script_path: str, out_base: Optional[str] = None) -> PreviewSession:
         """Create (or return existing) session for *script_path*.
+
+        *out_base* overrides the registry's configured base for this session;
+        when omitted it falls back to ``self._out_base``.
 
         Raises:
             ValueError: script path is outside the allow-list.
             FileNotFoundError: script does not exist.
         """
         resolved = str(Path(script_path).resolve())
+        out_base = out_base if out_base is not None else self._out_base
 
         if not self._check_allowed(resolved):
             raise ValueError(

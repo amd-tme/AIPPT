@@ -20,7 +20,15 @@ from typing import Generator, Iterator, List, Optional
 import sqlite3
 
 from aippt.llm import LLMClient
-from aippt.patch import extract_patches, apply_patch, revert_by_id, revert_last, Patch
+from aippt.patch import (
+    extract_patches,
+    apply_patch,
+    revert_by_id,
+    revert_last,
+    slides_touched_by_patch,
+    Patch,
+)
+from aippt.thumbnails import invalidate_slides
 
 logger = logging.getLogger(__name__)
 
@@ -56,25 +64,26 @@ Rules for patches:
 - After the block, briefly explain what you changed and why.
 """
 
-_EDIT_MODE_ADDENDUM_GENERIC = """\
-When the user asks you to make a specific text change, emit exactly one fenced JSON block:
+_EDIT_MODE_ADDENDUM_SLIDE = """\
+This deck has no source script — edits are applied directly to the slide's
+stored text. When the user asks you to make a specific text change, emit
+exactly one fenced patch block in this format:
 
-```json
-{
-  "patch": {
-    "script": "<absolute path shown in [Script: ...] header>",
-    "anchor": "<unique function name or line substring near the change>",
-    "old": "<exact text to replace — copy verbatim from the script above>",
-    "new": "<replacement text>",
-    "summary": "<one line: what and why>"
-  }
-}
+```patch
+slide: <slide id from the context block>
+field: <title | content_text | notes>
+---
+<exact text to replace — copy verbatim from the slide content above>
+===
+<replacement text>
 ```
 
 Rules for patches:
-- Use the exact script path shown in the [Script: ...] header above — copy it verbatim.
-- The "old" text MUST match the script verbatim — copy it exactly.
+- Use the numeric slide id shown as "id=" / "slide id:" in the context block above.
+- "field" must be one of: title, content_text, notes.
+- The old text (before "===") MUST match the slide content verbatim — copy it exactly.
 - Make one focused change per block.
+- Do NOT emit a ```json script patch — this deck has no script file to patch.
 - Do not emit a patch block if the user is only asking a question or requesting analysis.
 - After the block, briefly explain what you changed and why.
 """
@@ -91,7 +100,7 @@ def _system_prompt(mode: str, script_path: Optional[str] = None) -> str:
         if script_path:
             addendum = _EDIT_MODE_ADDENDUM_TEMPLATE.format(script_path=script_path)
         else:
-            addendum = _EDIT_MODE_ADDENDUM_GENERIC
+            addendum = _EDIT_MODE_ADDENDUM_SLIDE
     else:
         addendum = _ASK_MODE_ADDENDUM
     return _SYSTEM_PROMPT_BASE + "\n" + addendum
@@ -227,11 +236,29 @@ class ChatService:
             return False, "No patch on this message"
 
         patches = [Patch(**p) for p in json.loads(row["patch_json"])]
+
+        # If the conversation has an authoritative script path, redirect any
+        # script patch that targets the wrong file. LLMs occasionally hallucinate
+        # a wrong deck number in the path (e.g. /1/ instead of /3/) while getting
+        # the old/new text exactly right — correcting the path silently is safe
+        # because the old text match is the real integrity check.
+        conv_row = self.conn.execute(
+            "SELECT script_path FROM chat_conversations WHERE id = ?",
+            (row["conversation_id"],),
+        ).fetchone()
+        authoritative_script = conv_row["script_path"] if conv_row else None
+
         errors = []
         history_ids = []
+        touched: list[int] = []
         for patch in patches:
+            if authoritative_script and patch.is_script_patch:
+                patch.script_path = authoritative_script
             patch.conversation_id = row["conversation_id"]
             patch.message_id = message_id
+            # Collect affected slide ids *before* the write, while the old text
+            # is still present to match, so we can invalidate their thumbnails.
+            touched.extend(slides_touched_by_patch(patch, self.conn))
             try:
                 history_id = apply_patch(patch, self.conn, source="chat", cwd=self.db_cwd)
                 history_ids.append(history_id)
@@ -247,6 +274,10 @@ class ChatService:
             (history_ids[0] if history_ids else None, message_id),
         )
         self.conn.commit()
+
+        # Invalidate the changed slides' thumbnails so the UI falls back to a
+        # placeholder instead of a stale image. Best-effort: never fails apply.
+        self._invalidate_thumbnails(touched)
         return True, "ok"
 
     def revert_message_patch(self, message_id: int) -> tuple[bool, str]:
@@ -266,6 +297,21 @@ class ChatService:
             return False, "Patch has not been applied yet"
         if not row["patch_json"]:
             return False, "No patch on this message"
+
+        # Collect the slides this revert will change *before* the write. After
+        # apply, the slide content holds the patch's ``new`` text; matching on
+        # that finds the same rows the revert rewrites back to ``old``.
+        touched: list[int] = []
+        try:
+            for p in json.loads(row["patch_json"]):
+                patch = Patch(**p)
+                if patch.is_script_patch:
+                    probe = Patch(script_path=patch.script_path, old=patch.new, new=patch.old)
+                    touched.extend(slides_touched_by_patch(probe, self.conn))
+                elif patch.slide_id is not None:
+                    touched.append(int(patch.slide_id))
+        except (ValueError, TypeError, json.JSONDecodeError):
+            touched = []
 
         history_id = row["edit_history_id"]
         if history_id is not None:
@@ -291,7 +337,23 @@ class ChatService:
             (message_id,),
         )
         self.conn.commit()
+
+        # Invalidate the reverted slides' thumbnails (best-effort).
+        self._invalidate_thumbnails(touched)
         return True, "ok"
+
+    def _invalidate_thumbnails(self, slide_ids: list[int]) -> None:
+        """Null image_path/hash for changed slides so the UI drops to a
+        placeholder rather than showing a stale thumbnail. Never raises."""
+        if not slide_ids:
+            return
+        try:
+            db_file = self.conn.execute("PRAGMA database_list").fetchone()[2]
+        except sqlite3.Error:
+            return
+        if not db_file:
+            return
+        invalidate_slides(slide_ids, db_path=db_file)
 
     # ------------------------------------------------------------------
     # Slide / deck context helpers
@@ -304,7 +366,11 @@ class ChatService:
             content = Path(script_path).read_text(encoding="utf-8")
         except OSError:
             return ""
-        return f"[Script: {script_path}]\n```javascript\n{content}\n```\n"
+        return (
+            f"[CURRENT SCRIPT STATE — authoritative, overrides any prior context]\n"
+            f"[Script: {script_path}]\n"
+            f"```javascript\n{content}\n```\n"
+        )
 
     def _build_deck_context(self, deck_id: int) -> str:
         """Return a compact summary of every slide in *deck_id* for deck-level chat."""
@@ -396,10 +462,15 @@ class ChatService:
         conv = self.get_conversation(conversation_id)
         conv_script_path = conv.get("script_path") if conv else None
 
-        if slide_id:
-            context = self._build_slide_context(slide_id)
-        elif conv_script_path:
+        if conv_script_path:
+            # Script-origin deck: always lead with the full script so the LLM
+            # can produce verbatim patches. Append slide context on top when a
+            # specific slide is scoped — don't let slide_id replace the script.
             context = self._build_script_context(conv_script_path)
+            if slide_id:
+                context = context + "\n\n" + self._build_slide_context(slide_id)
+        elif slide_id:
+            context = self._build_slide_context(slide_id)
         else:
             context = self._build_deck_context(conv["deck_id"]) if conv else ""
         full_user_content = (

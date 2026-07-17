@@ -41,6 +41,35 @@ _JSON_PATCH_BLOCK_RE = re.compile(
     re.DOTALL,
 )
 
+
+def _sanitize_json_capture(s: str) -> str:
+    """Escape literal control characters that LLMs sometimes emit inside JSON strings.
+
+    JSON spec forbids unescaped U+0000–U+001F inside string values. LLMs
+    occasionally emit a literal newline (e.g. in the "new" field) instead of
+    the \\n escape sequence, causing json.loads to raise. This pass fixes that
+    without touching structural characters outside strings.
+    """
+    _CTRL_MAP = {"\n": "\\n", "\r": "\\r", "\t": "\\t"}
+    result: list[str] = []
+    in_string = False
+    skip_next = False
+    for ch in s:
+        if skip_next:
+            result.append(ch)
+            skip_next = False
+        elif ch == "\\" and in_string:
+            result.append(ch)
+            skip_next = True
+        elif ch == '"':
+            result.append(ch)
+            in_string = not in_string
+        elif in_string and ch in _CTRL_MAP:
+            result.append(_CTRL_MAP[ch])
+        else:
+            result.append(ch)
+    return "".join(result)
+
 _EDIT_HISTORY_DIR = ".aippt"
 _EDIT_HISTORY_FILE = "edit-history.jsonl"
 
@@ -78,8 +107,18 @@ def extract_patches(text: str) -> List[Patch]:
 
     # New JSON format
     for m in _JSON_PATCH_BLOCK_RE.finditer(text):
+        raw = m.group(1)
         try:
-            data = json.loads(m.group(1))
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            # LLMs sometimes emit literal newlines inside JSON strings. Try once
+            # more after escaping control characters within string values.
+            try:
+                data = json.loads(_sanitize_json_capture(raw))
+            except json.JSONDecodeError as exc:
+                logger.warning("Skipping malformed JSON patch block: %s", exc)
+                continue
+        try:
             p_data = data.get("patch", {})
             if not p_data.get("script") or not p_data.get("old") or "new" not in p_data:
                 logger.warning("Skipping JSON patch block: missing required keys")
@@ -91,7 +130,7 @@ def extract_patches(text: str) -> List[Patch]:
                 new=p_data["new"],
                 summary=p_data.get("summary", ""),
             ))
-        except (json.JSONDecodeError, KeyError) as exc:
+        except (KeyError, AttributeError) as exc:
             logger.warning("Skipping malformed JSON patch block: %s", exc)
 
     # Legacy ```patch format (fallback)
@@ -145,6 +184,94 @@ def _parse_legacy_patch_block(body: str) -> Patch:
         old_text=old_text.strip("\n"),
         new_text=new_text.strip("\n"),
     )
+
+
+# Quoted string literals inside a code snippet: 'x', "x", or `x`.
+_QUOTED_LITERAL_RE = re.compile(r"""(['"`])(.*?)\1""", re.DOTALL)
+
+
+def _extract_literals(text: Optional[str]) -> set[str]:
+    """Return the non-empty quoted string literals in *text*."""
+    if not text:
+        return set()
+    return {
+        m.group(2).strip()
+        for m in _QUOTED_LITERAL_RE.finditer(text)
+        if m.group(2).strip()
+    }
+
+
+def slides_touched_by_patch(patch: Patch, conn: sqlite3.Connection) -> List[int]:
+    """Return the slide ids whose rendered content this patch changes.
+
+    Used to invalidate exactly those slides' thumbnails after an apply/revert,
+    so the deck view falls back to a placeholder card instead of showing a
+    stale image.
+
+    - Legacy field patches: just the patch's ``slide_id``.
+    - Script patches: real LLM patches wrap the changed text in code, e.g.
+      ``addBulletSlide(deck, 'Benefits', [``, so the raw ``old`` string is
+      almost never a substring of a rendered slide field. We therefore build a
+      set of candidate text fragments — the string *literals* that differ
+      between ``old`` and ``new`` (the actual changed values), plus the raw
+      ``old``/``new`` to still catch bare-text patches — and match those against
+      title / content_text / notes for the decks sourced from this script
+      (**precise**, option B). When nothing matches (structural edits, or decks
+      whose rendered text isn't captured in any field), we fall back to
+      invalidating every slide of those decks (**coarse**, option A) so a script
+      edit never leaves a stale thumbnail behind.
+
+    Over-matching within the script's own deck is safe (an extra placeholder
+    that repopulates on the next Save); only a *miss* would show a stale image,
+    and the coarse fallback prevents that.
+
+    Always safe: any query error yields an empty list rather than raising.
+    """
+    try:
+        if patch.is_script_patch:
+            deck_rows = conn.execute(
+                "SELECT id FROM decks WHERE source_script_path = ?",
+                (patch.script_path,),
+            ).fetchall()
+            deck_ids = [r[0] for r in deck_rows]
+            if not deck_ids:
+                return []
+            deck_ph = ",".join("?" for _ in deck_ids)
+
+            # Candidate fragments: changed string literals (symmetric difference
+            # so unchanged shared literals don't over-match) + raw old/new.
+            changed = _extract_literals(patch.old) ^ _extract_literals(patch.new)
+            candidates = {c for c in changed if c}
+            for raw in (patch.old, patch.new):
+                if raw and raw.strip():
+                    candidates.add(raw.strip())
+
+            matched: set[int] = set()
+            for frag in candidates:
+                like = f"%{frag}%"
+                rows = conn.execute(
+                    f"SELECT s.id FROM slides s "  # noqa: S608
+                    f"WHERE s.deck_id IN ({deck_ph}) "
+                    f"AND (s.title LIKE ? OR s.content_text LIKE ? OR s.notes LIKE ?)",
+                    (*deck_ids, like, like, like),
+                ).fetchall()
+                matched.update(r[0] for r in rows)
+
+            if matched:
+                return sorted(matched)
+
+            # Coarse fallback: can't locate the changed slide → invalidate the
+            # whole deck so we never show a stale thumbnail after a script edit.
+            rows = conn.execute(
+                f"SELECT id FROM slides WHERE deck_id IN ({deck_ph})",  # noqa: S608
+                deck_ids,
+            ).fetchall()
+            return sorted(r[0] for r in rows)
+        if patch.slide_id is not None:
+            return [int(patch.slide_id)]
+    except sqlite3.Error:
+        logger.exception("slides_touched_by_patch failed")
+    return []
 
 
 def _sync_script_patch_to_slides(patch: Patch, conn: sqlite3.Connection) -> None:
@@ -269,7 +396,16 @@ def apply_patch(
         script = Path(patch.script_path)
         content = script.read_text(encoding="utf-8")
         new_content = content.replace(patch.old, patch.new, 1)
-        script.write_text(new_content, encoding="utf-8")
+        try:
+            script.write_text(new_content, encoding="utf-8")
+        except OSError as exc:
+            # e.g. the script lives on a read-only filesystem. Surface a clean
+            # ValueError (→ 400) instead of an uncaught 500. Preview-cataloged
+            # decks stage a writable copy (see _stage_writable_script); this
+            # guards decks whose source_script_path is still read-only.
+            raise ValueError(
+                f"Cannot write patch to script (is it on a read-only path?): {exc}"
+            ) from exc
 
         # Mirror the change into SQLite so the slide grid updates immediately.
         _sync_script_patch_to_slides(patch, conn)
@@ -349,7 +485,11 @@ def revert_by_id(
             script = Path(msg_row["script_path"])
             if script.exists():
                 content = script.read_text(encoding="utf-8")
-                script.write_text(content.replace(new_value, old_value, 1), encoding="utf-8")
+                try:
+                    script.write_text(content.replace(new_value, old_value, 1), encoding="utf-8")
+                except OSError as exc:
+                    # Read-only script path — report cleanly instead of 500ing.
+                    return False, f"Cannot revert patch (script on a read-only path?): {exc}"
             # Mirror the revert into SQLite so the slide grid updates immediately.
             _sync_script_revert_to_slides(old_value, new_value, msg_row["script_path"], conn)
         conn.execute("DELETE FROM edit_history WHERE id = ?", (history_id,))

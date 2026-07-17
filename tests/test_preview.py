@@ -162,6 +162,50 @@ class TestRenderer:
         assert result.pptx_path == str(pptx.resolve())
         assert result.duration_ms is not None
 
+    def test_render_sets_node_path_to_project_node_modules(self, tmp_path):
+        """Staged scripts live outside project_root, so the render env must point
+        NODE_PATH at the repo's node_modules for bare specifiers to resolve."""
+        (tmp_path / "node_modules").mkdir()
+        r = Renderer(project_root=str(tmp_path))
+        script = tmp_path / "deck.js"
+        script.write_text("// ok")
+        out = tmp_path / "out"
+        out.mkdir()
+
+        captured = {}
+
+        def fake_run(cmd, cwd=None, env=None):
+            captured["env"] = env
+            (out / "deck.pptx").write_bytes(b"PK")
+            return MagicMock(returncode=0, stderr="", stdout="")
+
+        with patch.object(r, "_run", side_effect=fake_run):
+            r.render(str(script), str(out))
+
+        node_path = captured["env"]["NODE_PATH"]
+        assert str(tmp_path / "node_modules") in node_path
+        assert str(tmp_path) in captured["env"]["PYTHONPATH"]
+
+    def test_render_skips_node_path_when_no_node_modules(self, tmp_path):
+        """No node_modules under project_root → NODE_PATH not injected."""
+        r = Renderer(project_root=str(tmp_path))
+        script = tmp_path / "deck.js"
+        script.write_text("// ok")
+        out = tmp_path / "out"
+        out.mkdir()
+
+        captured = {}
+
+        def fake_run(cmd, cwd=None, env=None):
+            captured["env"] = env
+            (out / "deck.pptx").write_bytes(b"PK")
+            return MagicMock(returncode=0, stderr="", stdout="")
+
+        with patch.object(r, "_run", side_effect=fake_run):
+            r.render(str(script), str(out))
+
+        assert "NODE_PATH" not in captured["env"]
+
 
 # ---------------------------------------------------------------------------
 # discover_local_imports tests
@@ -267,6 +311,61 @@ class TestSessionRegistry:
 
         asyncio.run(_run())
 
+    def test_out_base_places_artifacts_on_configured_path(self, tmp_path):
+        """Session out_dir must derive from the registry's configured out_base.
+
+        Regression: out_base was hardcoded cwd-relative ('output/.preview'),
+        which is read-only under a container's readOnlyRootFilesystem. It must
+        be configurable so deploys can point it at the writable data volume.
+        """
+        script = tmp_path / "deck.js"
+        script.write_text("// ok")
+        out_base = tmp_path / "data" / ".preview"
+
+        registry = SessionRegistry(allow_dirs=[str(tmp_path)], out_base=str(out_base))
+
+        async def _run():
+            async def _noop_start(self):
+                pass
+            with patch.object(PreviewSession, "start", _noop_start):
+                session = await registry.create(str(script))
+                assert session.out_dir == str(out_base / "deck")
+                await registry.shutdown()
+
+        asyncio.run(_run())
+
+    def test_out_base_defaults_to_cwd_relative(self, tmp_path):
+        """Unset out_base keeps the historical cwd-relative default."""
+        script = tmp_path / "deck.js"
+        script.write_text("// ok")
+        registry = SessionRegistry(allow_dirs=[str(tmp_path)])
+
+        async def _run():
+            async def _noop_start(self):
+                pass
+            with patch.object(PreviewSession, "start", _noop_start):
+                session = await registry.create(str(script))
+                assert session.out_dir == str(Path("output/.preview") / "deck")
+                await registry.shutdown()
+
+        asyncio.run(_run())
+
+    def test_create_out_base_arg_overrides_registry_default(self, tmp_path):
+        """Per-call out_base still overrides the registry-configured base."""
+        script = tmp_path / "deck.js"
+        script.write_text("// ok")
+        registry = SessionRegistry(allow_dirs=[str(tmp_path)], out_base=str(tmp_path / "reg"))
+
+        async def _run():
+            async def _noop_start(self):
+                pass
+            with patch.object(PreviewSession, "start", _noop_start):
+                session = await registry.create(str(script), out_base=str(tmp_path / "override"))
+                assert session.out_dir == str(tmp_path / "override" / "deck")
+                await registry.shutdown()
+
+        asyncio.run(_run())
+
     def test_get_returns_none_for_unknown_token(self, tmp_path):
         registry = SessionRegistry(allow_dirs=[str(tmp_path)])
         assert registry.get("nonexistent") is None
@@ -278,3 +377,51 @@ class TestSessionRegistry:
             await registry.delete("nonexistent")  # should not raise
 
         asyncio.run(_run())
+
+
+# ---------------------------------------------------------------------------
+# render_complete pptx_url — must carry the BASE_PATH prefix
+# ---------------------------------------------------------------------------
+
+class TestPptxUrlPrefix:
+    def _run_one_render(self, tmp_path):
+        """Drive one render and return the broadcast render_complete payload."""
+        script = tmp_path / "deck.js"
+        script.write_text("// ok")
+
+        renderer = MagicMock()
+        renderer.render.return_value = RenderResult(
+            success=True, pptx_path=str(tmp_path / "deck.pptx"), duration_ms=5
+        )
+        session = PreviewSession(
+            script_path=str(script),
+            token="tok123",
+            out_dir=str(tmp_path / "out"),
+            renderer=renderer,
+            semaphore=asyncio.Semaphore(1),
+        )
+
+        captured = {}
+
+        class _FakeWS:
+            async def send_text(self, text):
+                import json
+                msg = json.loads(text)
+                if msg.get("event") == "render_complete":
+                    captured["payload"] = msg
+
+        session.add_client(_FakeWS())
+        asyncio.run(session._run_render(trigger="test"))
+        return captured.get("payload")
+
+    def test_pptx_url_prefixed_under_base_path(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("BASE_PATH", "/aippt/")
+        payload = self._run_one_render(tmp_path)
+        assert payload is not None
+        assert payload["pptx_url"] == "/aippt/api/preview/sessions/tok123/pptx"
+
+    def test_pptx_url_bare_at_apex(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("BASE_PATH", raising=False)
+        payload = self._run_one_render(tmp_path)
+        assert payload is not None
+        assert payload["pptx_url"] == "/api/preview/sessions/tok123/pptx"

@@ -21,7 +21,7 @@ from aippt.patch import (
     revert_last,
     PATCHABLE_FIELDS,
 )
-from aippt.chat import ChatService, CancelToken
+from aippt.chat import ChatService, CancelToken, _system_prompt
 
 
 # ---------------------------------------------------------------------------
@@ -292,6 +292,230 @@ class TestScriptPatch:
         assert not ok
         assert "not found" in reason
 
+    def test_readonly_script_write_raises_clean_valueerror(self, conn, tmp_path, monkeypatch):
+        """A read-only script path must surface a ValueError (→ 400), not an
+        uncaught OSError (→ 500). Regression for the container read-only-fs
+        crash on script-patch apply."""
+        script, _ = self._seed_script_deck(conn, tmp_path, "title = 'Alpha';\n")
+        conn.commit()
+        p = Patch(script_path=script, old="Alpha", new="Beta", summary="s")
+
+        real_write_text = Path.write_text
+
+        def _deny_write(self, *args, **kwargs):
+            if str(self) == script:
+                raise OSError(30, "Read-only file system")
+            return real_write_text(self, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "write_text", _deny_write)
+        with pytest.raises(ValueError, match="read-only"):
+            apply_patch(p, conn, cwd=str(tmp_path))
+
+
+class TestThumbnailInvalidationOnEdit:
+    """Applying / reverting a chat patch must invalidate the affected slide's
+    thumbnail so the UI never shows a stale image after a content change."""
+
+    def _seed_script_deck(self, conn, tmp_path, body):
+        script = tmp_path / "deck.js"
+        script.write_text(body, encoding="utf-8")
+        cur = conn.execute(
+            "INSERT INTO decks (name, file_path, file_hash, source_script_path) VALUES (?,?,?,?)",
+            ("script-deck", "/tmp/script-deck.pptx", "shash", str(script)),
+        )
+        return str(script), cur.lastrowid
+
+    def test_slides_touched_by_script_patch(self, conn, tmp_path):
+        from aippt.patch import slides_touched_by_patch
+
+        script, deck_id = self._seed_script_deck(conn, tmp_path, "t = 'Alpha';\n")
+        c1 = conn.execute(
+            "INSERT INTO slides (deck_id, position, title, content_text, content_hash) VALUES (?,?,?,?,?)",
+            (deck_id, 1, "Alpha", "has Alpha inside", "sh1"),
+        )
+        conn.execute(
+            "INSERT INTO slides (deck_id, position, title, content_text, content_hash) VALUES (?,?,?,?,?)",
+            (deck_id, 2, "Beta", "no match", "sh2"),
+        )
+        conn.commit()
+        p = Patch(script_path=script, old="Alpha", new="Gamma", summary="s")
+        touched = slides_touched_by_patch(p, conn)
+        assert touched == [c1.lastrowid]
+
+    def test_slides_touched_by_legacy_patch(self, conn, slide_id, tmp_path):
+        from aippt.patch import slides_touched_by_patch
+
+        p = Patch(slide_id=slide_id, field="title", old_text="Intro", new_text="Introduction")
+        assert slides_touched_by_patch(p, conn) == [slide_id]
+
+    def test_slides_touched_by_code_anchored_patch(self, conn, tmp_path):
+        """Real LLM script patches wrap the changed text in code, e.g.
+        ``addBulletSlide(deck, 'Benefits', [``. The raw ``old`` is never a
+        substring of a rendered slide field, so matching must extract the
+        changed *string literal* ('Benefits') and match that. Regression for the
+        Check-3 prod failure where invalidation never fired on script decks."""
+        from aippt.patch import slides_touched_by_patch
+
+        script, deck_id = self._seed_script_deck(
+            conn, tmp_path, "addBulletSlide(deck, 'Benefits', ['a','b']);\n"
+        )
+        c1 = conn.execute(
+            "INSERT INTO slides (deck_id, position, title, content_text, content_hash) VALUES (?,?,?,?,?)",
+            (deck_id, 1, "Benefits", "", "sh1"),
+        )
+        conn.execute(
+            "INSERT INTO slides (deck_id, position, title, content_text, content_hash) VALUES (?,?,?,?,?)",
+            (deck_id, 2, "Other", "", "sh2"),
+        )
+        conn.commit()
+        p = Patch(
+            script_path=script,
+            old="addBulletSlide(deck, 'Benefits', [",
+            new="addBulletSlide(deck, 'Why It Rocks', [",
+            summary="rename",
+        )
+        # Precise: only the slide whose title matches the changed literal.
+        assert slides_touched_by_patch(p, conn) == [c1.lastrowid]
+
+    def test_slides_touched_coarse_fallback_when_no_literal_matches(self, conn, tmp_path):
+        """When the changed text can't be located in any rendered slide field
+        (e.g. content_text is empty and the edit is structural), fall back to
+        invalidating every slide of the script's deck(s) — never stale."""
+        from aippt.patch import slides_touched_by_patch
+
+        script, deck_id = self._seed_script_deck(
+            conn, tmp_path, "addImageSlide(deck, 'diagram.png');\n"
+        )
+        ids = []
+        for pos in (1, 2, 3):
+            c = conn.execute(
+                "INSERT INTO slides (deck_id, position, title, content_text, content_hash) VALUES (?,?,?,?,?)",
+                (deck_id, pos, f"Title {pos}", "", f"h{pos}"),
+            )
+            ids.append(c.lastrowid)
+        conn.commit()
+        # The literal 'diagram.png' / 'chart.png' appears in no slide field.
+        p = Patch(
+            script_path=script,
+            old="addImageSlide(deck, 'diagram.png')",
+            new="addImageSlide(deck, 'chart.png')",
+            summary="swap image",
+        )
+        assert slides_touched_by_patch(p, conn) == sorted(ids)
+
+    def test_apply_invalidates_thumbnail(self, conn, tmp_path):
+        script, deck_id = self._seed_script_deck(conn, tmp_path, "t = 'Alpha';\n")
+        c1 = conn.execute(
+            "INSERT INTO slides (deck_id, position, title, content_text, content_hash, "
+            "image_path, image_content_hash) VALUES (?,?,?,?,?,?,?)",
+            (deck_id, 1, "Alpha", "body", "sh1", "images/x/Slide1.png", "sh1"),
+        )
+        slide_id = c1.lastrowid
+        conn.commit()
+
+        mock_llm = MagicMock()
+        mock_llm.model_config.supports_vision = False
+        svc = ChatService(conn, mock_llm, db_cwd=str(tmp_path))
+        conv_id = svc.create_conversation(deck_id, script_path=script)
+        msg_id = svc._save_message(
+            conv_id, "assistant", "ok", mode="edit",
+            patch_json=json.dumps([
+                {"script_path": script, "old": "Alpha", "new": "Beta", "summary": "s"}
+            ]),
+        )
+        ok, reason = svc.apply_message_patch(msg_id)
+        assert ok, reason
+
+        row = conn.execute(
+            "SELECT image_path, image_content_hash FROM slides WHERE id = ?", (slide_id,)
+        ).fetchone()
+        assert row["image_path"] is None
+        assert row["image_content_hash"] is None
+
+    def test_revert_invalidates_thumbnail(self, conn, tmp_path):
+        script, deck_id = self._seed_script_deck(conn, tmp_path, "t = 'Alpha';\n")
+        c1 = conn.execute(
+            "INSERT INTO slides (deck_id, position, title, content_text, content_hash, "
+            "image_path, image_content_hash) VALUES (?,?,?,?,?,?,?)",
+            (deck_id, 1, "Alpha", "body", "sh1", "images/x/Slide1.png", "sh1"),
+        )
+        slide_id = c1.lastrowid
+        conn.commit()
+
+        mock_llm = MagicMock()
+        mock_llm.model_config.supports_vision = False
+        svc = ChatService(conn, mock_llm, db_cwd=str(tmp_path))
+        conv_id = svc.create_conversation(deck_id, script_path=script)
+        msg_id = svc._save_message(
+            conv_id, "assistant", "ok", mode="edit",
+            patch_json=json.dumps([
+                {"script_path": script, "old": "Alpha", "new": "Beta", "summary": "s"}
+            ]),
+        )
+        assert svc.apply_message_patch(msg_id)[0]
+        # A re-capture would repopulate the image; simulate that before revert.
+        conn.execute(
+            "UPDATE slides SET image_path = ?, image_content_hash = ? WHERE id = ?",
+            ("images/x/Slide1.png", "sh-beta", slide_id),
+        )
+        conn.commit()
+
+        ok, reason = svc.revert_message_patch(msg_id)
+        assert ok, reason
+        row = conn.execute(
+            "SELECT image_path, image_content_hash FROM slides WHERE id = ?", (slide_id,)
+        ).fetchone()
+        assert row["image_path"] is None
+        assert row["image_content_hash"] is None
+
+    def test_apply_invalidates_thumbnail_code_anchored(self, conn, tmp_path):
+        """End-to-end at the service level with a realistic code-anchored patch
+        and a title-only slide (empty content_text) — the exact prod scenario
+        from the Check-3 failure. Apply must invalidate the renamed slide's
+        thumbnail via literal extraction."""
+        body = "addBulletSlide(deck, 'Benefits of Code-Driven Decks', ['a','b']);\n"
+        script, deck_id = self._seed_script_deck(conn, tmp_path, body)
+        c1 = conn.execute(
+            "INSERT INTO slides (deck_id, position, title, content_text, content_hash, "
+            "image_path, image_content_hash) VALUES (?,?,?,?,?,?,?)",
+            (deck_id, 1, "Benefits of Code-Driven Decks", "", "sh1",
+             "images/x/Slide1.png", "sh1"),
+        )
+        # A second, unrelated slide whose thumbnail must survive.
+        c2 = conn.execute(
+            "INSERT INTO slides (deck_id, position, title, content_text, content_hash, "
+            "image_path, image_content_hash) VALUES (?,?,?,?,?,?,?)",
+            (deck_id, 2, "Other Slide", "", "sh2", "images/x/Slide2.png", "sh2"),
+        )
+        conn.commit()
+
+        mock_llm = MagicMock()
+        mock_llm.model_config.supports_vision = False
+        svc = ChatService(conn, mock_llm, db_cwd=str(tmp_path))
+        conv_id = svc.create_conversation(deck_id, script_path=script)
+        msg_id = svc._save_message(
+            conv_id, "assistant", "ok", mode="edit",
+            patch_json=json.dumps([{
+                "script_path": script,
+                "old": "addBulletSlide(deck, 'Benefits of Code-Driven Decks', [",
+                "new": "addBulletSlide(deck, 'Why Code-Driven Decks Rock', [",
+                "summary": "rename",
+            }]),
+        )
+        ok, reason = svc.apply_message_patch(msg_id)
+        assert ok, reason
+
+        r1 = conn.execute(
+            "SELECT image_path, image_content_hash FROM slides WHERE id = ?", (c1.lastrowid,)
+        ).fetchone()
+        r2 = conn.execute(
+            "SELECT image_path FROM slides WHERE id = ?", (c2.lastrowid,)
+        ).fetchone()
+        # Renamed slide invalidated; the unrelated slide keeps its thumbnail.
+        assert r1["image_path"] is None
+        assert r1["image_content_hash"] is None
+        assert r2["image_path"] == "images/x/Slide2.png"
+
 
 class TestEditHistoryMigration:
     def test_legacy_notnull_slide_id_is_relaxed(self, tmp_path):
@@ -440,6 +664,59 @@ class TestChatService:
         assert not tok.is_cancelled
         tok.cancel()
         assert tok.is_cancelled
+
+    def test_edit_mode_upload_deck_proposes_slide_patch(self, conn, deck_id, slide_id, tmp_path):
+        """An upload deck (no script_path) must round-trip a slide-field patch.
+
+        Regression: edit mode used to steer the LLM toward a ```json script
+        patch even when the conversation had no script, so Apply always failed
+        validation with 'script file not found'. Upload decks should use the
+        legacy slide-field patch path instead.
+        """
+        mock_llm = MagicMock()
+        mock_llm.model_config.supports_vision = False
+        reply = (
+            "Renaming the slide.\n"
+            f"```patch\nslide: {slide_id}\nfield: title\n---\nIntro\n===\nIntroduction\n```"
+        )
+        mock_llm.stream_text.return_value = iter([reply])
+        svc = ChatService(conn, mock_llm, db_cwd=str(tmp_path))
+        conv_id = svc.create_conversation(deck_id)  # no script_path
+
+        events = list(svc.stream_reply(conv_id, "Rename the first slide", mode="edit"))
+        patch_events = [e for e in events if e.startswith("[PATCH_PROPOSED:")]
+        assert len(patch_events) == 1
+
+        # The proposed patch is a legacy slide patch, not a script patch.
+        rest = patch_events[0][len("[PATCH_PROPOSED:"):]
+        msg_id, _, payload = rest.partition(":")
+        payload = payload[:-1] if payload.endswith("]") else payload
+        proposed = json.loads(payload)
+        assert proposed[0]["slide_id"] == slide_id
+        assert "script_path" not in proposed[0]
+
+        ok, reason = svc.apply_message_patch(int(msg_id))
+        assert ok, reason
+        row = conn.execute("SELECT title FROM slides WHERE id = ?", (slide_id,)).fetchone()
+        assert row["title"] == "Introduction"
+
+
+class TestEditModeSystemPrompt:
+    def test_script_deck_prompt_asks_for_json_script_patch(self):
+        prompt = _system_prompt("edit", script_path="/app/examples/foo/foo.mjs")
+        assert "/app/examples/foo/foo.mjs" in prompt
+        assert "```json" in prompt
+
+    def test_upload_deck_prompt_asks_for_slide_patch(self):
+        prompt = _system_prompt("edit", script_path=None)
+        # Steers to the legacy slide-field ```patch format, not a script patch.
+        assert "```patch" in prompt
+        assert "field:" in prompt
+        assert "no source script" in prompt.lower()
+
+    def test_ask_mode_forbids_patches(self):
+        prompt = _system_prompt("ask", script_path=None)
+        assert "read-only" in prompt.lower()
 
 
 # ---------------------------------------------------------------------------

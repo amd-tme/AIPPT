@@ -26,7 +26,7 @@ import {
   addIconRowsSlide, addSectionDivider, addClosingSlide,
   addFooter, renderIconSvg, iconToBase64, preRenderIcons,
   cardShadow, SW, SH,
-} from '../lib/pptxgenjs-helpers.mjs';
+} from '../../lib/pptxgenjs-helpers.mjs';
 
 import { existsSync } from 'fs';
 import { resolve, dirname } from 'path';
@@ -298,7 +298,11 @@ async function buildDeck() {
   // Slide 12 — Closing
   addClosingSlide(deck, sn);
 
-  await deck.save('output/meme-directives-test.pptx');
+  // Honor AIPPT_PREVIEW_OUT (set by the live-preview renderer) so the deck
+  // lands on a writable path under a read-only root filesystem; fall back to
+  // the repo-relative output/ dir for standalone CLI runs.
+  const _outDir = process.env.AIPPT_PREVIEW_OUT || 'output';
+  await deck.save(`${_outDir}/meme-directives-test.pptx`);
 }
 
 buildDeck().catch(console.error);

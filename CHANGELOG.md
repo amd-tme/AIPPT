@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Slide thumbnail generation for script/preview-origin decks.** Live Preview →
+  Save-to-Library now captures each rendered slide in the browser (PptxViewJS
+  `renderSlide` → `canvas.toBlob`) and posts the images with the catalog request,
+  so cataloged preview decks show real slide previews instead of `no-image`
+  placeholder cards and `GET /slide-image/{id}` no longer 404s for them. New
+  `aippt.thumbnails` module wires the captured images through the existing
+  `slides.image_path` + object-storage plumbing and writes a downscaled JPEG grid
+  tier alongside the full PNG. A nullable `slides.image_content_hash` column
+  records the slide content hash at generation time for freshness-aware reuse.
+  Generation is best-effort: a capture-less Save still succeeds and keeps
+  placeholder cards — no new 500s. Writes land only on the writable data volume
+  (`readOnlyRootFilesystem`-safe).
 - **Live Script Render — Backend Pipeline.** New `aippt.preview` module adds
   file-watch-driven PPTX rendering for slides-as-code workflows. The server
   stops once the `.pptx` is generated and serves it directly; PptxViewJS renders
@@ -83,6 +95,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Thumbnail invalidation never fired for script-origin decks.** Real chat
+  Edit patches wrap the changed text in code (e.g.
+  `addBulletSlide(deck, 'Title', [`), so the raw patch text was never a
+  substring of a rendered slide field and `slides_touched_by_patch` matched
+  nothing — leaving stale thumbnails after an apply/revert on exactly the decks
+  the feature targets. It now extracts the changed string *literals* from the
+  patch and matches those (precise), falling back to invalidating the whole
+  deck when the changed text can't be located in any field (e.g. structural
+  edits or slides with empty `content_text`), so a script edit never leaves a
+  stale thumbnail.
+- **No-image placeholder cards (and `/slide-image/{id}` 404s) for preview decks.**
+  Decks cataloged via Live Preview → Save-to-Library landed every slide with
+  `image_path = NULL`, so the deck and chat grids rendered placeholder cards and
+  every slide-image request 404'd. Save now captures per-slide thumbnails so
+  these decks get real previews.
 - **Admin tier: case-insensitive NTID matching.** The admin allowlist gate
   preserved exact case on both sides, so an ``X-AIPPT-NTID`` header whose
   case differed from the ``admin_ntids`` entry silently returned 403.
@@ -100,6 +127,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Slide thumbnails invalidate on content change.** When a slide's content
+  changes via chat Edit apply/revert, the affected slides' thumbnails are nulled
+  (precise, per-slide) so the deck view falls back to a placeholder rather than
+  showing a stale image; a fresh capture repopulates on the next Save. Deck
+  regenerate reuses a prior thumbnail only when the regenerated slide's content
+  hash is unchanged.
 - **Admin allowlist expanded** from ``melliott`` to seven NTIDs
   (``ansgputa``, ``edtian``, ``egroenke``, ``melliott``, ``miroy``,
   ``yrajesh``, ``zsyed``) in ``gateway.yaml`` and ``gateway.yaml.example``.

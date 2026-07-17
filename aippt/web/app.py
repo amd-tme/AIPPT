@@ -38,7 +38,7 @@ def detect_view_only(gateway_config: str) -> bool:
     return True
 
 
-def create_app(db_path: str = "slides.db", gateway_config: str = None, uploads_dir: str = "uploads", images_dir: str = "images", project_root: str = None, view_only: bool = None, max_upload_mb: int = None, storage_backend: str = None, data_dir: str = None, preview_allow_dirs: list = None, preview_concurrency: int = 2) -> FastAPI:
+def create_app(db_path: str = "slides.db", gateway_config: str = None, uploads_dir: str = "uploads", images_dir: str = "images", project_root: str = None, view_only: bool = None, max_upload_mb: int = None, storage_backend: str = None, data_dir: str = None, preview_allow_dirs: list = None, preview_concurrency: int = 2, preview_out_dir: str = None) -> FastAPI:
     """Create and configure the FastAPI application.
 
     Args:
@@ -120,17 +120,31 @@ def create_app(db_path: str = "slides.db", gateway_config: str = None, uploads_d
             await _app.state.preview_registry.shutdown()
 
     app = FastAPI(title="AIPPT", version="2.0.0", lifespan=_lifespan)
-    # Preview session registry — allow-list defaults to output/ and examples/
+    # Preview session registry — allow-list defaults to output/, examples/, and
+    # uploads/preview-scripts/ (scripts staged by the Save-to-Library pipeline).
+    _uploads_preview = os.path.join(os.path.abspath(uploads_dir), "preview-scripts")
     _default_allow = [
         os.path.join(resolved_root, "output"),
         os.path.join(resolved_root, "examples"),
+        _uploads_preview,
     ]
     allow_dirs = [os.path.abspath(d) for d in (preview_allow_dirs or [])] or _default_allow
-    app.state.preview_registry = SessionRegistry(
+    # Preview artifacts must land on a writable path. Under readOnlyRootFilesystem
+    # the cwd-relative default (output/.preview → /app/output) is read-only, so
+    # container deploys pass --preview-out-dir / AIPPT_PREVIEW_OUT_DIR pointing at
+    # the data volume. Falls back to the cwd-relative default for local dev.
+    _preview_out = (
+        preview_out_dir
+        or os.environ.get("AIPPT_PREVIEW_OUT_DIR")
+        or os.path.join(resolved_root, "output", ".preview")
+    )
+    registry_kwargs = dict(
         allow_dirs=allow_dirs,
         max_parallel=preview_concurrency,
         renderer=Renderer(project_root=resolved_root),
+        out_base=_preview_out,
     )
+    app.state.preview_registry = SessionRegistry(**registry_kwargs)
 
     app.state.log_buffer = log_buffer
     app.state.db_path = db_path

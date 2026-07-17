@@ -39,13 +39,23 @@ from aippt.catalog import (
 from aippt.export import export_csv
 from aippt import graph
 from aippt.ingest import ingest_deck
+from aippt.thumbnails import store_client_images
 from aippt.web.asset_sync import persist_file, persist_tree, materialize_file
 import aippt.pipeline as _pipeline_module
 from aippt.pipeline import PipelineConfig
-from aippt.config import get_template_default, TemplateConfigError
+from aippt.config import get_template_default, TemplateConfigError, base_path_prefix
 
 router = APIRouter()
 STATIC_DIR = Path(__file__).parent / "static"
+
+
+def _base_prefix() -> str:
+    """Mount prefix (no trailing slash) for origin-resolved absolute URLs.
+
+    Thin wrapper over :func:`aippt.config.base_path_prefix` — kept as a
+    module-local name for the preview session/WS URL builders below.
+    """
+    return base_path_prefix()
 
 
 @router.get("/healthz")
@@ -336,6 +346,21 @@ async def regenerate_deck(deck_id: int, request: Request):
 
             _conn = get_db(db_path)
             try:
+                # Preserve each old slide's thumbnail state keyed by its content
+                # hash. A regenerated slide may reuse a prior canvas-captured
+                # image only if its content is unchanged (hash matches); slides
+                # whose text changed drop to a placeholder rather than showing a
+                # stale thumbnail. Keyed on content_hash, not position, so a
+                # reordered/inserted slide doesn't inherit a neighbor's image.
+                _old_thumbs = {
+                    r["image_content_hash"]: r["image_path"]
+                    for r in _conn.execute(
+                        "SELECT image_path, image_content_hash FROM slides "
+                        "WHERE deck_id = ? AND image_path IS NOT NULL "
+                        "AND image_content_hash IS NOT NULL",
+                        (deck_id,),
+                    ).fetchall()
+                }
                 # Remove old slides (CASCADE would also work but be explicit)
                 _conn.execute("DELETE FROM slides WHERE deck_id = ?", (deck_id,))
                 # Re-catalog the new PPTX into the existing deck row
@@ -359,18 +384,19 @@ async def regenerate_deck(deck_id: int, request: Request):
                     notes = ""
                     if slide.has_notes_slide:
                         notes = slide.notes_slide.notes_text_frame.text.strip()
-                    images_dir_for_regen = _per_deck_images_dir(request, output_path)
-                    image_path = None
-                    for ext in (".png", ".PNG", ".jpg", ".jpeg"):
-                        candidate = os.path.join(images_dir_for_regen, f"Slide{i}{ext}")
-                        if os.path.exists(candidate):
-                            image_path = os.path.relpath(os.path.abspath(candidate), project_root)
-                            break
+                    # Canvas-only: reuse a prior thumbnail only when the slide's
+                    # content is byte-for-byte the same (content_hash match).
+                    # Changed slides get NULL image_path → placeholder card,
+                    # never a stale image. A fresh capture repopulates on the
+                    # next Live Preview → Save.
+                    image_path = _old_thumbs.get(chash)
+                    image_content_hash = chash if image_path else None
                     _conn.execute(
                         """INSERT INTO slides (deck_id, position, title, content_text,
-                           content_hash, notes, image_path)
-                           VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                        (deck_id, i, title, content_text, chash, notes, image_path),
+                           content_hash, notes, image_path, image_content_hash)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                        (deck_id, i, title, content_text, chash, notes,
+                         image_path, image_content_hash),
                     )
                 # Update the deck row (keep same id)
                 _conn.execute(
@@ -1063,6 +1089,65 @@ def _sources_dir(uploads_dir: str, deck_id: int) -> str:
     path = os.path.join(uploads_dir, "sources", str(deck_id))
     os.makedirs(path, exist_ok=True)
     return path
+
+
+def _stage_writable_script(script_path: str, deck_id: int, uploads_dir: str, project_root: str) -> str:
+    """Copy a preview script to a writable per-deck location and return the copy's path.
+
+    Chat "edit" patches (and their reverts) write the modified source back to
+    ``source_script_path`` in place. Scripts discovered from the bundled
+    ``examples/`` tree live on the container's read-only ``/app`` filesystem, so
+    an in-place write raises ``OSError: [Errno 30]``. Staging a copy onto the
+    writable data volume makes the patch/revert path work.
+
+    The copy preserves the script's path *relative to ``project_root``* under a
+    per-deck staging base, and copies the repo ``lib/`` alongside, so relative
+    imports of any depth resolve exactly as they do in the repo::
+
+        <uploads>/preview-scripts/<deck_id>/examples/<name>/<script>.mjs  # copy
+        <uploads>/preview-scripts/<deck_id>/lib/                         # repo lib/
+
+    e.g. from a staged ``examples/demo/demo.mjs`` the script's own
+    ``../../lib/...`` import resolves to the copied ``lib/``. Theme files (read
+    relative to the render cwd, which stays ``project_root``) are unaffected.
+    Idempotent: re-staging refreshes the copy in place.
+
+    Returns the staged script path, or the original ``script_path`` unchanged if
+    staging fails for any reason (the caller then falls back to in-place —
+    correct for local dev where the tree is already writable).
+    """
+    import shutil
+
+    try:
+        src = Path(script_path).resolve()
+        if not src.is_file():
+            return script_path
+        base = Path(uploads_dir) / "preview-scripts" / str(deck_id)
+
+        # Preserve the script's path relative to project_root so its relative
+        # imports (../../lib, etc.) resolve after the copy. If the script sits
+        # outside project_root, fall back to just its basename.
+        root = Path(project_root).resolve()
+        try:
+            rel = src.relative_to(root)
+        except ValueError:
+            rel = Path(src.name)
+        dst = base / rel
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dst)
+
+        # Copy the repo lib/ so relative "../../lib/..." imports resolve.
+        lib_src = root / "lib"
+        if lib_src.is_dir():
+            # dirs_exist_ok keeps re-staging idempotent (Python 3.8+).
+            shutil.copytree(lib_src, base / "lib", dirs_exist_ok=True)
+        return str(dst)
+    except OSError as exc:
+        logger.warning(
+            "Could not stage writable copy of %s for deck %s (%s); using in-place path",
+            script_path, deck_id, exc,
+        )
+        return script_path
 
 
 def _per_deck_images_dir(request: Request, deck_path: str) -> str:
@@ -2158,7 +2243,7 @@ async def create_preview_session(request: Request):
 
     return {
         "token": session.token,
-        "ws_url": f"/ws/preview/{session.token}",
+        "ws_url": f"{_base_prefix()}/ws/preview/{session.token}",
         "script": session.script_path,
     }
 
@@ -2170,11 +2255,22 @@ async def find_preview_session_by_script(request: Request, script: str = None):
         return JSONResponse({"error": "script query param required"}, status_code=400)
     registry = _preview_registry(request)
     resolved = str(Path(script).resolve())
-    for session in list(registry._sessions.values()):
+    script_name = Path(script).name
+    sessions = list(registry._sessions.values())
+    # Exact resolved-path match first.
+    for session in sessions:
         if str(Path(session.script_path).resolve()) == resolved:
             return {
                 "token": session.token,
-                "ws_url": f"/ws/preview/{session.token}",
+                "ws_url": f"{_base_prefix()}/ws/preview/{session.token}",
+                "script": session.script_path,
+            }
+    # Fallback: same filename (handles uploads copy vs output copy mismatch).
+    for session in sessions:
+        if Path(session.script_path).name == script_name:
+            return {
+                "token": session.token,
+                "ws_url": f"{_base_prefix()}/ws/preview/{session.token}",
                 "script": session.script_path,
             }
     return JSONResponse({"error": "No active preview session for that script"}, status_code=404)
@@ -2241,6 +2337,20 @@ async def catalog_preview_session(token: str, request: Request):
     if not pptx_path or not Path(pptx_path).exists():
         return JSONResponse({"error": "No rendered .pptx available yet — force a render first"}, status_code=404)
 
+    # Optional client-captured slide images (Approach B): the browser renders
+    # each slide via PptxViewJS and posts them so cataloged preview decks get
+    # per-slide thumbnails without a Microsoft Graph render at catalog time.
+    # Absent/empty body is fine — the deck just keeps placeholder cards.
+    images_payload = []
+    try:
+        body = await request.json()
+        if isinstance(body, dict):
+            payload = body.get("images")
+            if isinstance(payload, list):
+                images_payload = payload
+    except Exception:
+        images_payload = []
+
     db_path = request.app.state.db_path
     try:
         deck_id = catalog_deck(
@@ -2249,13 +2359,23 @@ async def catalog_preview_session(token: str, request: Request):
             source_script_path=session.script_path,
             source_engine="pptxgenjs",
         )
+        # Stage a writable copy of the script so chat "edit" patches (which write
+        # the source back in place) don't hit the read-only /app filesystem when
+        # the script came from the bundled examples/ tree. Falls back to the
+        # original path if staging fails (local dev / already-writable trees).
+        uploads_dir = getattr(request.app.state, "uploads_dir", "uploads")
+        project_root = getattr(request.app.state, "project_root", os.getcwd())
+        staged_script = _stage_writable_script(
+            session.script_path, deck_id, uploads_dir, project_root
+        )
         # catalog_deck early-returns on hash match without updating source_script_path.
-        # Always ensure it's set so the chat conversation gets the correct script path.
+        # Always ensure it points at the staged (writable) path so the chat
+        # conversation and its patch/revert writes target the copy.
         conn = get_db(db_path)
         try:
             conn.execute(
                 "UPDATE decks SET source_script_path = ? WHERE id = ? AND (source_script_path IS NULL OR source_script_path != ?)",
-                (session.script_path, deck_id, session.script_path),
+                (staged_script, deck_id, staged_script),
             )
             conn.commit()
         finally:
@@ -2264,7 +2384,25 @@ async def catalog_preview_session(token: str, request: Request):
         logger.error("catalog_preview_session error: %s", exc)
         return JSONResponse({"error": str(exc)}, status_code=500)
 
-    return {"deck_id": deck_id, "script_path": session.script_path}
+    # Best-effort thumbnail generation: never turns a successful catalog into a
+    # 500. On any failure the deck keeps placeholder cards, exactly as before.
+    thumb_count = 0
+    if images_payload:
+        try:
+            images_dir = _per_deck_images_dir(request, pptx_path)
+            thumb_count = store_client_images(
+                deck_id,
+                images_payload,
+                out_dir=images_dir,
+                db_path=db_path,
+                base_dir=project_root,
+            )
+            # Write-through to durable object storage (no-op in fs mode).
+            persist_tree(request.app.state, images_dir)
+        except Exception:
+            logger.exception("Thumbnail generation failed for deck %s", deck_id)
+
+    return {"deck_id": deck_id, "script_path": staged_script, "thumbnails": thumb_count}
 
 
 @router.get("/api/preview/scripts")

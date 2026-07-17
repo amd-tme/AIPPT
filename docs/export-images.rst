@@ -19,6 +19,30 @@ Choose the path that matches your host:
   Use the Microsoft Graph pipeline. Requires a SharePoint staging library
   and a Graph access token. See `Linux (Microsoft Graph)`_.
 
+Slide Thumbnails (Live Preview → Save)
+--------------------------------------
+
+The image-export paths above render a deck's slides on the **server**. Decks
+created through **Live Preview → Save to Library** take a different, lighter
+route that does **not** need PowerPoint, Microsoft Graph, or ``pdftoppm``:
+the deck is already rendered in the browser by PptxViewJS, so on save each
+slide is captured directly from the viewer canvas
+(``renderSlide`` → ``canvas.toBlob``) and posted alongside the catalog request.
+
+The server (``aippt.thumbnails``) stores each captured slide as
+``Slide{N}.png`` in the deck's images directory — the same layout and naming
+the catalog expects — wires it into ``slides.image_path``, and writes a
+downscaled ``Slide{N}.thumb.jpg`` grid tier next to it. This *supplements* the
+image-export pipeline rather than replacing it: server-side export remains the
+path for uploaded decks and for full-resolution renders, while the
+canvas-capture path exists so script/preview-origin decks get previews without
+a Graph token.
+
+Capture is best-effort. If the browser can't render a slide, or PptxViewJS is
+unavailable, the save still succeeds and the deck simply keeps placeholder
+cards — no error. Thumbnails are stored only on the writable data volume, so
+the feature works under ``readOnlyRootFilesystem``.
+
 Windows (PowerPoint COM)
 ------------------------
 

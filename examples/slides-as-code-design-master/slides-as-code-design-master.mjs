@@ -91,4 +91,8 @@ await deck.save('output/my-deck.pptx');
 // ═══ Slide 10: Closing ═══
 addClosingSlide(deck, sn++, 'Generated with slide masters enabled.');
 
-await deck.save('examples/slides-as-code-design-master/slides-as-code-design-master.pptx');
+// Honor AIPPT_PREVIEW_OUT (set by the live-preview renderer) so the deck lands
+// on a writable path under a read-only root filesystem; fall back to the
+// repo-relative path for standalone CLI runs.
+const _outDir = process.env.AIPPT_PREVIEW_OUT || 'examples/slides-as-code-design-master';
+await deck.save(`${_outDir}/slides-as-code-design-master.pptx`);
