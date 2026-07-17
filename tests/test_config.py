@@ -487,6 +487,24 @@ class TestGetTemplateDefault:
         with pytest.raises(TemplateConfigError):
             get_template_default(str(tmp_path / "nope.yaml"))
 
+    def test_env_override_takes_precedence(self, tmp_path, monkeypatch):
+        p = tmp_path / "templates.yaml"
+        p.write_text("default_template: templates/corp.pptx\n")
+        monkeypatch.setenv("AIPPT_TEMPLATE_PATH", "/app/data/templates/corp.pptx")
+        assert get_template_default(str(p)) == "/app/data/templates/corp.pptx"
+
+    def test_env_override_wins_even_without_templates_yaml(self, tmp_path, monkeypatch):
+        # The env override short-circuits before templates.yaml is read, so a
+        # missing/invalid config must not raise when the override is set.
+        monkeypatch.setenv("AIPPT_TEMPLATE_PATH", "/app/data/templates/corp.pptx")
+        assert get_template_default(str(tmp_path / "nope.yaml")) == "/app/data/templates/corp.pptx"
+
+    def test_blank_env_override_is_ignored(self, tmp_path, monkeypatch):
+        p = tmp_path / "templates.yaml"
+        p.write_text("default_template: templates/corp.pptx\n")
+        monkeypatch.setenv("AIPPT_TEMPLATE_PATH", "   ")
+        assert get_template_default(str(p)) == "templates/corp.pptx"
+
 
 # ---------------------------------------------------------------------------
 # TestSetTemplateDefault

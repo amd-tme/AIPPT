@@ -107,6 +107,27 @@ def create_app(db_path: str = "slides.db", gateway_config: str = None, uploads_d
                 restore_db(db_path, storage)
             except Exception:
                 logger.exception("Catalog restore from object storage failed")
+
+            # Restore the corporate template into the writable data volume. It
+            # is not in the image (proprietary, gitignored) and lives under
+            # read-only /app, so on a cold pod fetch it from object storage to
+            # the path get_template_default() resolves to (set via
+            # AIPPT_TEMPLATE_PATH in the deployment). Best-effort: a failure
+            # here leaves deck creation to 404 with a clear message, but must
+            # not block startup.
+            try:
+                from aippt.config import get_template_default, TemplateConfigError
+                from aippt.templates_store import restore_template
+
+                try:
+                    template_target = get_template_default()
+                except TemplateConfigError:
+                    template_target = None
+                if template_target:
+                    restore_template(template_target, storage)
+            except Exception:
+                logger.exception("Corporate template restore failed")
+
             scheduler = SnapshotScheduler(db_path, storage)
             set_snapshot_scheduler(scheduler)
         try:

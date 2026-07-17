@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Corporate template restore from object storage.** In `s3` mode the app now
+  restores the corporate PPTX template from MinIO (`templates/corp.pptx`) into
+  the writable data volume on startup, mirroring the catalog snapshot/restore.
+  The template is proprietary and gitignored, so it is neither in git nor baked
+  into the image; without this, deck creation on a cold pod returned
+  `404 Template not found: templates/corp.pptx`. New `aippt.templates_store`
+  module (`restore_template`), an `AIPPT_TEMPLATE_PATH` env override honored
+  first by `get_template_default()` so the container points at the restored
+  data-dir path while local dev keeps the committed `templates.yaml` default,
+  and startup wiring in the web app's `s3` lifespan branch. Best-effort: a
+  restore failure logs and leaves a clear 404 rather than blocking startup.
+
 - **Slide thumbnail generation for script/preview-origin decks.** Live Preview →
   Save-to-Library now captures each rendered slide in the browser (PptxViewJS
   `renderSlide` → `canvas.toBlob`) and posts the images with the catalog request,

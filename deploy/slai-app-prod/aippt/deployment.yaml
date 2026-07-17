@@ -86,6 +86,13 @@ spec:
             # snapshotted (debounced) on write. See PRD 2026-06-10.
             - name: AIPPT_STORAGE
               value: "s3"
+            # The corporate template is proprietary and gitignored, so it is
+            # neither in git nor baked into the image. It lives in MinIO under
+            # templates/corp.pptx (source of truth) and is restored on startup
+            # into the writable data volume; point template resolution there.
+            # See aippt/templates_store.py and get_template_default().
+            - name: AIPPT_TEMPLATE_PATH
+              value: "/app/data/templates/corp.pptx"
             - name: MINIO_ENDPOINT
               value: "s3minio.amd.com:21000"
             - name: MINIO_BUCKET
