@@ -65,7 +65,8 @@ addTitleSlide(deck, '<title>', '<subtitle>', 1);
 // ═══ Slide N: <title> ═══
 // ... one helper call per slide
 
-await deck.save('output/<sanitized-title>.pptx');
+const outDir = process.env.AIPPT_PREVIEW_OUT || 'output';
+await deck.save(`${outDir}/<sanitized-title>.pptx`);
 ```
 
 ## Critical Rules — violating these corrupts the PPTX file
@@ -78,6 +79,7 @@ await deck.save('output/<sanitized-title>.pptx');
 - ALWAYS use `pptx.layout = "LAYOUT_WIDE"` — NEVER use LAYOUT_16x9
 - ALWAYS define safe-area constants: SW=13.33, SH=7.5 — validate all positions
 - ALWAYS add a slide marker comment before each slide: // ═══ Slide N: Title ═══
+- ALWAYS save to `process.env.AIPPT_PREVIEW_OUT || 'output'` — NEVER hardcode 'output/' alone
 - NEVER use eval(), Function(), child_process, fs, net, http, setTimeout, setInterval
 - NEVER use dynamic import()
 - Only import from: '../lib/pptxgenjs-helpers.mjs', '../lib/pptxgenjs-masters.mjs', 'path', 'url'
