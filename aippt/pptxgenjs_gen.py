@@ -103,19 +103,20 @@ Map each slide's content to the best layout:
 |---|---|
 | First heading in outline | addTitleSlide |
 | Section heading (no children, corp-match) | SKIP — do not render |
-| 3-4 bullets with bold lead-ins (Key: value) | addCardGrid |
+| 2-4 named items / features / use cases | addCardGrid |
 | Prominent number or statistic | addStatCallout |
 | Code blocks or CLI commands | addCodeSlide |
-| LAYOUT: two_column or ||| separator | addTwoColumn |
-| LAYOUT: numbered or sequential steps | addProcessFlow |
+| Two contrasting topics / compare | addTwoColumn |
+| Sequential steps or process (3-6 items) | addProcessFlow |
 | 3 parallel items with headings | addCardGrid (3 cards) |
-| Standard bullet list | addBulletSlide |
+| Simple list with NO natural grouping | addBulletSlide (last resort) |
 | IMAGE: with no bullets | addImageSlide |
 | IMAGE: with bullets | addImageBulletsSlide |
 | Last slide / thank you | addClosingSlide |
 
-Variety Rule: never use the same layout on two consecutive slides.
-Substitution: bullet→bullet: use addCardGrid or addIconRowsSlide for the second.
+Variety Rule: NEVER use the same layout on two consecutive slides.
+Substitution: if you would use addBulletSlide twice in a row, use addCardGrid or addTwoColumn instead.
+Preference: addBulletSlide is the LAST RESORT — always prefer addCardGrid, addTwoColumn, addProcessFlow, or addStatCallout when the content fits.
 
 ## Speaker Notes Metadata
 
