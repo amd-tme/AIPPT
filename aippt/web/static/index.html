@@ -4564,7 +4564,7 @@
                     msAuth.signOut();
                     toast('Create failed: Microsoft sign-in expired — please sign in again');
                 } else {
-                    toast('Create failed: ' + data.detail);
+                    toast('Create failed: ' + (data.detail || data.message || 'unknown error'));
                 }
             }
         }
