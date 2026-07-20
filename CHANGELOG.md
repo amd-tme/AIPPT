@@ -8,6 +8,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **pptxgenjs deck generation via web UI.** The Create Deck panel now exposes an
+  Engine selector (pptxgenjs / python-pptx). When pptxgenjs is chosen, the
+  server generates a validated `.mjs` script from the markdown outline using the
+  LLM (same Critical Rules and Layout Decision Strategy as the `/create-deck`
+  skill), executes it via `Renderer.render()`, catalogs the resulting deck with
+  `source_engine="pptxgenjs"` and `source_script_path` set, and streams progress
+  over SSE just like the python-pptx path. A deterministic validation gate
+  (`aippt.pptxgenjs_validate`) rejects scripts that contain dangerous constructs
+  (`eval`, `Function`, `child_process`, `fs`, `net`, `http`, `process.env`,
+  dynamic `import()`), disallowed import sources, or Critical Rule violations
+  (hash-prefixed hex colors, 8-char hex, `LAYOUT_16x9`) before any execution
+  occurs. The generator retries up to 3 times on validation failure before
+  raising `ScriptGenerationError`. New modules: `aippt.pptxgenjs_validate`,
+  `aippt.pptxgenjs_gen`.
 - **Slide thumbnail generation for script/preview-origin decks.** Live Preview →
   Save-to-Library now captures each rendered slide in the browser (PptxViewJS
   `renderSlide` → `canvas.toBlob`) and posts the images with the catalog request,
