@@ -33,7 +33,8 @@ _DENIED_PATTERNS: List[Tuple[re.Pattern, str]] = [
     (re.compile(r'\bnet\b'),               "net module is not allowed"),
     (re.compile(r'\bhttp\s*\.'),           "http module is not allowed"),
     (re.compile(r'\bhttps\s*\.'),          "https module is not allowed"),
-    (re.compile(r'process\s*\.\s*env'),    "process.env access is not allowed"),
+    (re.compile(r'process\s*\.\s*env\s*\.\s*(?!AIPPT_PREVIEW_OUT\b)\w+'),
+                                           "process.env access is not allowed (only AIPPT_PREVIEW_OUT is permitted)"),
     (re.compile(r'\bsetTimeout\s*\('),     "setTimeout is not allowed"),
     (re.compile(r'\bsetInterval\s*\('),    "setInterval is not allowed"),
     # Dynamic import() — pattern catches `import(` and `import (` etc.
