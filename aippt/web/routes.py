@@ -1710,6 +1710,7 @@ async def create_deck_stream(
     audience: str = Form(None),
     title: str = Form(None),
     image_files: List[UploadFile] = File(default=[]),
+    engine: str = Form("pptxgenjs"),
 ):
     """API: Create a deck from markdown outline, streaming progress as SSE."""
     if getattr(request.app.state, "view_only", False):
@@ -1744,16 +1745,18 @@ async def create_deck_stream(
             status_code=400,
         )
 
-    try:
-        template_path = get_template_default()
-    except TemplateConfigError as exc:
-        return JSONResponse({"error": str(exc)}, status_code=503)
-
-    if not os.path.exists(template_path):
-        return JSONResponse(
-            {"error": f"Template not found: {template_path}. Update the path in Settings."},
-            status_code=404,
-        )
+    # Template is only needed for the python-pptx engine
+    template_path = None
+    if engine == "python-pptx":
+        try:
+            template_path = get_template_default()
+        except TemplateConfigError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=503)
+        if not os.path.exists(template_path):
+            return JSONResponse(
+                {"error": f"Template not found: {template_path}. Update the path in Settings."},
+                status_code=404,
+            )
 
     db_path = request.app.state.db_path
     uploads_dir = request.app.state.uploads_dir
@@ -1806,6 +1809,90 @@ async def create_deck_stream(
         loop = asyncio.get_running_loop()
 
         def _worker():
+            if engine == "pptxgenjs":
+                return _worker_pptxgenjs()
+            return _worker_python_pptx()
+
+        def _worker_pptxgenjs():
+            from aippt.pptxgenjs_gen import generate_script, ScriptGenerationError
+            from aippt.preview import Renderer
+
+            script_path = os.path.join(uploads_dir, f"{_short_id}_{_base_name}.mjs")
+            try:
+                llm = _make_llm_client(request, operation="create", model_override=model, user_ntid=ntid)
+            except ValueError as exc:
+                event_q.put(("error", {"message": str(exc)}))
+                return None
+
+            try:
+                generate_script(
+                    outline_text=md_text,
+                    output_script_path=script_path,
+                    llm_client=llm,
+                    theme="amd",
+                    progress_callback=create_progress,
+                )
+            except ScriptGenerationError as exc:
+                event_q.put(("error", {"message": str(exc)}))
+                return None
+
+            persist_file(request.app.state, script_path)
+            create_progress("render", "Executing script…")
+
+            project_root = str(Path(__file__).resolve().parents[2])
+            renderer = Renderer(project_root=project_root)
+            render_out_dir = os.path.join(uploads_dir, _short_id)
+            render_result = renderer.render(script_path, render_out_dir)
+            if not render_result.success:
+                msg = render_result.stderr_tail or "Script render failed (no .pptx produced)"
+                event_q.put(("error", {"message": msg}))
+                return None
+
+            pptx_path = render_result.pptx_path
+            persist_file(request.app.state, pptx_path)
+            event_q.put(("progress", {"step": "ingest", "status": "running", "detail": "Cataloging generated deck…"}))
+
+            per_deck_images = _per_deck_images_dir(request, pptx_path)
+            ingest_result = ingest_deck(
+                deck_path=pptx_path,
+                db_path=db_path,
+                images_dir=per_deck_images,
+                gateway_config=gateway_config,
+                require_images=_require_images_for_render(),
+                progress_callback=ingest_progress,
+                source_script_path=script_path,
+                outline_path=outline_save_path,
+                ms_token=ms_token,
+                ntid=ntid,
+            )
+            persist_tree(request.app.state, per_deck_images)
+
+            deck_id = ingest_result["deck_id"]
+            try:
+                import shutil as _shutil
+                stable_dir = _sources_dir(uploads_dir, deck_id)
+                stable_outline = os.path.join(stable_dir, "outline.md")
+                stable_script = os.path.join(stable_dir, f"{_base_name}.mjs")
+                _shutil.copy2(outline_save_path, stable_outline)
+                _shutil.copy2(script_path, stable_script)
+                persist_file(request.app.state, stable_outline)
+                persist_file(request.app.state, stable_script)
+                _conn = get_db(db_path)
+                _conn.execute(
+                    "UPDATE decks SET outline_path = ?, source_engine = ?, source_script_path = ?, "
+                    "source_generated_at = datetime('now'), updated_at = datetime('now') "
+                    "WHERE id = ?",
+                    (stable_outline, "pptxgenjs", stable_script, deck_id),
+                )
+                _conn.commit()
+                _conn.close()
+            except Exception as _exc:
+                logger.warning("Failed to persist pptxgenjs origin for deck %s: %s", deck_id, _exc)
+
+            return {"output_path": pptx_path, "slide_count": ingest_result.get("slide_count", 0),
+                    "title": _base_name, **ingest_result}
+
+        def _worker_python_pptx():
             pipeline_config = PipelineConfig(
                 outline_text=md_text,
                 template_path=template_path,
@@ -1898,12 +1985,15 @@ async def create_deck_stream(
             yield _format_sse("error", {"detail": str(exc)})
             return
 
+        if result is None:
+            return  # worker already emitted an error event
+
         yield _format_sse("complete", {
             "deck_id": result["deck_id"],
-            "deck_name": result["deck_name"],
-            "display_name": display_name(result["deck_name"]),
-            "slide_count": result["slide_count"],
-            "output_path": result["output_path"],
+            "deck_name": result.get("deck_name", ""),
+            "display_name": display_name(result.get("deck_name", "")),
+            "slide_count": result.get("slide_count", 0),
+            "output_path": result.get("output_path", ""),
         })
 
     return StreamingResponse(_event_generator(), media_type="text/event-stream")
