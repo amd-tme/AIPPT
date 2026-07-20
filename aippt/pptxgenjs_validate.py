@@ -73,10 +73,39 @@ _IMPORT_RE = re.compile(
     re.MULTILINE,
 )
 
+# Named imports extracted from helpers import statement
+_NAMED_IMPORT_RE = re.compile(
+    r'''import\s*\{([^}]+)\}\s*from\s*["']\.\.\/lib\/pptxgenjs-helpers\.mjs["']''',
+    re.DOTALL,
+)
+
+# All AIPPT helper function names that must be imported before use
+_HELPER_FUNCTIONS: frozenset[str] = frozenset({
+    "createDeck", "addTitleSlide", "addBulletSlide", "addTwoColumn",
+    "addCardGrid", "addStatCallout", "addProcessFlow", "addIconRowsSlide",
+    "addImageSlide", "addImageBulletsSlide", "addCodeSlide",
+    "addSectionDivider", "addClosingSlide", "cardShadow",
+})
+
 
 def _extract_import_sources(source: str) -> List[str]:
     """Return all import source specifiers found in *source*."""
     return _IMPORT_RE.findall(source)
+
+
+def _check_missing_imports(source: str) -> List[str]:
+    """Return reasons for any helper functions called but not imported."""
+    m = _NAMED_IMPORT_RE.search(source)
+    imported: set[str] = set()
+    if m:
+        imported = {name.strip() for name in m.group(1).split(",")}
+
+    reasons = []
+    for fn in sorted(_HELPER_FUNCTIONS):
+        # Check if called (followed by open paren) but not imported
+        if re.search(rf'\b{fn}\s*\(', source) and fn not in imported:
+            reasons.append(f"'{fn}' is called but not imported from pptxgenjs-helpers.mjs")
+    return reasons
 
 
 # ---------------------------------------------------------------------------
@@ -108,5 +137,8 @@ def validate_script(source: str) -> Tuple[bool, List[str]]:
     for pattern, message in _CRITICAL_RULES:
         if pattern.search(source):
             reasons.append(message)
+
+    # 4. Missing imports — called but not imported from helpers
+    reasons.extend(_check_missing_imports(source))
 
     return (len(reasons) == 0, reasons)
