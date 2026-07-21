@@ -8,11 +8,14 @@ Provides:
 from __future__ import annotations
 
 import json
+import logging
 import re
 import threading
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Callable, List, Optional
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -228,6 +231,8 @@ def run_auto_refine(
             )
             result.findings_per_round.append(combined)
 
+            result.rounds_completed = round_num
+
             actionable = combined.actionable
             if not actionable:
                 _progress("review", f"Round {round_num}: no actionable findings — stopping.")
@@ -247,7 +252,6 @@ def run_auto_refine(
                     slide_ids_touched.extend(patch_result)
 
             result.patches_applied += applied
-            result.rounds_completed = round_num
 
             if not applied:
                 result.residual_findings = combined.advisory
@@ -260,9 +264,17 @@ def run_auto_refine(
             # --- Re-render the script ---
             if script_path:
                 _progress("render", f"Round {round_num}: re-rendering deck…")
-                renderer = Renderer(project_root=project_root)
                 import os
-                out_dir = os.path.dirname(script_path)
+                renderer = Renderer(project_root=project_root)
+                # Output dir is the deck's upload subdirectory (same as original render)
+                pptx_row = conn.execute(
+                    "SELECT d.name FROM decks d WHERE d.id = ?", (deck_id,)
+                ).fetchone()
+                out_dir = os.path.join(
+                    os.path.dirname(db_path), "uploads",
+                    str(deck_id),
+                )
+                os.makedirs(out_dir, exist_ok=True)
                 render_result = renderer.render(script_path, out_dir)
                 if render_result.success:
                     result.regenerated = True
@@ -342,7 +354,7 @@ def _apply_finding_as_patch(
     Returns a list of slide_ids touched (for thumbnail invalidation),
     or None if the patch could not be applied.
     """
-    from aippt.patch import extract_patches, validate_patch, apply_patch
+    from aippt.patch import extract_patches, validate_patch, apply_patch, slides_touched_by_patch
 
     hint = finding.patch_hint or ""
     slide_context = f"Slide {finding.slide_num}" if finding.slide_num else "Deck-level"
@@ -371,13 +383,13 @@ def _apply_finding_as_patch(
     for patch in patches:
         ok, reason = validate_patch(patch, conn)
         if not ok:
+            logger.debug("Auto-refine patch invalid: %s", reason)
             continue
+        # Collect affected slide ids before the write (while old text still matches)
+        touched.extend(slides_touched_by_patch(patch, conn))
         try:
             apply_patch(patch, conn, source="auto-refine")
-            # Collect slide ids for thumbnail invalidation
-            if patch.slide_id:
-                touched.append(patch.slide_id)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("Auto-refine apply_patch failed: %s", exc)
 
     return touched if touched else None
