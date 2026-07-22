@@ -3281,8 +3281,19 @@
                 div.className = `chat-msg chat-msg--${m.role}`;
                 div.textContent = m.content;
                 histEl.appendChild(div);
+                // Re-render review findings table if this was a review-mode assistant message
+                if (m.role === 'assistant' && m.mode === 'review' && m.patch_json) {
+                    try {
+                        const reviewData = JSON.parse(m.patch_json);
+                        if (reviewData.findings) {
+                            _renderReviewFindings(histEl, reviewData.findings);
+                            // Remove the raw text bubble we just added — findings table replaces it
+                            histEl.removeChild(div);
+                        }
+                    } catch {}
+                }
                 // Re-render patch block if this assistant message had a proposed patch
-                if (m.role === 'assistant' && m.patch_json) {
+                if (m.role === 'assistant' && m.mode !== 'review' && m.patch_json) {
                     let patches;
                     try { patches = JSON.parse(m.patch_json); } catch { patches = null; }
                     if (patches) {
