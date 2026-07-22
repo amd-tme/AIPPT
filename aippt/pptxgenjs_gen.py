@@ -191,13 +191,14 @@ def generate_script(
     ScriptGenerationError
         When the script fails validation after all retries.
     """
-    user_prompt = (
+    base_user_prompt = (
         f"Generate a pptxgenjs .mjs script for the following presentation outline.\n"
         f"Theme: {theme}\n\n"
         f"---\n{outline_text.strip()}\n---\n\n"
         "Output ONLY the script inside a ```javascript code fence."
     )
 
+    user_prompt = base_user_prompt
     last_reasons: list[str] = []
     for attempt in range(max_retries):
         if progress_callback:
@@ -212,7 +213,7 @@ def generate_script(
         raw = llm_client.generate_text(
             prompt=user_prompt,
             system_prompt=_SYSTEM_PROMPT,
-            max_tokens=8000,
+            max_tokens=12000,
         )
 
         script = _extract_code_block(raw)
@@ -223,6 +224,15 @@ def generate_script(
             if progress_callback:
                 progress_callback("generate", f"Script validated ({len(script)} chars)")
             return script
+
+        # Feed the specific validation failures back into the next attempt so
+        # the model can correct them, rather than blindly regenerating.
+        user_prompt = (
+            base_user_prompt
+            + "\n\nYour previous attempt failed these checks — fix each one exactly, "
+            "keeping everything else the same:\n"
+            + "\n".join(f"- {r}" for r in last_reasons)
+        )
 
     # All retries exhausted
     reasons_str = "; ".join(last_reasons[:3])

@@ -54,6 +54,14 @@ _VENV_PYTHON = (
     else "python3"
 )
 
+# Environment variables the rendered subprocess is allowed to inherit. The
+# parent process holds LLM/storage credentials (AMD_LLM_KEY, ANTHROPIC_API_KEY,
+# OPENAI_API_KEY, MINIO_*, …); a generated or user-authored script must never
+# see them. Everything the script legitimately needs (output dir, module paths)
+# is injected explicitly in ``_child_env``. Deny by default — add here only if a
+# concrete non-secret need appears.
+_ENV_ALLOW: tuple = ("PATH", "HOME", "LANG", "LC_ALL", "LC_CTYPE", "TMPDIR", "TZ")
+
 
 def _tail(text: str, lines: int = 30) -> str:
     return "\n".join(text.splitlines()[-lines:])
@@ -86,19 +94,12 @@ class Renderer:
         out.mkdir(parents=True, exist_ok=True)
 
         # --- Step 1: run the script from the project root ---
-        cmd, stage = self._build_command(script)
-        env = {**os.environ, "AIPPT_PREVIEW_OUT": str(out)}
-        # Staged (writable-copy) scripts live outside project_root, so Node's
-        # upward node_modules walk never reaches the repo's. Point NODE_PATH at
-        # it explicitly so bare specifiers (e.g. "pptxgenjs") resolve wherever
-        # the script sits. Same idea for Python scripts via PYTHONPATH.
-        if self.project_root:
-            node_modules = os.path.join(self.project_root, "node_modules")
-            if os.path.isdir(node_modules):
-                existing = env.get("NODE_PATH", "")
-                env["NODE_PATH"] = node_modules + (os.pathsep + existing if existing else "")
-            existing_py = env.get("PYTHONPATH", "")
-            env["PYTHONPATH"] = str(self.project_root) + (os.pathsep + existing_py if existing_py else "")
+        # Scripts are LLM-generated (pptxgenjs create path) or user-authored
+        # (Live Preview), so the subprocess is treated as untrusted: it gets a
+        # scrubbed env (no credentials) and, for Node, the runtime permission
+        # model scoping filesystem access. See _child_env / _build_command.
+        cmd, stage = self._build_command(script, out)
+        env = self._child_env(out)
         result = self._run(cmd, cwd=self.project_root, env=env)
         if result.returncode != 0:
             return RenderResult(
@@ -126,14 +127,61 @@ class Renderer:
     # Helpers
     # ------------------------------------------------------------------
 
-    def _build_command(self, script: Path):
+    def _child_env(self, out: Path) -> dict:
+        """Build a scrubbed environment for the render subprocess.
+
+        Only non-secret vars from ``_ENV_ALLOW`` are inherited; the module
+        search paths and output dir the script needs are injected explicitly.
+        This ensures credentials held by the parent (LLM/storage keys) are
+        never visible to an untrusted generated/user script.
+        """
+        env = {k: os.environ[k] for k in _ENV_ALLOW if k in os.environ}
+        env["AIPPT_PREVIEW_OUT"] = str(out)
+        # Staged (writable-copy) scripts live outside project_root, so Node's
+        # upward node_modules walk never reaches the repo's. Point NODE_PATH at
+        # it explicitly so bare specifiers (e.g. "pptxgenjs") resolve wherever
+        # the script sits. Same idea for Python scripts via PYTHONPATH.
+        if self.project_root:
+            node_modules = os.path.join(self.project_root, "node_modules")
+            if os.path.isdir(node_modules):
+                env["NODE_PATH"] = node_modules
+            env["PYTHONPATH"] = str(self.project_root)
+        return env
+
+    def _build_command(self, script: Path, out: Path):
         ext = script.suffix.lower()
         if ext in (".js", ".mjs"):
-            return (["node", str(script)], "node")
+            return (self._node_command(script, out), "node")
         if ext == ".py":
             return ([_VENV_PYTHON, str(script)], "python")
         # fallback — try node
-        return (["node", str(script)], "node")
+        return (self._node_command(script, out), "node")
+
+    def _node_command(self, script: Path, out: Path) -> list:
+        """Node invocation confined by the runtime permission model.
+
+        Grants filesystem *read* to the project root (themes, assets, lib,
+        node_modules) and the output dir, and filesystem *write* to the output
+        dir only. ``--allow-child-process`` is deliberately omitted, so a script
+        cannot spawn subprocesses. Network is not gated by the permission model
+        (documented limitation); with the env scrubbed there is nothing
+        sensitive to exfiltrate, and container egress policy is the outer layer.
+        """
+        cmd = ["node"]
+        read_dirs: List[str] = []
+        write_dirs: List[str] = [str(out)]
+        if self.project_root:
+            read_dirs.append(self.project_root)
+        read_dirs.append(str(out))
+        # The script itself may live outside project_root (staged copies).
+        read_dirs.append(str(script.parent))
+        cmd.append("--permission")
+        for d in read_dirs:
+            cmd.append(f"--allow-fs-read={d}")
+        for d in write_dirs:
+            cmd.append(f"--allow-fs-write={d}")
+        cmd.append(str(script))
+        return cmd
 
     @staticmethod
     def _run(cmd: list, cwd: Optional[str] = None, env: Optional[dict] = None):
