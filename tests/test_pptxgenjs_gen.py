@@ -121,6 +121,26 @@ def test_all_retries_exhausted_raises(tmp_path):
     assert not Path(out).exists()
 
 
+def test_retry_prompt_includes_prior_failure_reasons(tmp_path):
+    """On regenerate, the next prompt must contain the validation reasons."""
+    client = MagicMock()
+    client.generate_text.side_effect = [
+        f"```javascript\n{_BAD_SCRIPT}\n```",
+        f"```javascript\n{_GOOD_SCRIPT}\n```",
+    ]
+    out = str(tmp_path / "deck.mjs")
+
+    generate_script(_OUTLINE, out, client, max_retries=3)
+
+    # Second call's prompt should reference the fix-up instruction + a reason.
+    second_prompt = client.generate_text.call_args_list[1].kwargs.get("prompt", "")
+    assert "failed these checks" in second_prompt
+    assert "-" in second_prompt  # at least one bulleted reason
+    # First call's prompt should NOT contain the fix-up preamble.
+    first_prompt = client.generate_text.call_args_list[0].kwargs.get("prompt", "")
+    assert "failed these checks" not in first_prompt
+
+
 def test_progress_callback_called_on_retry(tmp_path):
     """Progress callback should be called on generation and retries."""
     client = MagicMock()
