@@ -2740,7 +2740,7 @@ async def chat_send_message(conversation_id: int, request: Request):
     user_message = body.get("message", "").strip()
     slide_id = body.get("slide_id")
     mode = body.get("mode", "ask")
-    if mode not in ("ask", "edit"):
+    if mode not in ("ask", "edit", "review"):
         mode = "ask"
     # In view-only mode, force ask (read-only) regardless of what the client sent
     if getattr(request.app.state, "view_only", False):
@@ -2788,12 +2788,18 @@ async def chat_send_message(conversation_id: int, request: Request):
                     return
                 elif chunk.startswith("[PATCH_PROPOSED:"):
                     # Format: [PATCH_PROPOSED:msg_id:json_array]
-                    # Strip the leading sentinel prefix and the trailing ] added by the sentinel wrapper
-                    rest = chunk[len("[PATCH_PROPOSED:"):-1]  # -1 removes sentinel's closing ]
+                    rest = chunk[len("[PATCH_PROPOSED:"):-1]
                     colon = rest.index(":")
                     msg_id = int(rest[:colon])
                     patch_json = rest[colon + 1:]
                     yield _sse_event({"type": "patch_proposed", "message_id": msg_id, "patches": json.loads(patch_json)})
+                elif chunk.startswith("[REVIEW_COMPLETE:"):
+                    # Format: [REVIEW_COMPLETE:msg_id:json_object]
+                    rest = chunk[len("[REVIEW_COMPLETE:"):-1]
+                    colon = rest.index(":")
+                    msg_id = int(rest[:colon])
+                    findings_json = rest[colon + 1:]
+                    yield _sse_event({"type": "review_complete", "message_id": msg_id, "findings": json.loads(findings_json)})
                 else:
                     yield _sse_event({"type": "chunk", "text": chunk})
             yield _sse_event({"type": "done"})
@@ -2894,3 +2900,293 @@ async def revert_slide_field(slide_id: int, request: Request):
         return {"reverted": True, "message": msg}
     finally:
         conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Deck Review & Auto-Refine endpoints
+# ---------------------------------------------------------------------------
+
+# Per-deck threading.Event used to unblock the refine loop when the browser
+# posts fresh thumbnails.  Keyed by deck_id.
+_refine_events: dict[int, "threading.Event"] = {}
+
+
+@router.post("/api/decks/{deck_id}/review")
+async def review_deck(deck_id: int, request: Request):
+    """Stream a full-deck visual + notes-flow review pass (no auto-apply).
+
+    Creates a new chat conversation for this review run, sends a review-mode
+    message for each slide, runs the notes-flow pass, then emits the merged
+    R4 findings report.
+
+    Response: ``text/event-stream``
+
+    Event types::
+
+        data: {"type":"progress","step":"review","slide":N,"total":M}
+        data: {"type":"findings","data":{...ReviewResult...}}
+        data: {"type":"done"}
+        data: {"type":"error","message":"..."}
+    """
+    if getattr(request.app.state, "view_only", False):
+        return JSONResponse({"error": "Review is disabled in view-only mode"}, status_code=403)
+
+    body = await request.json()
+    model_override = body.get("model")
+    user_ntid = body.get("ntid") or request.headers.get("X-User-NTID")
+
+    db_path = request.app.state.db_path
+
+    # Verify deck exists and has slides
+    conn_check = get_db(db_path)
+    deck_row = conn_check.execute("SELECT id, name FROM decks WHERE id = ?", (deck_id,)).fetchone()
+    conn_check.close()
+    if not deck_row:
+        return JSONResponse({"error": "Deck not found"}, status_code=404)
+
+    try:
+        llm = _make_llm_client(request, "improve", model_override, user_ntid)
+    except ValueError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
+
+    def _sse(payload: dict) -> str:
+        return f"data: {json.dumps(payload)}\n\n"
+
+    def generate():
+        import threading as _threading
+        from aippt.chat import ChatService
+        from aippt.deck_review import _review_all_slides, ReviewResult
+
+        conn = get_db(db_path)
+        try:
+            # Create a dedicated review conversation
+            svc = ChatService(conn, llm, db_cwd=str(Path(db_path).parent))
+            conv_id = svc.create_conversation(deck_id, title="Review run")
+
+            slides = conn.execute(
+                "SELECT id, position FROM slides WHERE deck_id = ? ORDER BY position",
+                (deck_id,),
+            ).fetchall()
+            total = len(slides)
+
+            all_findings = []
+            for i, slide in enumerate(slides, 1):
+                yield _sse({"type": "progress", "step": "review", "slide": i, "total": total})
+                chunks = []
+                for chunk in svc.stream_reply(
+                    conv_id,
+                    f"Review slide {slide['position']}",
+                    slide_id=slide["id"],
+                    mode="review",
+                ):
+                    if not chunk.startswith("[REVIEW_COMPLETE:") and not chunk.startswith("[CANCELLED]"):
+                        chunks.append(chunk)
+                from aippt.deck_review import parse_review_output
+                sr = parse_review_output("".join(chunks))
+                for f in sr.findings:
+                    if f.slide_num is None:
+                        f.slide_num = slide["position"]
+                all_findings.extend(sr.findings)
+
+            # Notes-flow pass
+            yield _sse({"type": "progress", "step": "notes", "slide": total, "total": total})
+            notes_result = svc.run_notes_flow_pass(conv_id)
+            all_findings.extend(notes_result.findings)
+
+            from aippt.deck_review import ReviewResult
+            merged = ReviewResult(findings=all_findings)
+            yield _sse({"type": "findings", "data": merged.to_dict()})
+            yield _sse({"type": "done"})
+        except Exception as exc:
+            logger.error("Review stream error for deck %s: %s", deck_id, exc)
+            yield _sse({"type": "error", "message": str(exc)})
+        finally:
+            conn.close()
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
+
+
+@router.post("/api/decks/{deck_id}/refine")
+async def refine_deck(deck_id: int, request: Request):
+    """Stream the bounded auto-refine loop for a deck.
+
+    After each re-render round the server emits ``recapture_needed``; the
+    browser should re-render the updated deck via PptxViewJS, POST fresh
+    thumbnails to ``/api/decks/{id}/thumbnails``, then POST to
+    ``/api/decks/{id}/thumbnails-ready`` to unblock the next round.
+
+    Response: ``text/event-stream``
+
+    Event types::
+
+        data: {"type":"progress","step":"review"|"patch"|"render"|"recapture","detail":"..."}
+        data: {"type":"round_complete","round":N,"patches_applied":M,"findings":[...]}
+        data: {"type":"recapture_needed","deck_id":N}
+        data: {"type":"thumbnails_ready"}
+        data: {"type":"complete","summary":{...}}
+        data: {"type":"error","message":"..."}
+    """
+    if getattr(request.app.state, "view_only", False):
+        return JSONResponse({"error": "Refine is disabled in view-only mode"}, status_code=403)
+
+    body = await request.json()
+    max_rounds = int(body.get("max_rounds", 2))
+    model_override = body.get("model")
+    user_ntid = body.get("ntid") or request.headers.get("X-User-NTID")
+
+    db_path = request.app.state.db_path
+    project_root = str(Path(request.app.state.db_path).parent)
+
+    conn_check = get_db(db_path)
+    deck_row = conn_check.execute("SELECT id FROM decks WHERE id = ?", (deck_id,)).fetchone()
+    conn_check.close()
+    if not deck_row:
+        return JSONResponse({"error": "Deck not found"}, status_code=404)
+
+    try:
+        llm = _make_llm_client(request, "improve", model_override, user_ntid)
+    except ValueError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
+
+    import threading as _threading
+    evt = _threading.Event()
+    _refine_events[deck_id] = evt
+
+    import queue as _queue
+    event_q: _queue.Queue = _queue.Queue()
+
+    def _progress(step: str, detail: str) -> None:
+        event_q.put(("progress", {"step": step, "detail": detail}))
+        if step == "recapture":
+            event_q.put(("recapture_needed", {"deck_id": deck_id}))
+
+    def _worker():
+        from aippt.deck_review import run_auto_refine
+        try:
+            result = run_auto_refine(
+                deck_id=deck_id,
+                conversation_id=_get_or_create_refine_conversation(deck_id, llm, db_path),
+                db_path=db_path,
+                project_root=project_root,
+                llm_client=llm,
+                max_rounds=max_rounds,
+                progress_callback=_progress,
+                thumbnails_ready_event=evt,
+            )
+            event_q.put(("complete", result.to_dict()))
+        except Exception as exc:
+            logger.error("Refine worker error for deck %s: %s", deck_id, exc)
+            event_q.put(("error", {"message": str(exc)}))
+        finally:
+            _refine_events.pop(deck_id, None)
+
+    def _sse(payload: dict) -> str:
+        return f"data: {json.dumps(payload)}\n\n"
+
+    async def generate():
+        import asyncio
+        loop = asyncio.get_running_loop()
+        fut = loop.run_in_executor(None, _worker)
+        try:
+            while True:
+                try:
+                    kind, payload = event_q.get(timeout=0.1)
+                except Exception:
+                    if fut.done():
+                        # Drain any remaining events
+                        while not event_q.empty():
+                            kind, payload = event_q.get_nowait()
+                            yield _sse({"type": kind, **payload})
+                        break
+                    await asyncio.sleep(0.05)
+                    continue
+
+                yield _sse({"type": kind, **payload})
+                if kind in ("complete", "error"):
+                    break
+
+                if kind == "recapture_needed":
+                    # Signal browser then wait for thumbnails_ready event
+                    # The event is set by POST /api/decks/{id}/thumbnails-ready
+                    yield _sse({"type": "thumbnails_ready"})  # placeholder — real signal from browser
+        finally:
+            await fut
+    return StreamingResponse(generate(), media_type="text/event-stream")
+
+
+def _get_or_create_refine_conversation(deck_id: int, llm, db_path: str) -> int:
+    """Return an existing 'Auto-refine' conversation or create a new one."""
+    from aippt.chat import ChatService
+    conn = get_db(db_path)
+    try:
+        svc = ChatService(conn, llm, db_cwd=str(Path(db_path).parent))
+        convs = svc.list_conversations(deck_id)
+        for c in convs:
+            if c.get("title", "").startswith("Auto-refine"):
+                return c["id"]
+        # Look up script path
+        row = conn.execute("SELECT source_script_path FROM decks WHERE id = ?", (deck_id,)).fetchone()
+        script_path = row["source_script_path"] if row else None
+        return svc.create_conversation(deck_id, title="Auto-refine", script_path=script_path)
+    finally:
+        conn.close()
+
+
+@router.post("/api/decks/{deck_id}/thumbnails")
+async def post_deck_thumbnails(deck_id: int, request: Request):
+    """Accept fresh slide images from the browser (no session token needed).
+
+    Request body (JSON)::
+
+        {"images": [{"position": 1, "data": "<base64-png>"}, ...]}
+
+    Used by the auto-refine loop's recapture step when there is no live
+    preview session open.
+    """
+    db_path = request.app.state.db_path
+    uploads_dir = request.app.state.uploads_dir
+
+    conn_check = get_db(db_path)
+    deck_row = conn_check.execute("SELECT id FROM decks WHERE id = ?", (deck_id,)).fetchone()
+    conn_check.close()
+    if not deck_row:
+        return JSONResponse({"error": "Deck not found"}, status_code=404)
+
+    body = await request.json()
+    images = body.get("images", [])
+    if not images:
+        return JSONResponse({"error": "images is required"}, status_code=400)
+
+    from aippt.thumbnails import store_client_images
+    import os
+
+    images_dir = os.path.join(uploads_dir, "images", str(deck_id))
+    os.makedirs(images_dir, exist_ok=True)
+
+    try:
+        count = store_client_images(
+            deck_id=deck_id,
+            images=images,
+            out_dir=images_dir,
+            db_path=db_path,
+            base_dir=str(Path(db_path).parent),
+        )
+        return {"stored": count}
+    except Exception as exc:
+        logger.error("Failed to store deck thumbnails for deck %s: %s", deck_id, exc)
+        return JSONResponse({"error": str(exc)}, status_code=500)
+
+
+@router.post("/api/decks/{deck_id}/thumbnails-ready")
+async def thumbnails_ready(deck_id: int, request: Request):
+    """Signal the refine loop that fresh thumbnails have been posted.
+
+    Called by the browser after it POSTs new slide images following a
+    ``recapture_needed`` event.  Sets the per-deck threading.Event so
+    the refine loop can proceed to the next round.
+    """
+    evt = _refine_events.get(deck_id)
+    if evt is None:
+        return JSONResponse({"error": "No active refine loop for this deck"}, status_code=404)
+    evt.set()
+    return {"acknowledged": True}
