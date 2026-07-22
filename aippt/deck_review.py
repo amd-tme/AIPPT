@@ -318,26 +318,40 @@ def _review_all_slides(
     model_used = ""
 
     for slide in slides:
-        reply_chunks = []
-        for chunk in chat_svc.stream_reply(
-            conversation_id,
-            f"Review slide {slide['position']}: {slide['title'] or '(untitled)'}",
-            slide_id=slide["id"],
-            mode="review",
-        ):
-            # Collect non-sentinel chunks
-            if not chunk.startswith("[REVIEW_COMPLETE:") and not chunk.startswith("[CANCELLED]"):
-                reply_chunks.append(chunk)
+        try:
+            reply_chunks = []
+            for chunk in chat_svc.stream_reply(
+                conversation_id,
+                f"Review slide {slide['position']}: {slide['title'] or '(untitled)'}",
+                slide_id=slide["id"],
+                mode="review",
+            ):
+                # Collect non-sentinel chunks
+                if not chunk.startswith("[REVIEW_COMPLETE:") and not chunk.startswith("[CANCELLED]"):
+                    reply_chunks.append(chunk)
 
-        full_reply = "".join(reply_chunks)
-        slide_result = parse_review_output(full_reply, round_num=round_num)
-        model_used = slide_result.model_used or model_used
+            full_reply = "".join(reply_chunks)
+            slide_result = parse_review_output(full_reply, round_num=round_num)
+            model_used = slide_result.model_used or model_used
 
-        # Tag each finding with the correct slide_num if not set
-        for f in slide_result.findings:
-            if f.slide_num is None:
-                f.slide_num = slide["position"]
-        all_findings.extend(slide_result.findings)
+            # Tag each finding with the correct slide_num if not set
+            for f in slide_result.findings:
+                if f.slide_num is None:
+                    f.slide_num = slide["position"]
+            all_findings.extend(slide_result.findings)
+
+        except Exception as exc:
+            logger.warning(
+                "Review failed for slide %s (deck %s): %s — skipping",
+                slide["position"], deck_id, exc,
+            )
+            all_findings.append(Finding(
+                slide_num=slide["position"],
+                severity=Severity.LOW,
+                category="content",
+                description=f"Review could not complete for this slide (network error): {exc}",
+                actionable=False,
+            ))
 
     return ReviewResult(findings=all_findings, round_num=round_num, model_used=model_used)
 
