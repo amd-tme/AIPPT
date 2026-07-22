@@ -2971,22 +2971,34 @@ async def review_deck(deck_id: int, request: Request):
 
             all_findings = []
             for i, slide in enumerate(slides, 1):
-                yield _sse({"type": "progress", "step": "review", "slide": i, "total": total})
-                chunks = []
-                for chunk in svc.stream_reply(
-                    conv_id,
-                    f"Review slide {slide['position']}",
-                    slide_id=slide["id"],
-                    mode="review",
-                ):
-                    if not chunk.startswith("[REVIEW_COMPLETE:") and not chunk.startswith("[CANCELLED]"):
-                        chunks.append(chunk)
-                from aippt.deck_review import parse_review_output
-                sr = parse_review_output("".join(chunks))
-                for f in sr.findings:
-                    if f.slide_num is None:
-                        f.slide_num = slide["position"]
-                all_findings.extend(sr.findings)
+                yield _sse({"type": "progress", "step": "review", "slide": i, "total": total,
+                            "detail": f"Reviewing slide {i} of {total}…"})
+                try:
+                    chunks = []
+                    for chunk in svc.stream_reply(
+                        conv_id,
+                        f"Review slide {slide['position']}",
+                        slide_id=slide["id"],
+                        mode="review",
+                    ):
+                        if not chunk.startswith("[REVIEW_COMPLETE:") and not chunk.startswith("[CANCELLED]"):
+                            chunks.append(chunk)
+                    from aippt.deck_review import parse_review_output
+                    sr = parse_review_output("".join(chunks))
+                    for f in sr.findings:
+                        if f.slide_num is None:
+                            f.slide_num = slide["position"]
+                    all_findings.extend(sr.findings)
+                except Exception as slide_exc:
+                    logger.warning("Review slide %s error: %s — skipping", slide["position"], slide_exc)
+                    from aippt.deck_review import Finding, Severity
+                    all_findings.append(Finding(
+                        slide_num=slide["position"],
+                        severity=Severity.LOW,
+                        category="content",
+                        description="Review could not complete for this slide (network error)",
+                        actionable=False,
+                    ))
 
             # Notes-flow pass
             yield _sse({"type": "progress", "step": "notes", "slide": total, "total": total})
