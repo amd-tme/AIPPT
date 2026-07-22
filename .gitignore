@@ -84,3 +84,8 @@ llm-examples/
 
 # Local design docs (analysis, plans, superpowers — moved out of tracked tree)
 .local-docs/
+
+# Orchestration/Linear skill scaffolding (not part of the aippt skill pipeline)
+skills-lock.json
+skills/orca-linear/
+skills/orchestration/
