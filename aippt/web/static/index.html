@@ -1737,6 +1737,17 @@
                         <input type="file" id="create-image-files" accept="image/*" multiple style="display:none;" onchange="updateImageLabel(this)">
                         <span id="create-image-count" style="font-size:0.8rem; color:var(--pico-muted-color);"></span>
                     </div>
+                    <div style="display:flex;align-items:center;gap:1rem;margin-bottom:0.5rem;">
+                        <span style="font-size:0.82rem;color:var(--pico-muted-color);">Engine</span>
+                        <label style="font-size:0.82rem;cursor:pointer;display:flex;align-items:center;gap:0.3rem;">
+                            <input type="radio" name="create-engine" value="pptxgenjs" checked style="margin:0;">
+                            pptxgenjs <span style="font-size:0.72rem;color:var(--pico-primary);">(rich visuals)</span>
+                        </label>
+                        <label style="font-size:0.82rem;cursor:pointer;display:flex;align-items:center;gap:0.3rem;">
+                            <input type="radio" name="create-engine" value="python-pptx" style="margin:0;">
+                            python-pptx <span style="font-size:0.72rem;color:var(--pico-muted-color);">(template)</span>
+                        </label>
+                    </div>
                     <div class="create-options">
                         <button class="outline" onclick="document.getElementById('create-md-file').click()" style="width:auto; padding:0.3rem 0.7rem; font-size:0.85rem;">Upload .md</button>
                         <input type="file" id="create-md-file" accept=".md,.txt" style="display:none;" onchange="loadMdFile(this)">
@@ -4507,9 +4518,12 @@
             }
             progressEl.style.display = 'block';
 
+            const engine = document.querySelector('input[name="create-engine"]:checked')?.value || 'pptxgenjs';
+
             const formData = new FormData();
             formData.append('outline_text', outlineText);
             formData.append('enhance', enhance.toString());
+            formData.append('engine', engine);
             if (model) formData.append('model', model);
             if (audience && audience !== 'mixed') formData.append('audience', audience);
 
@@ -4593,7 +4607,7 @@
                     msAuth.signOut();
                     toast('Create failed: Microsoft sign-in expired — please sign in again');
                 } else {
-                    toast('Create failed: ' + data.detail);
+                    toast('Create failed: ' + (data.detail || data.message || 'unknown error'));
                 }
             }
         }

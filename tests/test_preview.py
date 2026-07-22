@@ -26,23 +26,33 @@ class TestRenderer:
         r = Renderer()
         script = tmp_path / "deck.js"
         script.touch()
-        cmd, stage = r._build_command(script)
+        out = tmp_path / "out"
+        cmd, stage = r._build_command(script, out)
         assert cmd[0] == "node"
         assert stage == "node"
+        # Node runs under the permission model with fs-write scoped to out dir
+        # and no child-process permission.
+        assert "--permission" in cmd
+        assert f"--allow-fs-write={out}" in cmd
+        assert not any(c.startswith("--allow-child-process") for c in cmd)
 
     def test_build_command_mjs(self, tmp_path):
         r = Renderer()
         script = tmp_path / "deck.mjs"
         script.touch()
-        cmd, stage = r._build_command(script)
+        out = tmp_path / "out"
+        cmd, stage = r._build_command(script, out)
         assert cmd[0] == "node"
         assert stage == "node"
+        assert "--permission" in cmd
+        assert f"--allow-fs-write={out}" in cmd
 
     def test_build_command_py(self, tmp_path):
         r = Renderer()
         script = tmp_path / "deck.py"
         script.touch()
-        cmd, stage = r._build_command(script)
+        out = tmp_path / "out"
+        cmd, stage = r._build_command(script, out)
         assert "python" in cmd[0].lower()
         assert stage == "python"
 

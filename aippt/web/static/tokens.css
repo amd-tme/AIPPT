@@ -147,7 +147,7 @@
 
 :root {
     /* Level 3 surface (modals) — not in upstream tokens.css */
-    --bg-modal: #2d3449;
+    --bg-modal: #1a1c1e;
 
     /* Body font stack uses DM Sans (Daedalus portal pattern) */
     --font-sans: 'DM Sans', system-ui, -apple-system, 'Helvetica Neue', sans-serif;

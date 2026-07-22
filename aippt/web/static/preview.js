@@ -375,6 +375,8 @@ function _clearViewer() {
 export function prevSlide() { pptxViewer?.previousSlide?.(); }
 export function nextSlide() { pptxViewer?.nextSlide?.(); }
 export function getSessionToken() { return session?.token ?? null; }
+export function getPptxViewer() { return pptxViewer; }
+export async function goToSlide(index) { await pptxViewer?.goToSlide?.(index); }
 
 /**
  * Capture each rendered slide as a PNG data URL for Save-to-Library.
