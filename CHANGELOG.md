@@ -10,18 +10,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **pptxgenjs deck generation via web UI.** The Create Deck panel now exposes an
   Engine selector (pptxgenjs / python-pptx). When pptxgenjs is chosen, the
-  server generates a validated `.mjs` script from the markdown outline using the
-  LLM (same Critical Rules and Layout Decision Strategy as the `/create-deck`
-  skill), executes it via `Renderer.render()`, catalogs the resulting deck with
+  server generates a `.mjs` script from the markdown outline using the LLM (same
+  Critical Rules and Layout Decision Strategy as the `/create-deck` skill),
+  executes it via `Renderer.render()`, catalogs the resulting deck with
   `source_engine="pptxgenjs"` and `source_script_path` set, and streams progress
-  over SSE just like the python-pptx path. A deterministic validation gate
-  (`aippt.pptxgenjs_validate`) rejects scripts that contain dangerous constructs
-  (`eval`, `Function`, `child_process`, `fs`, `net`, `http`, `process.env`,
-  dynamic `import()`), disallowed import sources, or Critical Rule violations
-  (hash-prefixed hex colors, 8-char hex, `LAYOUT_16x9`) before any execution
-  occurs. The generator retries up to 3 times on validation failure before
-  raising `ScriptGenerationError`. New modules: `aippt.pptxgenjs_validate`,
-  `aippt.pptxgenjs_gen`.
+  over SSE just like the python-pptx path. Execution safety is enforced by a
+  runtime sandbox in `aippt.preview` (the security boundary): the child process
+  runs under the Node.js permission model (`--permission` with narrow
+  `--allow-fs-read`/`--allow-fs-write` and no `--allow-child-process`) and a
+  scrubbed environment allow-list, so generated scripts cannot reach credentials,
+  spawn processes, or write outside the render directory. A separate quality lint
+  (`aippt.pptxgenjs_validate`) catches only PPTX-corrupting mistakes
+  (hash-prefixed hex colors, 8-char hex, `LAYOUT_16x9`, missing helper imports)
+  and drives the generator's retry loop (up to 3 attempts, with prior failure
+  reasons fed back into the prompt) — it is explicitly not a security control.
+  New modules: `aippt.pptxgenjs_validate`, `aippt.pptxgenjs_gen`.
+- **Corporate template restore from object storage.** In `s3` mode the app now
+  restores the corporate PPTX template from MinIO (`templates/corp.pptx`) into
+  the writable data volume on startup, mirroring the catalog snapshot/restore.
+  The template is proprietary and gitignored, so it is neither in git nor baked
+  into the image; without this, deck creation on a cold pod returned
+  `404 Template not found: templates/corp.pptx`. New `aippt.templates_store`
+  module (`restore_template`), an `AIPPT_TEMPLATE_PATH` env override honored
+  first by `get_template_default()` so the container points at the restored
+  data-dir path while local dev keeps the committed `templates.yaml` default,
+  and startup wiring in the web app's `s3` lifespan branch. Best-effort: a
+  restore failure logs and leaves a clear 404 rather than blocking startup.
 - **Slide thumbnail generation for script/preview-origin decks.** Live Preview →
   Save-to-Library now captures each rendered slide in the browser (PptxViewJS
   `renderSlide` → `canvas.toBlob`) and posts the images with the catalog request,

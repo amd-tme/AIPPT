@@ -17,6 +17,42 @@ registry:
     max_input_tokens: 128000
     supports_vision: true
     supports_images: true
+  gpt-5.4:
+    provider: openai
+    max_tokens: 128000
+    max_input_tokens: 1047576
+    supports_vision: true
+    supports_images: false
+  gpt-5.4-mini:
+    provider: openai
+    max_tokens: 128000
+    max_input_tokens: 1047576
+    supports_vision: true
+    supports_images: false
+  gpt-5.5:
+    provider: openai
+    max_tokens: 128000
+    max_input_tokens: 1047576
+    supports_vision: true
+    supports_images: false
+  gpt-5.6-luna:
+    provider: openai
+    max_tokens: 128000
+    max_input_tokens: 1050000
+    supports_vision: true
+    supports_images: false
+  gpt-5.6-sol:
+    provider: openai
+    max_tokens: 128000
+    max_input_tokens: 1050000
+    supports_vision: true
+    supports_images: false
+  gpt-5.6-terra:
+    provider: openai
+    max_tokens: 128000
+    max_input_tokens: 1050000
+    supports_vision: true
+    supports_images: false
   o3-mini:
     provider: openai
     max_tokens: 128000
@@ -57,6 +93,18 @@ registry:
     provider: anthropic
     max_tokens: 200000
     max_input_tokens: 200000
+    supports_vision: true
+    supports_images: false
+  claude-opus-4-8:
+    provider: anthropic
+    max_tokens: 128000
+    max_input_tokens: 1000000
+    supports_vision: true
+    supports_images: false
+  claude-sonnet-5:
+    provider: anthropic
+    max_tokens: 128000
+    max_input_tokens: 1000000
     supports_vision: true
     supports_images: false
   gemini-2.0-flash:

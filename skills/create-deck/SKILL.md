@@ -87,7 +87,7 @@ Read the [pptxgenjs guide](references/pptxgenjs-guide.md) for complete API refer
 3. **Decide layouts** — For each slide, analyze content and choose a layout using the Layout Decision Strategy (see below). Apply the **variety rule**: never repeat the same layout on consecutive slides.
 
 4. **Generate script** — Write a Node.js ES module (`.mjs`) that imports from the helper library:
-   - `import { createDeck, addTitleSlide, addBulletSlide, addImageSlide, addImageBulletsSlide, addProcessFlow, addTwoColumn, addCardGrid, addStatCallout, addCodeSlide, addIconRowsSlide, addSectionDivider, addClosingSlide, addFooter, renderIconSvg, iconToBase64, preRenderIcons, cardShadow, SW, SH } from '../lib/pptxgenjs-helpers.mjs';`
+   - `import { createDeck, addTitleSlide, addBulletSlide, addImageSlide, addImageBulletsSlide, addProcessFlow, addTwoColumn, addCardGrid, addStatCallout, addCodeSlide, addIconRowsSlide, addSectionDivider, addClosingSlide, addFooter, renderIconSvg, iconToBase64, preRenderIcons, cardShadow, SW, SH, addTitleAlt, addSectionContent, addTwoColNumbered, addPictureCaption, addFourImageGallery, addThreeColContent, addThreeColImageText, addThreeImageGallery, addTwoImageGallery, addCinematicSlide, addSplitImageContent, addTitleWithImage } from '../lib/pptxgenjs-helpers.mjs';`
    - Call `createDeck('themes/<theme>.yaml')` — returns a `deck` object with `pptx`, `theme`, and `layout` already configured. When `--slide-master` is specified, use `createDeck('themes/<theme>.yaml', { useSlideMaster: true })` to enable slide masters (chrome inherited from master, not baked per-slide).
    - Use slide builder functions: `addBulletSlide(deck, title, bullets, slideNum, notes)`, `addProcessFlow(deck, title, steps, slideNum)`, etc.
    - Pre-render icons with `preRenderIcons({ name: { component, color } })` or individual `iconToBase64(renderIconSvg(Icon, 256, color))`
@@ -216,6 +216,18 @@ Analyze each slide's content for signals that map to layout types:
 | `LAYOUT: diagram` without `IMAGE:` | Content fallback + actionable suggestion | Layout 3 (Title and Content) + actionable suggestion |
 | Slide about specific vendor product | Any layout + brand badge (top-right) | Any layout + floating logo badge |
 | Last slide / thank you | Closing slide | Layout 30 (Closing Logo) |
+| Section-break / chapter opener (not deck title) | `addTitleAlt()` — large title + subtitle card | N/A (pptxgenjs only) |
+| Short section label + 3-5 summary bullets | `addSectionContent()` — label left, bullets right | N/A |
+| Ranked or prioritized list under one theme | `addTwoColNumbered()` — label left, numbered right | N/A |
+| Single product/hardware image to highlight | `addPictureCaption()` — full image + caption | N/A |
+| 4 parallel use cases, products, or screenshots | `addFourImageGallery()` — 2×2 image grid | N/A |
+| 3-pillar framework or three-way comparison (text-only) | `addThreeColContent()` — 3 equal heading+body cols | N/A |
+| 3-way comparison where each column has a visual | `addThreeColImageText()` — 3 image+heading+body cols | N/A |
+| 3 customer stories, case studies, or environments | `addThreeImageGallery()` — 3 side-by-side images | N/A |
+| Before/after, two-product or dual case study | `addTwoImageGallery()` — 2 side-by-side images | N/A |
+| Dramatic section opener, quote, or transition | `addCinematicSlide()` — full-bleed image + centered title | N/A |
+| Hardware/product visual + bullet feature list | `addSplitImageContent()` — image left, bullets right | N/A |
+| Product name + image at equal visual weight | `addTitleWithImage()` — large title left, image right | N/A |
 
 ### Layout Variety Rule
 
@@ -224,12 +236,13 @@ Analyze each slide's content for signals that map to layout types:
 
 **Substitution table** (when layout repeats):
 
-- Two bullet slides in a row → make the second one icon+text rows or card grid
+- Two bullet slides in a row → make the second one `section_content`, `split_image_content`, or card grid
 - Two card grids in a row → make the second one icon+text rows
 - Two process flows in a row → make the second one icon+text rows with numbered labels
 - Two code slides in a row → make the second one standard bullets with inline code
 - Two two-column slides in a row → make the second one a card grid or bullet slide
 - Two icon+text rows in a row → make the second one a logo grid (if items are named technologies) or card grid
+- Two gallery slides in a row → swap second to `three_col_content` or `split_image_content`
 
 ### Numbered List Item Count
 
@@ -244,6 +257,18 @@ If the outline contains explicit directives, they override the auto-detection:
 - `LAYOUT: numbered` → process flow or numbered list
 - `LAYOUT: basic` → simple title + content
 - `LAYOUT: diagram` → image slide (with `IMAGE:` directive)
+- `LAYOUT: title_alt` → alternate title card (`addTitleAlt`)
+- `LAYOUT: section_content` → label left + bullets right (`addSectionContent`)
+- `LAYOUT: two_col_numbered` → label left + numbered list right (`addTwoColNumbered`)
+- `LAYOUT: picture_caption` → full-width image + caption (`addPictureCaption`)
+- `LAYOUT: four_image_gallery` → 2×2 image grid (`addFourImageGallery`)
+- `LAYOUT: three_col_content` → 3 heading+body columns (`addThreeColContent`)
+- `LAYOUT: three_col_image_text` → 3 image+heading+body columns (`addThreeColImageText`)
+- `LAYOUT: three_image_gallery` → 3 images with captions (`addThreeImageGallery`)
+- `LAYOUT: two_image_gallery` → 2 images with captions (`addTwoImageGallery`)
+- `LAYOUT: cinematic` → full-bleed image + centered title (`addCinematicSlide`)
+- `LAYOUT: split_image_content` → image left + bullets right (`addSplitImageContent`)
+- `LAYOUT: title_with_image` → large title left + image right (`addTitleWithImage`)
 
 **Two-column header extraction (pptxgenjs):** When `LAYOUT: two_column | Left Header | Right Header` appears, parse the pipe-separated headers and pass them to `addTwoColumn()`:
 

@@ -357,11 +357,21 @@ def load_template_config(config_path: Optional[str] = None) -> Dict:
 
 
 def get_template_default(config_path: Optional[str] = None) -> str:
-    """Return the default template path from templates.yaml.
+    """Return the default template path.
+
+    The ``AIPPT_TEMPLATE_PATH`` environment variable, when set to a non-blank
+    value, takes precedence and short-circuits reading ``templates.yaml``. This
+    lets container deployments point at the template restored into the writable
+    data volume (see ``templates_store.restore_template``) without editing the
+    committed ``templates.yaml`` default that local dev relies on.
 
     Raises:
-      TemplateConfigError  -- if templates.yaml is missing or invalid
+      TemplateConfigError  -- if the env override is unset and templates.yaml is
+      missing or invalid
     """
+    env_override = os.environ.get("AIPPT_TEMPLATE_PATH")
+    if env_override and env_override.strip():
+        return env_override.strip()
     return load_template_config(config_path)["default_template"]
 
 
