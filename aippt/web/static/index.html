@@ -4772,10 +4772,10 @@
                 const auto = f.actionable ? '<span style="color:#4caf50;font-size:0.7rem;">auto-fix</span>' : '';
                 return `<tr>
                     <td style="white-space:nowrap;">${esc(slide)}</td>
-                    <td>${badge}</td>
-                    <td style="color:var(--pico-muted-color);font-size:0.75rem;">${esc(f.category)}</td>
+                    <td style="white-space:nowrap;">${badge}</td>
+                    <td style="white-space:nowrap;color:var(--pico-muted-color);font-size:0.75rem;">${esc(f.category)}</td>
                     <td>${esc(f.description)}</td>
-                    <td>${auto}</td>
+                    <td style="white-space:nowrap;">${auto}</td>
                 </tr>`;
             }).join('');
             threadEl.insertAdjacentHTML('beforeend', `
