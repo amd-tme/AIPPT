@@ -8,6 +8,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Deck Review mode in the web chat interface.** A new ★ Review radio button
+  alongside Ask / Edit sends the full deck through a structured visual-QA pass:
+  each slide is reviewed against a rubric (layout variety, text overflow, visual
+  density, AMD brand compliance, clarity) and speaker notes are checked for
+  repetition, weak transitions, and cadence. Findings are returned as a
+  HIGH/MEDIUM/LOW severity table with auto-fix eligibility flagged. Powered by
+  `aippt.deck_review.Finding / ReviewResult` and a new `"review"` mode in
+  `aippt.chat.ChatService.stream_reply()`. New endpoints: `POST
+  /api/decks/{id}/review` (SSE findings stream).
+- **Post-generation auto-refine loop.** After a pptxgenjs deck is created, an
+  optional bounded loop (1–2 rounds, enabled by default via the "Auto-refine after
+  generation" checkbox) reviews the deck and auto-applies fixes through the
+  existing patch → re-render cycle. The browser re-captures slide thumbnails
+  between rounds via `_inlinePptxViewer.captureSlideImages()` and POSTs them to
+  `POST /api/decks/{id}/thumbnails`; `POST /api/decks/{id}/thumbnails-ready`
+  unblocks the server loop. A "N issues fixed" summary toast and progress step are
+  shown. New orchestrator: `aippt.deck_review.run_auto_refine()`. New endpoints:
+  `POST /api/decks/{id}/refine`, `POST /api/decks/{id}/thumbnails`, `POST
+  /api/decks/{id}/thumbnails-ready`.
+
 - **pptxgenjs deck generation via web UI.** The Create Deck panel now exposes an
   Engine selector (pptxgenjs / python-pptx). When pptxgenjs is chosen, the
   server generates a `.mjs` script from the markdown outline using the LLM (same
