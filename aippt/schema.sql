@@ -109,7 +109,7 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     role TEXT NOT NULL CHECK(role IN ('user', 'assistant')),
     content TEXT NOT NULL,
     slide_id INTEGER REFERENCES slides(id) ON DELETE SET NULL,
-    mode TEXT DEFAULT 'ask' CHECK(mode IN ('ask', 'edit') OR mode IS NULL),
+    mode TEXT DEFAULT 'ask' CHECK(mode IN ('ask', 'edit', 'review') OR mode IS NULL),
     patch_json TEXT DEFAULT NULL,
     patch_applied_at TEXT DEFAULT NULL,
     patch_reverted_at TEXT DEFAULT NULL,
