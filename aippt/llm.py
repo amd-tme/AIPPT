@@ -32,6 +32,20 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
+def _first_text_block(response) -> str:
+    """Return the first text block from an Anthropic messages response.
+
+    Extended-thinking responses put a ``ThinkingBlock`` (which has no ``text``
+    attribute) at ``content[0]``, so indexing ``content[0].text`` blindly
+    raises ``AttributeError``. Scan for the first block that carries text.
+    """
+    for block in response.content:
+        text = getattr(block, "text", None)
+        if text is not None:
+            return text
+    raise ValueError("Anthropic response contained no text block.")
+
+
 # ---------------------------------------------------------------------------
 # Gateway configuration
 # ---------------------------------------------------------------------------
@@ -372,7 +386,7 @@ class LLMClient:
                     system=system_prompt,
                     messages=[{"role": "user", "content": prompt}],
                 )
-                return response.content[0].text
+                return _first_text_block(response)
             else:
                 response = self._openai_chat_create(
                     model=self.model,
@@ -447,7 +461,7 @@ class LLMClient:
                     system=system_prompt,
                     messages=[{"role": "user", "content": content}],
                 )
-                return response.content[0].text
+                return _first_text_block(response)
             else:
                 # OpenAI / compatible
                 data_url = f"data:{media_type};base64,{image_data}"
