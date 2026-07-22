@@ -36,33 +36,30 @@ RUN sphinx-build -b html docs docs/_build/html
 FROM python:3.11-slim
 
 # System dependencies:
-#  - poppler-utils (pdftoppm): used by BOTH the SharePoint/Graph render pipeline
-#    (PPTX -> Graph -> PDF -> pdftoppm -> PNG; see aippt/render.py) and the live
-#    preview pipeline (see aippt/preview.py).
-#  - libreoffice-impress: PPTX -> PDF conversion for the live preview pipeline
-#    (node/pptxgenjs -> .pptx -> soffice -> pdftoppm -> JPEG). Impress + core
-#    only (--no-install-recommends), no full office suite and no JRE; PPTX->PDF
-#    works headless without Java. If a deck ever needs Java-backed features, add
-#    default-jre-headless.
-#  - fonts-*: metric-compatible open substitutes for the Arial / Calibri /
-#    Cambria / Consolas families the slide themes request, so LibreOffice lays
-#    text out close to PowerPoint. Real MS fonts (ttf-mscorefonts-installer)
-#    need an EULA-gated SourceForge download the AMD proxy blocks; previews stay
-#    approximate, matching the UI's "fonts may differ" disclaimer.
-#  - nodejs + npm: run slides-as-code (.mjs/pptxgenjs) scripts (Debian bookworm
-#    ships Node 18, adequate for pptxgenjs 4 + ESM).
+#  - poppler-utils (pdftoppm): used by the SharePoint/Graph render pipeline
+#    (PPTX -> Graph -> PDF -> pdftoppm -> PNG; see aippt/render.py) for Linux
+#    image export. The live preview pipeline no longer needs it — PptxViewJS
+#    renders the generated .pptx in the browser (see aippt/preview.py), so
+#    LibreOffice/soffice and its metric-compatible font substitutes have been
+#    dropped from the image.
 #  - ca-certificates: base trust store extended with the AMD root below.
+# Node.js is deliberately NOT installed from apt here — see the COPY --from=node
+# block below for why (bookworm's Node 18 predates the render sandbox flag).
 RUN apt-get update && apt-get install -y --no-install-recommends \
         poppler-utils \
-        libreoffice-impress \
-        fonts-liberation \
-        fonts-crosextra-carlito \
-        fonts-crosextra-caladea \
-        fonts-dejavu \
-        nodejs \
-        npm \
         ca-certificates \
     && rm -rf /var/lib/apt/lists/*
+
+# Node.js 24 for the slides-as-code (.mjs/pptxgenjs) preview engine. Copied from
+# the official Node image rather than Debian apt: bookworm ships Node 18, but the
+# render sandbox in aippt/preview.py invokes node with the *stable* --permission
+# flag, which only exists from Node 23.5+ (it was --experimental-permission on
+# Node 20-22 LTS, and absent on Node 18). Node 24 is the current LTS. Both images
+# are Debian bookworm, so the binary is glibc-compatible with python:3.11-slim.
+COPY --from=node:24-bookworm-slim /usr/local/bin/node /usr/local/bin/node
+COPY --from=node:24-bookworm-slim /usr/local/lib/node_modules /usr/local/lib/node_modules
+RUN ln -sf ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
+    && ln -sf ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
 
 # Bake the AMD Corporate PKI chain into a combined CA bundle so minio-py (and
 # npm, below) can verify TLS under readOnlyRootFilesystem. The manifest points
