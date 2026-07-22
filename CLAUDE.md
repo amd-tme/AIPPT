@@ -355,22 +355,28 @@ The `pptx` skill (from `anthropic-agent-skills/document-skills`) provides optimi
 
 ## Project Tracking
 
-PRDs live in the shared **`swproductmgmt`** repo at `~/git/swproductmgmt/projects/aippt/prds/` — the single source of truth, where collaboration + review happen (house rule: branch → PR → reviewed and merged by someone else). This project additionally uses an **Obsidian vault** for the PRD status **dashboard** and daily logs — not GitHub Issues or Planner.
+PRDs live in the shared **`swproductmgmt`** repo at `~/git/swproductmgmt/projects/aippt/prds/` — the single source of truth, where collaboration + review happen (house rule: branch → PR → reviewed and merged by someone else). PRD **status** is tracked on a separate dashboard (never in GitHub Issues or Planner).
+
+**PRD status dashboard is migrating to Linear (trial, since 2026-07-20).** The Linear **AIPPT** project holds one issue per *open* PRD (status + priority + a link to the canonical `.md`; **never** duplicated PRD prose). The Obsidian **`AIPPT PRD Tracker.md`** still runs in parallel during the trial. Matt plans to **retire the Obsidian PRD tracker** once the Linear workflow proves out — so prefer Linear for PRD status going forward, and keep the vault tracker in sync only until it's formally retired. Confirm current state before assuming the vault tracker is gone. Daily logs stay in Obsidian regardless.
+
+- **Linear workspace:** `amd-melliott` (free tier — 250-issue cap, so track only open PRDs, never the implemented archive). One team **Matt Elliott** (`MAT`) spans all his projects; per-project separation is by Linear **Project** + a per-project **label**.
+- **AIPPT in Linear:** Project "AIPPT" (`https://linear.app/amd-melliott/project/aippt-e3c7f2ce5b24`); labels `AIPPT` (project) + `PRD` (PRD-scoped issues, vs small tasks). Status map: vault *Stub → Backlog · Draft → Todo · In Progress → In Progress · PR-in-review → In Review · Completed → Done* (Done not imported).
 
 **Vault root:** `/mnt/c/Users/melliott/git/obsidian-vault/`
 
 | Resource | Path |
 |----------|------|
-| Daily work log | `10 - Daily/YYYY-MM-DD.md` — add a `## 🛠️ Work Log` section with AIPPT subsection |
 | PRD content (canonical) | `~/git/swproductmgmt/projects/aippt/prds/` — shared repo, single source of truth |
-| PRD status dashboard | `30 - Projects/AIPPT/AIPPT PRD Tracker.md` (Obsidian) |
+| PRD status dashboard (primary, trial) | Linear project **AIPPT** — `https://linear.app/amd-melliott/project/aippt-e3c7f2ce5b24` |
+| PRD status dashboard (parallel, being retired) | `30 - Projects/AIPPT/AIPPT PRD Tracker.md` (Obsidian) |
+| Daily work log | `10 - Daily/YYYY-MM-DD.md` — add a `## 🛠️ Work Log` section with AIPPT subsection |
 | Dev notes | `30 - Projects/AIPPT/AIPPT Dev Notes.md` |
 | Feedback | `30 - Projects/AIPPT/AIPPT Feedback.md` |
 
 **After completing meaningful work** (feature implemented, PRD finished, branch merged):
 1. Add an entry to today's daily log under `## 🛠️ Work Log`
-2. Update `AIPPT PRD Tracker.md` — move the PRD to In Progress / Completed as appropriate
-3. Update the PRD's frontmatter `status` in `~/git/swproductmgmt/projects/aippt/prds/` via a PR (`draft` → `in-review` → `implemented`); on `implemented`, move it to `~/git/swproductmgmt/projects/aippt/prds/implemented/`
+2. Update the PRD's Linear issue status (and the Obsidian `AIPPT PRD Tracker.md` too, until the vault tracker is retired)
+3. Update the PRD's frontmatter `status` in `~/git/swproductmgmt/projects/aippt/prds/` via a PR (`draft` → `in-review` → `implemented`); on `implemented`, move it to `~/git/swproductmgmt/projects/aippt/prds/implemented/` and set the Linear issue to Done
 
 ## Planning Docs
 
@@ -406,7 +412,7 @@ git branch -d feature/<branch-name>
 
 - **Feature work**: Branch from `main`, use `feature/<descriptive-name>`
 - **Worktrees**: Go in `.worktrees/<short-name>/` (gitignored)
-- **PRDs**: Authored in `~/git/swproductmgmt/projects/aippt/prds/` (canonical content). Status is tracked in the `AIPPT PRD Tracker` note in the Obsidian vault — the tracker is your dashboard; swproductmgmt is the source of truth for PRD content.
+- **PRDs**: Authored in `~/git/swproductmgmt/projects/aippt/prds/` (canonical content). Status is tracked on the **Linear AIPPT project** (trial dashboard, migrating off the Obsidian `AIPPT PRD Tracker` note — see Project Tracking above); swproductmgmt remains the source of truth for PRD content.
 - **Cleanup**: Remove worktrees and delete branches after merging
 
 ### Current Active Branches
