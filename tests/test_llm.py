@@ -375,6 +375,25 @@ class TestGenerateText:
         assert result == "Hello from Claude"
         mock_client.messages.create.assert_called_once()
 
+    @patch("aippt.llm.anthropic.Client")
+    def test_generate_text_anthropic_skips_thinking_block(self, mock_client_cls, models_yaml):
+        # Extended-thinking responses put a ThinkingBlock (no .text) at content[0].
+        from types import SimpleNamespace
+
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+        mock_response = MagicMock()
+        mock_response.content = [
+            SimpleNamespace(type="thinking", thinking="hmm..."),
+            SimpleNamespace(type="text", text="Hello from Claude"),
+        ]
+        mock_client.messages.create.return_value = mock_response
+
+        llm = LLMClient(model="claude-3.5-sonnet", api_key="key")
+        result = llm.generate_text("Say hello")
+
+        assert result == "Hello from Claude"
+
     @patch("aippt.llm.openai.Client")
     def test_generate_text_openai(self, mock_client_cls, models_yaml):
         mock_client = MagicMock()
