@@ -1748,6 +1748,12 @@
                             python-pptx <span style="font-size:0.72rem;color:var(--pico-muted-color);">(template)</span>
                         </label>
                     </div>
+                    <div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.5rem;font-size:0.82rem;">
+                        <label style="display:flex;align-items:center;gap:0.3rem;cursor:pointer;margin:0;">
+                            <input type="checkbox" id="create-auto-refine" checked style="margin:0;">
+                            Auto-refine after generation <span style="color:var(--pico-muted-color);">(1–2 rounds)</span>
+                        </label>
+                    </div>
                     <div class="create-options">
                         <button class="outline" onclick="document.getElementById('create-md-file').click()" style="width:auto; padding:0.3rem 0.7rem; font-size:0.85rem;">Upload .md</button>
                         <input type="file" id="create-md-file" accept=".md,.txt" style="display:none;" onchange="loadMdFile(this)">
@@ -1790,6 +1796,11 @@
                         <div class="step waiting" id="create-step-ingest">
                             <span class="step-icon">○</span>
                             <span class="step-label">Catalog deck</span>
+                            <span class="step-detail"></span>
+                        </div>
+                        <div class="step waiting" id="create-step-refine" style="display:none;">
+                            <span class="step-icon">○</span>
+                            <span class="step-label">Auto-refine</span>
                             <span class="step-detail"></span>
                         </div>
                     </div>
@@ -1922,6 +1933,10 @@
                                 <label id="deck-chat-edit-label" style="display:flex; align-items:center; gap:0.25rem; cursor:pointer; margin:0;">
                                     <input type="radio" name="deck-chat-mode" id="deck-chat-mode-edit" value="edit"
                                            style="margin:0;" onchange="onChatModeChange()"> Edit
+                                </label>
+                                <label id="deck-chat-review-label" style="display:flex; align-items:center; gap:0.25rem; cursor:pointer; margin:0;">
+                                    <input type="radio" name="deck-chat-mode" id="deck-chat-mode-review" value="review"
+                                           style="margin:0;" onchange="onChatModeChange()"> ★ Review
                                 </label>
                                 <span id="deck-chat-mode-hint" style="color:var(--pico-muted-color); margin-left:auto; font-size:0.72rem;"></span>
                             </div>
@@ -3280,8 +3295,19 @@
                 div.className = `chat-msg chat-msg--${m.role}`;
                 div.textContent = m.content;
                 histEl.appendChild(div);
+                // Re-render review findings table if this was a review-mode assistant message
+                if (m.role === 'assistant' && m.mode === 'review' && m.patch_json) {
+                    try {
+                        const reviewData = JSON.parse(m.patch_json);
+                        if (reviewData.findings) {
+                            _renderReviewFindings(histEl, reviewData.findings);
+                            // Remove the raw text bubble we just added — findings table replaces it
+                            histEl.removeChild(div);
+                        }
+                    } catch {}
+                }
                 // Re-render patch block if this assistant message had a proposed patch
-                if (m.role === 'assistant' && m.patch_json) {
+                if (m.role === 'assistant' && m.mode !== 'review' && m.patch_json) {
                     let patches;
                     try { patches = JSON.parse(m.patch_json); } catch { patches = null; }
                     if (patches) {
@@ -3340,7 +3366,14 @@
         }
 
         async function sendDeckChat() {
-            if (!_deckChatConvId || _deckChatStreaming) return;
+            if (_deckChatStreaming) return;
+            // Review mode: run full-deck review instead of a chat message
+            const mode = document.querySelector('input[name="deck-chat-mode"]:checked')?.value || 'ask';
+            if (mode === 'review') {
+                runDeckReview(currentDeckId);
+                return;
+            }
+            if (!_deckChatConvId) return;
             const input = document.getElementById('deck-chat-input');
             const text = input.value.trim();
             if (!text) return;
@@ -3464,6 +3497,9 @@
             if (mode === 'edit') {
                 if (hint) hint.textContent = 'LLM may propose edits';
                 if (input) input.placeholder = 'Ask for an edit… (Ctrl+Enter to send)';
+            } else if (mode === 'review') {
+                if (hint) hint.textContent = 'Full-deck visual QA';
+                if (input) input.placeholder = 'Press Send to run a full deck review…';
             } else {
                 if (hint) hint.textContent = '';
                 if (input) input.placeholder = 'Ask about this deck… (Ctrl+Enter to send)';
@@ -4597,7 +4633,16 @@
                 }
                 detail.textContent = data.detail || '';
             } else if (eventType === 'complete') {
-                toast(`Created "${data.display_name || data.deck_name}" — ${data.slide_count} slide${data.slide_count !== 1 ? 's' : ''}`);
+                const name = data.display_name || data.deck_name;
+                toast(`Created "${name}" — ${data.slide_count} slide${data.slide_count !== 1 ? 's' : ''}`);
+                // Auto-refine: only for pptxgenjs engine when checkbox is checked
+                const engine = document.querySelector('input[name="create-engine"]:checked')?.value;
+                const autoRefine = document.getElementById('create-auto-refine')?.checked;
+                if (engine === 'pptxgenjs' && autoRefine && data.deck_id) {
+                    const refineStep = document.getElementById('create-step-refine');
+                    if (refineStep) refineStep.style.display = 'flex';
+                    runRefineLoop(data.deck_id, refineStep);
+                }
             } else if (eventType === 'error') {
                 // See note in handleUploadEvent — SSE error events with
                 // data.status === 401 are in-band auth failures; sign out
@@ -4610,6 +4655,195 @@
                     toast('Create failed: ' + (data.detail || data.message || 'unknown error'));
                 }
             }
+        }
+
+        // --- Auto-refine loop (client side) ---
+
+        async function runRefineLoop(deckId, stepEl) {
+            const ntid = localStorage.getItem('aippt_ntid') || '';
+            function setStep(status, detail) {
+                if (!stepEl) return;
+                stepEl.className = 'step ' + status;
+                const icon = stepEl.querySelector('.step-icon');
+                const det = stepEl.querySelector('.step-detail');
+                if (status === 'running') icon.innerHTML = '<div class="spinner-icon"></div>';
+                else if (status === 'done') icon.textContent = '✓';
+                else if (status === 'error') icon.textContent = '✗';
+                if (det) det.textContent = detail || '';
+            }
+            setStep('running', 'Starting…');
+
+            try {
+                const resp = await msAuth.fetchWithAuth(`api/decks/${deckId}/refine`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({max_rounds: 2, ntid: ntid || undefined}),
+                });
+                if (!resp.ok) { setStep('error', 'Refine request failed'); return; }
+
+                const reader = resp.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                while (true) {
+                    const {done, value} = await reader.read();
+                    if (done) break;
+                    buffer += decoder.decode(value, {stream: true});
+                    const parts = buffer.split('\n\n');
+                    buffer = parts.pop();
+                    for (const part of parts) {
+                        if (!part.trim()) continue;
+                        let eventData = '';
+                        for (const line of part.split('\n')) {
+                            if (line.startsWith('data: ')) eventData = line.slice(6).trim();
+                        }
+                        if (!eventData) continue;
+                        let data;
+                        try { data = JSON.parse(eventData); } catch { continue; }
+
+                        if (data.type === 'progress') {
+                            setStep('running', data.detail || '');
+                        } else if (data.type === 'recapture_needed') {
+                            // Re-capture thumbnails from the inline viewer and POST to server
+                            setStep('running', 'Capturing fresh slides…');
+                            try {
+                                if (typeof _inlinePptxViewer !== 'undefined' && _inlinePptxViewer &&
+                                    typeof _inlinePptxViewer.captureSlideImages === 'function') {
+                                    const images = await _inlinePptxViewer.captureSlideImages();
+                                    await fetch(`api/decks/${deckId}/thumbnails`, {
+                                        method: 'POST',
+                                        headers: {'Content-Type': 'application/json'},
+                                        body: JSON.stringify({images}),
+                                    });
+                                }
+                            } catch (e) {
+                                console.warn('Thumbnail recapture failed:', e);
+                            }
+                            // Unblock server regardless
+                            await fetch(`api/decks/${deckId}/thumbnails-ready`, {method: 'POST'}).catch(() => {});
+                        } else if (data.type === 'round_complete') {
+                            const n = data.patches_applied || 0;
+                            setStep('running', `Round ${data.round}: ${n} fix${n !== 1 ? 'es' : ''} applied`);
+                        } else if (data.type === 'complete') {
+                            const patches = data.patches_applied || 0;
+                            setStep('done', `${patches} issue${patches !== 1 ? 's' : ''} fixed`);
+                            if (patches > 0) toast(`Auto-refine: ${patches} issue${patches !== 1 ? 's' : ''} fixed`);
+                            else toast('Auto-refine: no issues found');
+                            await showDecks();
+                        } else if (data.type === 'error') {
+                            setStep('error', data.detail || 'Refine failed');
+                        }
+                    }
+                }
+            } catch (e) {
+                setStep('error', 'Network error');
+            }
+        }
+
+        // --- Deck review (manual, from chat Review tab) ---
+
+        async function runDeckReview(deckId) {
+            if (!deckId) { toast('No deck selected'); return; }
+            const ntid = localStorage.getItem('aippt_ntid') || '';
+            const threadEl = document.getElementById('deck-chat-history');
+
+            // Show a pending message in the chat thread
+            const pendingId = 'review-pending-' + Date.now();
+            if (threadEl) {
+                threadEl.insertAdjacentHTML('beforeend', `
+                    <div id="${pendingId}" class="chat-msg assistant" style="opacity:0.6;">
+                        <div class="spinner-icon" style="display:inline-block;margin-right:0.4rem;"></div>
+                        Running full-deck review…
+                    </div>`);
+                threadEl.scrollTop = threadEl.scrollHeight;
+            }
+
+            try {
+                const resp = await msAuth.fetchWithAuth(`api/decks/${deckId}/review`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ntid: ntid || undefined}),
+                });
+                const pending = document.getElementById(pendingId);
+
+                if (!resp.ok) {
+                    if (pending) pending.remove();
+                    toast('Review failed');
+                    return;
+                }
+
+                const reader = resp.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+                let allFindings = [];
+
+                while (true) {
+                    const {done, value} = await reader.read();
+                    if (done) break;
+                    buffer += decoder.decode(value, {stream: true});
+                    const parts = buffer.split('\n\n');
+                    buffer = parts.pop();
+                    for (const part of parts) {
+                        if (!part.trim()) continue;
+                        let eventData = '';
+                        for (const line of part.split('\n')) {
+                            if (line.startsWith('data: ')) eventData = line.slice(6).trim();
+                        }
+                        if (!eventData) continue;
+                        let data;
+                        try { data = JSON.parse(eventData); } catch { continue; }
+
+                        if (data.type === 'progress' && pending) {
+                            pending.innerHTML = `<div class="spinner-icon" style="display:inline-block;margin-right:0.4rem;"></div>${esc(data.detail || 'Reviewing…')}`;
+                        } else if (data.type === 'findings') {
+                            allFindings = allFindings.concat(data.data?.findings || []);
+                        } else if (data.type === 'done') {
+                            if (pending) pending.remove();
+                            _renderReviewFindings(threadEl, allFindings);
+                        }
+                    }
+                }
+            } catch (e) {
+                const pending = document.getElementById(pendingId);
+                if (pending) pending.remove();
+                toast('Review failed: network error');
+            }
+        }
+
+        function _renderReviewFindings(threadEl, findings) {
+            if (!threadEl) return;
+            const sevColor = {high: '#f44336', medium: '#ff9800', low: '#4caf50'};
+            if (!findings || findings.length === 0) {
+                threadEl.insertAdjacentHTML('beforeend',
+                    `<div class="chat-msg assistant" style="color:#4caf50;">&#10003; No issues found — deck looks great!</div>`);
+                threadEl.scrollTop = threadEl.scrollHeight;
+                return;
+            }
+            const rows = findings.map(f => {
+                const color = sevColor[f.severity] || '#aaa';
+                const slide = f.slide_num != null ? `Slide ${f.slide_num}` : 'Deck';
+                const badge = `<span style="color:${color};font-weight:600;text-transform:uppercase;font-size:0.7rem;">${esc(f.severity)}</span>`;
+                const auto = f.actionable ? '<span style="color:#4caf50;font-size:0.7rem;">auto-fix</span>' : '';
+                return `<tr>
+                    <td style="white-space:nowrap;">${esc(slide)}</td>
+                    <td style="white-space:nowrap;">${badge}</td>
+                    <td style="white-space:nowrap;color:var(--pico-muted-color);font-size:0.75rem;">${esc(f.category)}</td>
+                    <td>${esc(f.description)}</td>
+                    <td style="white-space:nowrap;">${auto}</td>
+                </tr>`;
+            }).join('');
+            threadEl.insertAdjacentHTML('beforeend', `
+                <div class="chat-msg assistant">
+                    <strong>Review findings (${findings.length})</strong>
+                    <div style="overflow-x:auto;margin-top:0.5rem;">
+                    <table style="font-size:0.78rem;width:100%;border-collapse:collapse;">
+                        <thead><tr style="color:var(--pico-muted-color);">
+                            <th>Slide</th><th>Severity</th><th>Category</th><th>Description</th><th></th>
+                        </tr></thead>
+                        <tbody>${rows}</tbody>
+                    </table></div>
+                </div>`);
+            threadEl.scrollTop = threadEl.scrollHeight;
         }
 
         // --- Template settings ---
