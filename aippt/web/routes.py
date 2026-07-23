@@ -1176,6 +1176,45 @@ def _stage_writable_script(script_path: str, deck_id: int, uploads_dir: str, pro
         return script_path
 
 
+def _stage_render_workspace(uploads_dir: str, short_id: str, base_name: str, project_root: str) -> tuple:
+    """Build a per-job workspace for a freshly generated pptxgenjs script.
+
+    The generated script imports the shared helpers with a hardcoded relative
+    path (``../lib/pptxgenjs-helpers.mjs``). ESM resolves that against the
+    *script file's own URL*, not the process cwd — so the ``lib/`` it needs must
+    sit one directory above the script. In the container the script is written
+    to the writable ``/app/data`` volume while the repo ``lib/`` is baked at
+    ``/app/lib`` (read-only ``/app``), so ``../lib`` misses. Mirror the preview
+    path's staging (see :func:`_stage_writable_script`) by laying out, per job::
+
+        <uploads>/<short_id>/script/<base_name>.mjs   # generated script
+        <uploads>/<short_id>/lib/                      # fresh copy of repo lib/
+        <uploads>/<short_id>/out/                      # render output
+
+    so ``../lib`` from ``script/`` resolves to the copied ``lib/``. Staging is
+    per-job (unique ``short_id``) and re-copies ``lib/`` from ``project_root``
+    every run, so it is never stale after a redeploy and never races a
+    concurrent render truncating a shared copy. Theme/asset files are read
+    relative to the render cwd (which stays ``project_root``) and are unaffected.
+
+    Returns ``(script_path, render_out_dir)``.
+    """
+    import shutil
+
+    job = Path(uploads_dir) / short_id
+    script_dir = job / "script"
+    out_dir = job / "out"
+    script_dir.mkdir(parents=True, exist_ok=True)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    lib_src = Path(project_root) / "lib"
+    if lib_src.is_dir():
+        # dirs_exist_ok keeps re-staging idempotent (Python 3.8+).
+        shutil.copytree(lib_src, job / "lib", dirs_exist_ok=True)
+
+    return str(script_dir / f"{base_name}.mjs"), str(out_dir)
+
+
 def _per_deck_images_dir(request: Request, deck_path: str) -> str:
     """Resolve the per-deck images directory under app.state.images_dir.
 
@@ -1817,7 +1856,14 @@ async def create_deck_stream(
             from aippt.pptxgenjs_gen import generate_script, ScriptGenerationError
             from aippt.preview import Renderer
 
-            script_path = os.path.join(uploads_dir, f"{_short_id}_{_base_name}.mjs")
+            # Stage a per-job workspace so the generated script's ``../lib``
+            # import resolves to a fresh copy of the repo lib/ on the writable
+            # data volume (the baked /app/lib is unreachable via ../lib from
+            # /app/data). See _stage_render_workspace.
+            project_root = str(Path(__file__).resolve().parents[2])
+            script_path, render_out_dir = _stage_render_workspace(
+                uploads_dir, _short_id, _base_name, project_root
+            )
             try:
                 llm = _make_llm_client(request, operation="create", model_override=model, user_ntid=ntid)
             except ValueError as exc:
@@ -1839,9 +1885,7 @@ async def create_deck_stream(
             persist_file(request.app.state, script_path)
             create_progress("render", "Executing script…")
 
-            project_root = str(Path(__file__).resolve().parents[2])
             renderer = Renderer(project_root=project_root)
-            render_out_dir = os.path.join(uploads_dir, _short_id)
             render_result = renderer.render(script_path, render_out_dir)
             if not render_result.success:
                 msg = render_result.stderr_tail or "Script render failed (no .pptx produced)"
