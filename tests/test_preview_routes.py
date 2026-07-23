@@ -347,3 +347,68 @@ class TestStageWritableScript:
         root, _, uploads = self._make_project(tmp_path)
         missing = str(tmp_path / "nope.mjs")
         assert _stage_writable_script(missing, 7, uploads, root) == missing
+
+
+class TestStageRenderWorkspace:
+    """_stage_render_workspace makes ``../lib`` reachable for freshly created decks."""
+
+    def _make_project(self, tmp_path):
+        # Simulate the container layout: repo lib/ baked at <root>/lib (/app/lib),
+        # uploads on the separate writable data volume (/app/data/uploads).
+        root = tmp_path / "app"
+        lib = root / "lib"
+        lib.mkdir(parents=True)
+        (lib / "pptxgenjs-helpers.mjs").write_text("export const SW = 13.33;\n", encoding="utf-8")
+        (lib / "pptxgenjs-masters.mjs").write_text("import { SW } from './pptxgenjs-helpers.mjs';\n", encoding="utf-8")
+        uploads = tmp_path / "data" / "uploads"
+        uploads.mkdir(parents=True)
+        return str(root), str(uploads)
+
+    def test_import_resolves_to_staged_lib(self, tmp_path):
+        from aippt.web.routes import _stage_render_workspace
+
+        root, uploads = self._make_project(tmp_path)
+        script_path, out_dir = _stage_render_workspace(uploads, "abc12345", "My Deck", root)
+
+        # The generated script's hardcoded ``../lib/...`` import must land on the
+        # staged copy, exactly as ESM resolves it (relative to the script's dir).
+        resolved = (Path(script_path).parent / ".." / "lib" / "pptxgenjs-helpers.mjs").resolve()
+        assert resolved.is_file()
+        # masters.mjs travels too, so its own ./pptxgenjs-helpers.mjs import resolves.
+        assert (resolved.parent / "pptxgenjs-masters.mjs").is_file()
+        # Workspace lives on the writable uploads tree, isolated per job.
+        assert str(Path(uploads) / "abc12345") in str(Path(script_path).resolve())
+        assert Path(out_dir).is_dir()
+
+    def test_script_dir_is_writable_and_out_separate(self, tmp_path):
+        from aippt.web.routes import _stage_render_workspace
+
+        root, uploads = self._make_project(tmp_path)
+        script_path, out_dir = _stage_render_workspace(uploads, "abc12345", "Deck", root)
+        Path(script_path).write_text("// generated\n", encoding="utf-8")
+        assert Path(script_path).read_text() == "// generated\n"
+        # out dir is a distinct sibling of the script dir (node writes here).
+        assert Path(out_dir).resolve() != Path(script_path).parent.resolve()
+
+    def test_restage_refreshes_lib(self, tmp_path):
+        from aippt.web.routes import _stage_render_workspace
+
+        root, uploads = self._make_project(tmp_path)
+        _stage_render_workspace(uploads, "abc12345", "Deck", root)
+        # Simulate a redeploy shipping updated helpers; re-staging must pick it up.
+        (Path(root) / "lib" / "pptxgenjs-helpers.mjs").write_text("export const SW = 99;\n", encoding="utf-8")
+        script_path, _ = _stage_render_workspace(uploads, "abc12345", "Deck", root)
+        staged = (Path(script_path).parent / ".." / "lib" / "pptxgenjs-helpers.mjs").resolve()
+        assert "99" in staged.read_text()
+
+    def test_missing_lib_still_builds_workspace(self, tmp_path):
+        from aippt.web.routes import _stage_render_workspace
+
+        root = tmp_path / "app"
+        root.mkdir()
+        uploads = tmp_path / "data" / "uploads"
+        uploads.mkdir(parents=True)
+        # No repo lib/ (unexpected, but must not crash workspace creation).
+        script_path, out_dir = _stage_render_workspace(str(uploads), "abc12345", "Deck", str(root))
+        assert Path(script_path).parent.is_dir()
+        assert Path(out_dir).is_dir()
