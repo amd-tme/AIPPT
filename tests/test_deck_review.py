@@ -129,7 +129,6 @@ _NO_ACTION_BLOCK = json.dumps({"findings": [
 _PATCH_TARGETS = [
     "aippt.catalog.get_db",
     "aippt.chat.ChatService",
-    "aippt.thumbnails.invalidate_slides",
     "aippt.patch.apply_patch",
     "aippt.patch.validate_patch",
     "aippt.patch.extract_patches",
@@ -139,13 +138,12 @@ _PATCH_TARGETS = [
 
 @patch("aippt.catalog.get_db")
 @patch("aippt.chat.ChatService")
-@patch("aippt.thumbnails.invalidate_slides")
 @patch("aippt.patch.apply_patch")
 @patch("aippt.patch.validate_patch")
 @patch("aippt.patch.extract_patches")
 @patch("aippt.patch.slides_touched_by_patch")
 def test_run_auto_refine_no_actionable_stops_immediately(
-    mock_touched, mock_extract, mock_validate, mock_apply, mock_invalidate, MockChat, mock_get_db
+    mock_touched, mock_extract, mock_validate, mock_apply, MockChat, mock_get_db
 ):
     conn = _make_db_conn()
     mock_get_db.return_value = conn
@@ -167,13 +165,12 @@ def test_run_auto_refine_no_actionable_stops_immediately(
 
 @patch("aippt.catalog.get_db")
 @patch("aippt.chat.ChatService")
-@patch("aippt.thumbnails.invalidate_slides")
 @patch("aippt.patch.apply_patch")
 @patch("aippt.patch.validate_patch")
 @patch("aippt.patch.extract_patches")
 @patch("aippt.patch.slides_touched_by_patch")
 def test_run_auto_refine_stops_when_no_patches_extracted(
-    mock_touched, mock_extract, mock_validate, mock_apply, mock_invalidate, MockChat, mock_get_db
+    mock_touched, mock_extract, mock_validate, mock_apply, MockChat, mock_get_db
 ):
     """If LLM returns actionable findings but no parseable patch, loop stops after round 1."""
     conn = _make_db_conn()
@@ -197,13 +194,12 @@ def test_run_auto_refine_stops_when_no_patches_extracted(
 
 @patch("aippt.catalog.get_db")
 @patch("aippt.chat.ChatService")
-@patch("aippt.thumbnails.invalidate_slides")
 @patch("aippt.patch.apply_patch")
 @patch("aippt.patch.validate_patch")
 @patch("aippt.patch.extract_patches")
 @patch("aippt.patch.slides_touched_by_patch")
 def test_run_auto_refine_thumbnails_event_unblocks_loop(
-    mock_touched, mock_extract, mock_validate, mock_apply, mock_invalidate, MockChat, mock_get_db
+    mock_touched, mock_extract, mock_validate, mock_apply, MockChat, mock_get_db
 ):
     """thumbnails_ready_event.wait() should be called; pre-set event unblocks immediately."""
     conn = _make_db_conn(slide_rows=[])  # no slides → no findings
@@ -227,7 +223,6 @@ def test_run_auto_refine_thumbnails_event_unblocks_loop(
 
 @patch("aippt.catalog.get_db")
 @patch("aippt.chat.ChatService")
-@patch("aippt.thumbnails.invalidate_slides")
 @patch("aippt.patch.apply_patch")
 @patch("aippt.patch.validate_patch")
 @patch("aippt.patch.extract_patches")
@@ -236,14 +231,14 @@ def test_run_auto_refine_thumbnails_event_unblocks_loop(
 @patch("os.makedirs")
 def test_run_auto_refine_patches_applied_counted(
     mock_makedirs, MockRenderer, mock_touched, mock_extract, mock_validate,
-    mock_apply, mock_invalidate, MockChat, mock_get_db
+    mock_apply, MockChat, mock_get_db
 ):
     conn = _make_db_conn(slide_rows=[{"id": 10, "position": 1, "title": "Slide 1"}])
     mock_get_db.return_value = conn
 
-    # Mock renderer so re-render path doesn't hit disk
+    # Mock renderer so re-render path doesn't hit disk; pptx_path=None skips file_path update
     renderer_instance = MagicMock()
-    renderer_instance.render.return_value = MagicMock(success=True)
+    renderer_instance.render.return_value = MagicMock(success=True, pptx_path=None)
     MockRenderer.return_value = renderer_instance
 
     raw_review = f"[REVIEW_FINDINGS]\n{_ACTION_BLOCK}\n[/REVIEW_FINDINGS]"
@@ -269,4 +264,3 @@ def test_run_auto_refine_patches_applied_counted(
     )
     assert result.patches_applied == 1
     mock_apply.assert_called_once()
-    mock_invalidate.assert_called_once_with([10], db_path="/fake/slides.db")

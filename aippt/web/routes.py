@@ -2244,6 +2244,34 @@ async def download_deck(deck_id: int, request: Request):
     )
 
 
+@router.get('/api/decks/{deck_id}/pptx')
+async def serve_deck_pptx(deck_id: int, request: Request):
+    """Serve the deck PPTX for in-browser rendering (no Content-Disposition header).
+
+    Unlike ``/download``, this endpoint omits the ``attachment`` disposition so
+    PptxViewJS can load it via ``loadFromUrl`` without the browser treating it as
+    a file download trigger.  Speaker notes from the DB are NOT written back here
+    (raw file only) to avoid temp-file overhead during thumbnail capture.
+    """
+    db_path = request.app.state.db_path
+    project_root = request.app.state.project_root
+
+    deck = get_deck_by_id(deck_id, db_path)
+    if deck is None:
+        return JSONResponse({'error': 'Deck not found'}, status_code=404)
+
+    file_path = deck.get('file_path', '')
+    if file_path:
+        file_path = _resolve_db_path(file_path, project_root)
+    if not file_path or not materialize_file(request.app.state, file_path):
+        return JSONResponse({'error': 'Source file not found'}, status_code=404)
+
+    return FileResponse(
+        file_path,
+        media_type='application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    )
+
+
 @router.get('/api/logs')
 async def get_logs(request: Request):
     """API: return recent in-memory application log records.
@@ -3125,6 +3153,7 @@ async def refine_deck(deck_id: int, request: Request):
     def _progress(step: str, detail: str) -> None:
         event_q.put(("progress", {"step": step, "detail": detail}))
         if step == "recapture":
+            logger.info("Auto-refine: emitting recapture_needed for deck %s", deck_id)
             event_q.put(("recapture_needed", {"deck_id": deck_id}))
 
     def _round_callback(round_num: int, patches_applied: int) -> None:
@@ -3223,6 +3252,7 @@ async def post_deck_thumbnails(deck_id: int, request: Request):
 
     body = await request.json()
     images = body.get("images", [])
+    logger.info("Received %d thumbnail image(s) for deck %s", len(images), deck_id)
     if not images:
         return JSONResponse({"error": "images is required"}, status_code=400)
 
@@ -3256,6 +3286,8 @@ async def thumbnails_ready(deck_id: int, request: Request):
     """
     evt = _refine_events.get(deck_id)
     if evt is None:
+        logger.warning("thumbnails-ready called but no refine loop active for deck %s", deck_id)
         return JSONResponse({"error": "No active refine loop for this deck"}, status_code=404)
+    logger.info("Auto-refine: thumbnails-ready received for deck %s — unblocking loop", deck_id)
     evt.set()
     return {"acknowledged": True}

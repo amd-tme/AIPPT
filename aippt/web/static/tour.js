@@ -281,19 +281,38 @@
         // LP tour pill only shown when on preview view (wired via showPreview hook below)
     });
 
-    // Hook into showPreview — called from index.html
-    // Wrapped so it fires after the original showPreview runs
+    // Hook into showPreview — hide main pill, show LP pill (auto-start on first visit)
     document.addEventListener('DOMContentLoaded', () => {
         const _orig = window.showPreview;
         if (typeof _orig === 'function') {
             window.showPreview = function (...args) {
                 _orig.apply(this, args);
+                window.__tour?.hidePill();
                 window.__lpTour?.showPill();
                 if (!localStorage.getItem('aippt_lp_tour_done')) {
                     setTimeout(window.__lpTour.start, 400);
                 }
             };
         }
+    });
+
+    // Hook into showDecks / showSearch — hide LP pill, restore main pill
+    document.addEventListener('DOMContentLoaded', () => {
+        function _wrapNonPreview(fnName) {
+            const _orig = window[fnName];
+            if (typeof _orig === 'function') {
+                window[fnName] = function (...args) {
+                    const r = _orig.apply(this, args);
+                    window.__lpTour?.hidePill();
+                    if (localStorage.getItem('aippt_tour_done')) {
+                        window.__tour?.showPill();
+                    }
+                    return r;
+                };
+            }
+        }
+        _wrapNonPreview('showDecks');
+        _wrapNonPreview('showSearch');
     });
 
 })();

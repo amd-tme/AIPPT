@@ -4703,6 +4703,76 @@
 
         // --- Auto-refine loop (client side) ---
 
+        // Capture fresh thumbnails for a deck, reusing the inline viewer if it
+        // is already loaded, or spinning up a temporary off-screen viewer otherwise.
+        // Returns [{position, data}] ready to POST to /thumbnails.
+        async function _captureRefreshThumbnails(deckId) {
+            const renderFromViewer = async (viewer, knownSlideCount) => {
+                const count = knownSlideCount || viewer.slideCount || 0;
+                if (!count) return [];
+                const offscreen = document.createElement('canvas');
+                offscreen.width = 640; offscreen.height = 360;
+                const restoreIndex = viewer.currentSlideIndex ?? 0;
+                const images = [];
+                try {
+                    for (let i = 0; i < count; i++) {
+                        try {
+                            // Navigate to the slide first so PptxViewJS parses it,
+                            // then render to the offscreen canvas.
+                            try { await viewer.goToSlide(i); } catch { /* ignore */ }
+                            await viewer.renderSlide(i, offscreen);
+                            const blob = await new Promise(r => offscreen.toBlob(r, 'image/jpeg', 0.82));
+                            if (!blob) continue;
+                            const buf = new Uint8Array(await blob.arrayBuffer());
+                            let bin = '';
+                            for (let b = 0; b < buf.length; b++) bin += String.fromCharCode(buf[b]);
+                            images.push({ position: i + 1, data: btoa(bin) });
+                        } catch (e) { console.warn(`Slide ${i + 1} capture failed:`, e); }
+                    }
+                } finally {
+                    try { await viewer.goToSlide(restoreIndex); } catch { /* ignore */ }
+                }
+                return images;
+            };
+
+            // Reuse the inline viewer if it is loaded and ready
+            if (typeof _inlinePptxViewer !== 'undefined' && _inlinePptxViewer &&
+                typeof _inlinePptxViewer.renderSlide === 'function' && _inlinePptxViewer.slideCount > 0) {
+                return renderFromViewer(_inlinePptxViewer, _inlinePptxViewer.slideCount);
+            }
+
+            // No viewer available — spin up a temporary hidden viewer
+            const PptxViewJSPkg = window.PptxViewJS || {};
+            const PPTXViewerCls = PptxViewJSPkg.PPTXViewer;
+            if (!PPTXViewerCls) return [];
+
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = 640; tempCanvas.height = 360;
+            // Must be in the DOM so the canvas gets a rendering context
+            tempCanvas.style.cssText = 'position:fixed;left:-9999px;top:-9999px;visibility:hidden;pointer-events:none;';
+            document.body.appendChild(tempCanvas);
+            const tempViewer = new PPTXViewerCls({ canvas: tempCanvas, fitMode: 'contain' });
+            try {
+                // Capture slideCount from the loadComplete event — more reliable than
+                // reading viewer.slideCount which may not be set yet.
+                let loadedSlideCount = 0;
+                await new Promise((resolve, reject) => {
+                    const tid = setTimeout(resolve, 25000);
+                    tempViewer.on('loadComplete', ({ slideCount } = {}) => {
+                        loadedSlideCount = slideCount || 0;
+                        clearTimeout(tid);
+                        resolve();
+                    });
+                    tempViewer.loadFromUrl(`api/decks/${deckId}/pptx?t=${Date.now()}`)
+                        .catch(err => { clearTimeout(tid); reject(err); });
+                });
+                return renderFromViewer(tempViewer, loadedSlideCount);
+            } finally {
+                try { tempViewer.destroy?.(); } catch { /* ignore */ }
+                try { document.body.removeChild(tempCanvas); } catch { /* ignore */ }
+            }
+        }
+
         async function runRefineLoop(deckId, stepEl) {
             const ntid = localStorage.getItem('aippt_ntid') || '';
             function setStep(status, detail) {
@@ -4748,12 +4818,10 @@
                         if (data.type === 'progress') {
                             setStep('running', data.detail || '');
                         } else if (data.type === 'recapture_needed') {
-                            // Re-capture thumbnails from the inline viewer and POST to server
                             setStep('running', 'Capturing fresh slides…');
                             try {
-                                if (typeof _inlinePptxViewer !== 'undefined' && _inlinePptxViewer &&
-                                    typeof _inlinePptxViewer.captureSlideImages === 'function') {
-                                    const images = await _inlinePptxViewer.captureSlideImages();
+                                const images = await _captureRefreshThumbnails(deckId);
+                                if (images.length > 0) {
                                     await fetch(`api/decks/${deckId}/thumbnails`, {
                                         method: 'POST',
                                         headers: {'Content-Type': 'application/json'},
@@ -4763,7 +4831,7 @@
                             } catch (e) {
                                 console.warn('Thumbnail recapture failed:', e);
                             }
-                            // Unblock server regardless
+                            // Unblock the server loop regardless of capture success
                             await fetch(`api/decks/${deckId}/thumbnails-ready`, {method: 'POST'}).catch(() => {});
                         } else if (data.type === 'round_complete') {
                             const n = data.patches_applied || 0;
@@ -4773,6 +4841,20 @@
                             setStep('done', `${patches} issue${patches !== 1 ? 's' : ''} fixed`);
                             if (patches > 0) toast(`Auto-refine: ${patches} issue${patches !== 1 ? 's' : ''} fixed`);
                             else toast('Auto-refine: no issues found');
+                            // Re-capture thumbnails from the final PPTX before rebuilding
+                            // the deck list, so cards show real slides instead of placeholders.
+                            if (patches > 0) {
+                                try {
+                                    const imgs = await _captureRefreshThumbnails(deckId);
+                                    if (imgs.length > 0) {
+                                        await fetch(`api/decks/${deckId}/thumbnails`, {
+                                            method: 'POST',
+                                            headers: {'Content-Type': 'application/json'},
+                                            body: JSON.stringify({images: imgs}),
+                                        });
+                                    }
+                                } catch (e) { console.warn('Post-refine thumbnail capture failed:', e); }
+                            }
                             await showDecks();
                         } else if (data.type === 'error') {
                             setStep('error', data.detail || 'Refine failed');
