@@ -142,9 +142,9 @@ class Renderer:
         # it explicitly so bare specifiers (e.g. "pptxgenjs") resolve wherever
         # the script sits. Same idea for Python scripts via PYTHONPATH.
         if self.project_root:
-            node_modules = os.path.join(self.project_root, "node_modules")
-            if os.path.isdir(node_modules):
-                env["NODE_PATH"] = node_modules
+            nm = self._find_node_modules()
+            if nm:
+                env["NODE_PATH"] = nm
             env["PYTHONPATH"] = str(self.project_root)
         return env
 
@@ -156,6 +156,26 @@ class Renderer:
             return ([_VENV_PYTHON, str(script)], "python")
         # fallback — try node
         return (self._node_command(script, out), "node")
+
+    def _find_node_modules(self) -> Optional[str]:
+        """Walk up from project_root to find the nearest node_modules directory.
+
+        Worktrees share node_modules with the parent repo rather than having
+        their own copy, so a plain os.path.join(project_root, 'node_modules')
+        check misses the real location when serving from a worktree.
+        """
+        if not self.project_root:
+            return None
+        check = Path(self.project_root).resolve()
+        for _ in range(5):  # don't walk past the filesystem root
+            nm = check / "node_modules"
+            if nm.is_dir():
+                return str(nm)
+            parent = check.parent
+            if parent == check:
+                break
+            check = parent
+        return None
 
     def _node_command(self, script: Path, out: Path) -> list:
         """Node invocation confined by the runtime permission model.
@@ -172,6 +192,11 @@ class Renderer:
         write_dirs: List[str] = [str(out)]
         if self.project_root:
             read_dirs.append(self.project_root)
+        # Allow reading node_modules even when it lives outside project_root
+        # (e.g. when serving from a git worktree that shares the parent's modules).
+        nm = self._find_node_modules()
+        if nm and nm not in read_dirs:
+            read_dirs.append(nm)
         read_dirs.append(str(out))
         # The script itself may live outside project_root (staged copies).
         read_dirs.append(str(script.parent))
