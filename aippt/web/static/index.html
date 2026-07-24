@@ -1104,6 +1104,17 @@
             margin-left: auto;
             font-size: 0.8rem;
         }
+        .upload-progress .progress-error {
+            margin-top: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            border: 1px solid #cf6679;
+            border-radius: var(--pico-border-radius);
+            background: rgba(207, 102, 121, 0.12);
+            color: #cf6679;
+            font-size: 0.8rem;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
         #save-notes-btn {
             margin-top: 0.5rem;
             width: auto;
@@ -1792,6 +1803,7 @@
                             <span class="step-label">Catalog deck</span>
                             <span class="step-detail"></span>
                         </div>
+                        <div class="progress-error" id="create-progress-error" style="display:none;"></div>
                     </div>
                 </div>
             </details>
@@ -4516,6 +4528,7 @@
                 step.querySelector('.step-icon').textContent = '○';
                 step.querySelector('.step-detail').textContent = '';
             }
+            document.getElementById('create-progress-error').style.display = 'none';
             progressEl.style.display = 'block';
 
             const engine = document.querySelector('input[name="create-engine"]:checked')?.value || 'pptxgenjs';
@@ -4532,6 +4545,8 @@
             for (const file of imageInput.files) {
                 formData.append('image_files', file);
             }
+
+            let hadError = false;
 
             try {
                 const resp = await msAuth.fetchWithAuth('api/decks/create', {method: 'POST', body: formData});
@@ -4567,24 +4582,45 @@
                         if (!eventData) continue;
                         let data;
                         try { data = JSON.parse(eventData); } catch { continue; }
-                        handleCreateEvent(eventType, data);
+                        if (handleCreateEvent(eventType, data)) hadError = true;
                     }
                 }
             } catch (e) {
+                markCreateProgressError('Network error — the connection to the server was lost.');
                 toast('Create failed: network error');
+                hadError = true;
             }
 
-            progressEl.style.display = 'none';
             createBtn.disabled = false;
             imageInput.value = '';
             document.getElementById('create-image-count').textContent = '';
-            await showDecks();
+            // Leave the progress panel (and its error banner) visible on
+            // failure instead of hiding it — otherwise the toast disappears
+            // after 2s and the whole panel vanishes right behind it, which
+            // reads as the app silently hanging then resetting (MAT-68).
+            if (!hadError) {
+                progressEl.style.display = 'none';
+                await showDecks();
+            }
         }
 
+        function markCreateProgressError(message) {
+            document.getElementById('create-progress').querySelectorAll('.step.running').forEach(step => {
+                step.className = 'step error';
+                step.querySelector('.step-icon').textContent = '✗';
+            });
+            const errorEl = document.getElementById('create-progress-error');
+            errorEl.textContent = message;
+            errorEl.style.display = 'block';
+        }
+
+        // Returns true if the event represented a failure, so the caller can
+        // keep the progress panel visible instead of hiding it as if nothing
+        // happened.
         function handleCreateEvent(eventType, data) {
             if (eventType === 'progress') {
                 const stepEl = document.getElementById('create-step-' + data.step);
-                if (!stepEl) return;
+                if (!stepEl) return false;
                 stepEl.className = 'step ' + data.status;
                 const icon = stepEl.querySelector('.step-icon');
                 const detail = stepEl.querySelector('.step-detail');
@@ -4599,6 +4635,12 @@
             } else if (eventType === 'complete') {
                 toast(`Created "${data.display_name || data.deck_name}" — ${data.slide_count} slide${data.slide_count !== 1 ? 's' : ''}`);
             } else if (eventType === 'error') {
+                // Backend error payloads aren't consistent about the key
+                // (worker early-exits use "message", the generator's own
+                // exception handlers use "detail") so check both.
+                const message = (data && (data.detail || data.message)) || 'Unknown error';
+                markCreateProgressError(message);
+
                 // See note in handleUploadEvent — SSE error events with
                 // data.status === 401 are in-band auth failures; sign out
                 // so the dead token leaves localStorage and the user is
@@ -4607,9 +4649,11 @@
                     msAuth.signOut();
                     toast('Create failed: Microsoft sign-in expired — please sign in again');
                 } else {
-                    toast('Create failed: ' + (data.detail || data.message || 'unknown error'));
+                    toast('Create failed: ' + message);
                 }
+                return true;
             }
+            return false;
         }
 
         // --- Template settings ---
