@@ -52,6 +52,12 @@ cardShadow(theme)                      — shadow factory (never reuse objects)
 
 Optional: import { masterNameFor } from '../lib/pptxgenjs-masters.mjs'
 
+Note on `steps` (addProcessFlow): unlike `cards` (addCardGrid), which takes an
+array of objects, `steps` takes an array of PLAIN STRINGS — one per step.
+To show a bold label plus description, join them with a literal newline in
+the string: "Label\nDescription text". Do NOT pass {label, description}
+objects here.
+
 ## Script skeleton
 
 ```javascript
