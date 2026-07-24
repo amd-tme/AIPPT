@@ -193,7 +193,6 @@ def run_auto_refine(
     """
     from aippt.chat import ChatService
     from aippt.patch import apply_patch, Patch
-    from aippt.thumbnails import invalidate_slides
     from aippt.preview import Renderer
     from aippt.catalog import get_db
 
@@ -262,9 +261,10 @@ def run_auto_refine(
             if round_complete_callback:
                 round_complete_callback(round_num, applied)
 
-            # --- Invalidate stale thumbnails ---
-            if slide_ids_touched:
-                invalidate_slides(slide_ids_touched, db_path=db_path)
+            # Note: we intentionally skip invalidate_slides() here.  Old thumbnails
+            # remain visible (slightly outdated) while fresh ones are captured after
+            # the complete event.  Wiping before a reliable recapture causes blank
+            # placeholder cards, which is worse than showing the previous render.
 
             # --- Re-render the script ---
             if script_path:
@@ -283,6 +283,16 @@ def run_auto_refine(
                 render_result = renderer.render(script_path, out_dir)
                 if render_result.success:
                     result.regenerated = True
+                    # Update file_path so the download endpoint serves the refined PPTX
+                    if render_result.pptx_path:
+                        new_rel = os.path.relpath(
+                            render_result.pptx_path, os.path.dirname(db_path)
+                        )
+                        conn.execute(
+                            "UPDATE decks SET file_path = ?, updated_at = datetime('now') WHERE id = ?",
+                            (new_rel, deck_id),
+                        )
+                        conn.commit()
                 else:
                     _progress("render", f"Round {round_num}: re-render failed — stopping.")
                     break
