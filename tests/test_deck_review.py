@@ -269,4 +269,4 @@ def test_run_auto_refine_patches_applied_counted(
     )
     assert result.patches_applied == 1
     mock_apply.assert_called_once()
-    mock_invalidate.assert_called_once_with([10], "/fake/slides.db")
+    mock_invalidate.assert_called_once_with([10], db_path="/fake/slides.db")
