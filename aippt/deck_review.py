@@ -161,6 +161,7 @@ def run_auto_refine(
     llm_client,
     max_rounds: int = 2,
     progress_callback: Optional[Callable[[str, str], None]] = None,
+    round_complete_callback: Optional[Callable[[int, int], None]] = None,
     thumbnails_ready_event: Optional[threading.Event] = None,
     thumbnails_timeout: float = 30.0,
 ) -> RefineResult:
@@ -257,9 +258,13 @@ def run_auto_refine(
                 result.residual_findings = combined.advisory
                 break
 
+            # --- Emit round_complete before re-render ---
+            if round_complete_callback:
+                round_complete_callback(round_num, applied)
+
             # --- Invalidate stale thumbnails ---
             if slide_ids_touched:
-                invalidate_slides(slide_ids_touched, db_path)
+                invalidate_slides(slide_ids_touched, db_path=db_path)
 
             # --- Re-render the script ---
             if script_path:

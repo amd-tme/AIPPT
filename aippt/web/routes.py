@@ -3127,6 +3127,9 @@ async def refine_deck(deck_id: int, request: Request):
         if step == "recapture":
             event_q.put(("recapture_needed", {"deck_id": deck_id}))
 
+    def _round_callback(round_num: int, patches_applied: int) -> None:
+        event_q.put(("round_complete", {"round": round_num, "patches_applied": patches_applied}))
+
     def _worker():
         from aippt.deck_review import run_auto_refine
         try:
@@ -3138,6 +3141,7 @@ async def refine_deck(deck_id: int, request: Request):
                 llm_client=llm,
                 max_rounds=max_rounds,
                 progress_callback=_progress,
+                round_complete_callback=_round_callback,
                 thumbnails_ready_event=evt,
             )
             event_q.put(("complete", result.to_dict()))
@@ -3172,10 +3176,8 @@ async def refine_deck(deck_id: int, request: Request):
                 if kind in ("complete", "error"):
                     break
 
-                if kind == "recapture_needed":
-                    # Signal browser then wait for thumbnails_ready event
-                    # The event is set by POST /api/decks/{id}/thumbnails-ready
-                    yield _sse({"type": "thumbnails_ready"})  # placeholder — real signal from browser
+                # recapture_needed was already yielded above; the loop continues
+                # when the browser POSTs /thumbnails-ready → threading.Event.set()
         finally:
             await fut
     return StreamingResponse(generate(), media_type="text/event-stream")
