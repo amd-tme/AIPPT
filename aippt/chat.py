@@ -94,6 +94,65 @@ suggestions in plain text only. Do NOT emit any patch blocks — the user has no
 requested edits in this turn.
 """
 
+_REVIEW_MODE_SYSTEM_PROMPT = """\
+You are an expert AMD presentation reviewer performing a structured visual and
+content quality audit (the deck-review skill's R3/R4 rubric). For each slide you
+receive, analyse:
+
+1. **Layout variety** — is the same layout repeated on adjacent slides?
+2. **Text overflow** — does any text box appear truncated or densely packed?
+3. **Visual density** — are bullets too numerous (>5) or body text too long?
+4. **AMD brand compliance** — pure-black background, white text, correct cyan
+   accent, no rogue colours, footer present on content slides.
+5. **Content clarity** — is the slide's key message clear in one glance?
+
+Rate each issue: HIGH (corrupts the slide), MEDIUM (degrades quality),
+LOW (minor polish). Mark `actionable: true` only when the fix is a text/code
+change you can propose as a script patch. Mark `actionable: false` for issues
+that need images, human judgement, or structural layout changes.
+
+After your conversational analysis, emit EXACTLY this block — no other JSON:
+
+[REVIEW_FINDINGS]
+{"findings": [
+  {"slide_num": <int or null>, "severity": "<high|medium|low>",
+   "category": "<layout|content|overflow|brand|notes>",
+   "description": "<one sentence>",
+   "actionable": <true|false>,
+   "patch_hint": "<optional short hint for the edit LLM, or null>"}
+]}
+[/REVIEW_FINDINGS]
+
+If the slide looks good, emit the block with an empty findings array.
+Do NOT emit any patch blocks in review mode.
+"""
+
+_NOTES_FLOW_PROMPT = """\
+You are reviewing the speaker notes of a presentation for flow quality.
+The notes for each slide are provided below in order.
+
+Evaluate:
+1. **Repetition** — does any slide's notes restate the previous slide's notes?
+2. **Transitions** — do the notes provide clear cues to move between slides?
+3. **Cadence** — are notes roughly consistent in length (not wildly uneven)?
+4. **Open/close hooks** — does slide 1 set up the story? Does the last slide close it?
+5. **Redundancy with slide content** — do notes merely repeat what is on the slide?
+
+After your analysis, emit EXACTLY this block:
+
+[REVIEW_FINDINGS]
+{"findings": [
+  {"slide_num": <int or null for deck-level>, "severity": "<high|medium|low>",
+   "category": "notes",
+   "description": "<one sentence>",
+   "actionable": <true|false>,
+   "patch_hint": "<optional hint or null>"}
+]}
+[/REVIEW_FINDINGS]
+
+If notes flow well, emit the block with an empty findings array.
+"""
+
 
 def _system_prompt(mode: str, script_path: Optional[str] = None) -> str:
     if mode == "edit":
@@ -101,6 +160,8 @@ def _system_prompt(mode: str, script_path: Optional[str] = None) -> str:
             addendum = _EDIT_MODE_ADDENDUM_TEMPLATE.format(script_path=script_path)
         else:
             addendum = _EDIT_MODE_ADDENDUM_SLIDE
+    elif mode == "review":
+        return _REVIEW_MODE_SYSTEM_PROMPT
     else:
         addendum = _ASK_MODE_ADDENDUM
     return _SYSTEM_PROMPT_BASE + "\n" + addendum
@@ -535,6 +596,7 @@ class ChatService:
         full_reply = "".join(accumulated)
 
         # In edit mode, extract patches and save them — do NOT apply yet.
+        # In review mode, extract findings and emit a REVIEW_COMPLETE sentinel.
         patch_json_str: Optional[str] = None
         if mode == "edit":
             patches = extract_patches(full_reply)
@@ -557,11 +619,69 @@ class ChatService:
                             "new_text": p.new_text,
                         })
                 patch_json_str = json.dumps(patch_dicts)
+        elif mode == "review":
+            from aippt.deck_review import parse_review_output
+            review_result = parse_review_output(
+                full_reply,
+                model_used=getattr(self.llm, "model", ""),
+            )
+            patch_json_str = json.dumps(review_result.to_dict())
 
         msg_id = self._save_message(
             conversation_id, "assistant", full_reply, slide_id,
             mode=mode, patch_json=patch_json_str,
         )
 
-        if patch_json_str:
+        if mode == "edit" and patch_json_str:
             yield f"[PATCH_PROPOSED:{msg_id}:{patch_json_str}]"
+        elif mode == "review" and patch_json_str:
+            yield f"[REVIEW_COMPLETE:{msg_id}:{patch_json_str}]"
+
+    # ------------------------------------------------------------------
+    # Review helpers
+    # ------------------------------------------------------------------
+
+    def run_notes_flow_pass(self, conversation_id: int) -> "ReviewResult":  # type: ignore[name-defined]
+        """Cross-slide notes-flow analysis (text-only, single LLM call).
+
+        Fetches all slides' speaker notes for the conversation's deck,
+        sends them to the LLM with the notes-flow rubric, and returns
+        a :class:`~aippt.deck_review.ReviewResult`.
+        """
+        from aippt.deck_review import parse_review_output, ReviewResult
+
+        conv = self.get_conversation(conversation_id)
+        if not conv:
+            return ReviewResult()
+
+        rows = self.conn.execute(
+            """SELECT position, title, notes FROM slides
+               WHERE deck_id = ? ORDER BY position ASC""",
+            (conv["deck_id"],),
+        ).fetchall()
+
+        if not rows:
+            return ReviewResult()
+
+        notes_block = "\n\n".join(
+            f"Slide {r['position']} — {r['title'] or '(untitled)'}:\n{r['notes'] or '(no notes)'}"
+            for r in rows
+        )
+        user_msg = f"Speaker notes for all slides:\n\n{notes_block}"
+
+        full_reply = ""
+        try:
+            for chunk in self.llm.stream_text(
+                [{"role": "user", "content": user_msg}],
+                system_prompt=_NOTES_FLOW_PROMPT,
+                max_tokens=2048,
+            ):
+                full_reply += chunk
+        except Exception as exc:
+            logger.error("Notes-flow LLM error: %s", exc)
+            return ReviewResult()
+
+        return parse_review_output(
+            full_reply,
+            model_used=getattr(self.llm, "model", ""),
+        )

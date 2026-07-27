@@ -188,8 +188,22 @@ new deck from a markdown outline. The panel supports:
 - **Audience** -- adapts enhanced output to one of ``Mixed / General``
   (default), ``Engineers``, ``Executives``, or ``Product``. The selection
   is sent as the ``audience`` form field when non-default.
+- **Engine** -- choose the rendering backend:
+
+  - **pptxgenjs** (default, *rich visuals*) -- the LLM writes a validated
+    ``.mjs`` script; the server executes it via Node.js and the result is a
+    full-fidelity PPTX with the AMD corporate theme applied automatically.
+  - **python-pptx** (*template*) -- original pipeline: the LLM fills a
+    ``.pptx`` template slide by slide.
+
+- **Auto-refine after generation** (checked by default, pptxgenjs only) --
+  after the deck is cataloged, a bounded 1–2 round review loop runs
+  automatically. Each round reviews every slide for layout issues, overflow,
+  density, and AMD brand compliance; actionable findings are auto-patched
+  and the script is re-rendered. A "N issues fixed" summary toast and
+  progress step are shown on completion. Uncheck to skip.
 - **Create Presentation** -- starts the pipeline. Progress streams in real
-  time via SSE (parse → enhance → build → ingest).
+  time via SSE (parse → enhance → build → ingest → auto-refine).
 
 All Create controls are disabled in view-only mode.
 
@@ -307,6 +321,42 @@ editor.
 
 Notes can be written back to the original PPTX file using the **Write
 Notes to Deck** button in the deck list.
+
+Deck Chat and Review Mode
+-------------------------
+
+Each deck has an inline chat panel (visible when browsing a deck in non-view-only
+mode). Three modes are available via radio buttons at the bottom of the panel:
+
+**Ask**
+  General-purpose Q&A about the deck's content, structure, or speaker notes.
+  The LLM has access to the slide text and (when slide thumbnails are available)
+  the slide image.
+
+**Edit**
+  Propose text edits to slide content or notes. The LLM may return a
+  ``[PATCH_PROPOSED]`` block; an **Apply / Reject** UI appears below the
+  reply. Applying records the edit in the change history and invalidates the
+  affected slide's thumbnail.
+
+**★ Review**
+  Full-deck visual QA. Pressing **Send** (no message text required) triggers
+  a slide-by-slide review pass plus a speaker-notes flow analysis. Each slide
+  is assessed against a rubric covering layout variety, text overflow, visual
+  density, AMD brand compliance, and clarity. Findings appear as a structured
+  table with columns:
+
+  - *Slide* -- slide number (or "Deck" for deck-level findings)
+  - *Severity* -- HIGH / MEDIUM / LOW
+  - *Category* -- layout, content, overflow, notes, brand
+  - *Description* -- human-readable description of the issue
+  - *auto-fix* badge -- present when the finding can be auto-patched
+
+  Review findings are persisted in the conversation history, so navigating
+  away and back restores the table exactly as it was. For large decks, a
+  live "Reviewing slide N of M…" counter is shown while the review runs.
+  If a network error interrupts a single slide, that slide gets an advisory
+  finding and the review continues rather than aborting.
 
 Settings
 --------

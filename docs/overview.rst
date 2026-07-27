@@ -23,6 +23,11 @@ Key features:
   Analyze for multimodal AI input and by the web UI for thumbnails.
 - **Analyze** -- Use multimodal AI (slide images + text) for feedback, speaker
   notes, auto-tagging, and improvement suggestions
+- **Review & Auto-Refine** -- Full-deck visual QA via the web chat panel
+  (★ Review mode): each slide is scored for layout variety, overflow, density,
+  and AMD brand compliance; findings appear as a HIGH/MEDIUM/LOW severity table.
+  pptxgenjs decks are also auto-refined immediately after generation — a bounded
+  1–2 round loop reviews, patches, and re-renders without any manual steps.
 - **Search & Remix** -- Query cataloged slides by tags or title, then assemble
   new decks from slides across your library
 - **Web UI** -- Browse, search, tag, and edit speaker notes from a FastAPI-based
