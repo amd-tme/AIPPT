@@ -120,6 +120,7 @@ registry:
     supports_vision: true
     supports_images: true
 defaults:
+  create: claude-sonnet-4-6
   enhance: claude-sonnet-4-6
   notes: claude-sonnet-4-6
   image: dall-e-3
