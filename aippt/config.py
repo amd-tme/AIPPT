@@ -19,7 +19,7 @@ try:
 except ImportError:
     HAS_YAML = False
 
-VALID_OPERATIONS = {"enhance", "feedback", "notes", "tags", "image", "improve", "reverse"}
+VALID_OPERATIONS = {"create", "enhance", "feedback", "notes", "tags", "image", "improve", "reverse"}
 VALID_PROVIDERS = {"anthropic", "openai", "google"}
 
 
@@ -145,7 +145,7 @@ def load_model_config(config_path: Optional[str] = None) -> Dict:
         raise ConfigError(f"{path} 'defaults' must be a mapping.")
 
     # Operations that must be present in every models.yaml
-    required_ops = VALID_OPERATIONS - {"improve", "reverse"}
+    required_ops = VALID_OPERATIONS - {"create", "improve", "reverse"}
     for op in required_ops:
         if op not in raw_defaults:
             raise ConfigError(
