@@ -413,6 +413,102 @@ slide = prs.slides.add_slide(prs.slide_layouts[30])
 save_deck(prs, 'output/infra-overview.pptx')
 ```
 
+## Conservative Snazz (Template-Based)
+
+For python-pptx decks using `corp.pptx`, visual enhancements are constrained by the template but still achievable. The key insight: **don't fight the template's structure — add on top of it.** Floating images and shapes can be layered over any template layout without touching placeholder indices.
+
+### Logo Badges
+
+Add a vendor or tool logo as a floating image on relevant slides (not in a placeholder). Works on any layout:
+
+```python
+from pptx.util import Inches
+
+def add_logo_badge(slide, image_path, x=Inches(10.5), y=Inches(0.3), w=Inches(0.8)):
+    """Add a floating logo badge in the top-right area."""
+    slide.shapes.add_picture(image_path, x, y, w)
+```
+
+### Tech Stack Icon Strip
+
+A row of small tool logos at the bottom of a slide (above the footer zone):
+
+```python
+def add_icon_strip(slide, icon_paths, y=Inches(6.2), icon_size=Inches(0.45), gap=Inches(0.15)):
+    """Add a row of small icons near the bottom of the slide."""
+    total_width = len(icon_paths) * (icon_size + gap) - gap
+    start_x = (Inches(13.33) - total_width) // 2
+    for i, path in enumerate(icon_paths):
+        x = start_x + i * (icon_size + gap)
+        slide.shapes.add_picture(path, x, y, icon_size, icon_size)
+```
+
+### Stat Callouts
+
+Large numbers in the AMD accent color (`00C2DE`) draw the eye on otherwise plain template layouts:
+
+```python
+from pptx.util import Inches, Pt
+from pptx.dml.color import RGBColor
+
+def add_stat_callout(slide, value, label, x, y, w=Inches(3.0)):
+    """Add a large colored stat number with a label below it."""
+    txBox = slide.shapes.add_textbox(x, y, w, Inches(0.8))
+    tf = txBox.text_frame
+    p = tf.paragraphs[0]
+    run = p.add_run()
+    run.text = value
+    run.font.size = Pt(48)
+    run.font.bold = True
+    run.font.color.rgb = RGBColor(0x00, 0xC2, 0xDE)
+    p.alignment = PP_ALIGN.CENTER
+
+    txBox2 = slide.shapes.add_textbox(x, y + Inches(0.85), w, Inches(0.4))
+    tf2 = txBox2.text_frame
+    p2 = tf2.paragraphs[0]
+    p2.text = label
+    p2.font.size = Pt(14)
+    p2.font.color.rgb = RGBColor(0x9D, 0x9F, 0xA2)
+    p2.alignment = PP_ALIGN.CENTER
+```
+
+### Header with Logo
+
+Add a styled header bar with logo over a placeholder area — creates a visual column header without modifying the placeholder:
+
+```python
+from pptx.util import Inches, Pt
+from pptx.dml.color import RGBColor
+
+def add_header_with_logo(slide, text, logo_path, x, y, w, accent_color=RGBColor(0x00, 0xC2, 0xDE)):
+    """Add a styled header bar with logo on top of a placeholder area."""
+    from pptx.enum.shapes import MSO_SHAPE_TYPE
+    RECT = MSO_SHAPE_TYPE.RECTANGLE
+
+    shape = slide.shapes.add_shape(RECT, x, y, w, Inches(0.48))
+    shape.fill.solid()
+    shape.fill.fore_color.rgb = RGBColor(0x63, 0x64, 0x66)
+    shape.line.fill.background()
+
+    accent = slide.shapes.add_shape(RECT, x, y, w, Inches(0.05))
+    accent.fill.solid()
+    accent.fill.fore_color.rgb = accent_color
+    accent.line.fill.background()
+
+    if logo_path:
+        slide.shapes.add_picture(logo_path, x + Inches(0.1), y + Inches(0.07), Inches(0.34), Inches(0.34))
+
+    text_x = x + (Inches(0.55) if logo_path else Inches(0.15))
+    txBox = slide.shapes.add_textbox(text_x, y + Inches(0.02), w - (text_x - x) - Inches(0.1), Inches(0.44))
+    tf = txBox.text_frame
+    p = tf.paragraphs[0]
+    run = p.add_run()
+    run.text = text
+    run.font.size = Pt(18)
+    run.font.bold = True
+    run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+```
+
 ## Troubleshooting
 
 | Problem | Cause | Fix |
