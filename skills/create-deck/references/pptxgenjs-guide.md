@@ -173,6 +173,12 @@ addBulletSlide(deck, "Overview", [
 ], sn++);
 ```
 
+### Icon + Text Rows
+
+Row height divides the full content area evenly (`CONTENT_H / items.length`), preventing the 30–40% blank space that comes from fixed row heights. Icons are vertically centered within each row. Separator lines between rows break up the space without adding visual noise.
+
+**No-icon fallback:** When no icon image is available for a row, render an accent-colored left bar (0.06" × 0.7") instead of an empty circle. This avoids plain solid circles that look like decorative blobs.
+
 ### addIconRowsSlide(deck, title, items, iconImages, slideNum, notes?)
 
 Rows with icon circles (or accent bars if no icon) and label/description.
@@ -180,7 +186,79 @@ Rows with icon circles (or accent bars if no icon) and label/description.
 - `items` — Array of `{ label, desc }` objects
 - `iconImages` — Array of base64 data URIs (or null entries for accent-bar fallback)
 - `notes` — Optional speaker notes string
-- Row height adapts: >3 items → 1.1", ≤3 items → 1.4"
+- Row height divides full content area evenly: `CONTENT_H / items.length` — no fixed heights
+
+**Internal implementation reference:**
+
+```javascript
+function addIconRows(pptx, title, items, iconImages, theme) {
+  const C = theme.colors;
+  const slide = pptx.addSlide();
+  slide.background = { color: C.background };
+
+  slide.addText(title, {
+    x: M, y: 0.3, w: CONTENT_W, h: 0.7,
+    fontSize: 28, fontFace: theme.fonts.heading,
+    color: C.text_primary, bold: true,
+  });
+
+  // Divide full content height evenly — prevents 30-40% blank space
+  const rowH = CONTENT_H / items.length;
+
+  items.forEach((item, i) => {
+    const y = CONTENT_Y + i * rowH;
+
+    // Vertically center icon within the row
+    const circleSize = 0.7;
+    const circleY = y + rowH / 2 - circleSize / 2;
+
+    // No-icon fallback: accent bar instead of empty circle
+    if (!iconImages || !iconImages[i]) {
+      slide.addShape(pptx.ShapeType.rect, {
+        x: M + 0.56, y: circleY, w: 0.06, h: circleSize,
+        fill: { color: C.accent },
+      });
+    } else {
+      // Icon circle
+      slide.addShape(pptx.ShapeType.ellipse, {
+        x: M + 0.56, y: circleY, w: circleSize, h: circleSize,
+        fill: { color: C.accent },
+      });
+      // Icon image
+      slide.addImage({
+        data: iconImages[i],
+        x: M + 0.68, y: circleY + 0.12, w: 0.46, h: 0.46,
+      });
+    }
+
+    // Label — vertically centered in top portion of row
+    slide.addText(item.label, {
+      x: M + 1.56, y: y + rowH * 0.15, w: CONTENT_W - 1.56, h: 0.4,
+      fontSize: 20, fontFace: theme.fonts.heading,
+      color: C.text_primary, bold: true,
+    });
+
+    // Description — below label
+    slide.addText(item.description, {
+      x: M + 1.56, y: y + rowH * 0.15 + 0.4, w: CONTENT_W - 1.56,
+      h: rowH * 0.55,
+      fontSize: 14, fontFace: theme.fonts.body,
+      color: C.text_body,
+    });
+
+    // Separator line between rows (not after last item)
+    if (i < items.length - 1) {
+      slide.addShape(pptx.ShapeType.rect, {
+        x: M + 1.56, y: y + rowH - 0.01, w: CONTENT_W - 1.56, h: 0.01,
+        fill: { color: C.surface },
+      });
+    }
+  });
+
+  addFooter(slide, pptx, theme, slideNum, TOTAL);
+  return slide;
+}
+```
 
 ### addProcessFlow(deck, title, steps, slideNum, notes?)
 
@@ -201,6 +279,74 @@ Two-column layout with headers and vertical divider.
 - `notes` — Optional speaker notes string
 - Automatic vertical divider line between columns (surface color)
 - Column widths: left 5.70", gutter 0.36", right fills remainder
+
+#### Column Headers with Logos
+
+When each column represents a named tool or technology, add the tool's logo to the column header for a purposeful layout instead of "two lists next to each other."
+
+```javascript
+function addTwoColumnWithLogos(pptx, title, leftHeader, rightHeader, leftContent, rightContent, leftIcon, rightIcon, theme) {
+  const C = theme.colors;
+  const slide = pptx.addSlide();
+  slide.background = { color: C.background };
+
+  slide.addText(title, {
+    x: M, y: 0.3, w: CONTENT_W, h: 0.7,
+    fontSize: 28, fontFace: theme.fonts.heading,
+    color: C.text_primary, bold: true,
+  });
+
+  const col1W = 5.70;
+  const gutter = 0.36;
+  const col2X = M + col1W + gutter;
+  const col2W = CONTENT_W - col1W - gutter;
+  const headerH = 0.48;
+
+  function addColumnHeader(x, w, header, iconData) {
+    slide.addShape(pptx.ShapeType.rect, {
+      x, y: CONTENT_Y, w, h: headerH,
+      fill: { color: C.surface },
+    });
+    slide.addShape(pptx.ShapeType.rect, {
+      x, y: CONTENT_Y, w, h: 0.05,
+      fill: { color: C.accent },
+    });
+    if (iconData) {
+      slide.addImage({ data: iconData, x: x + 0.1, y: CONTENT_Y + 0.07, w: 0.34, h: 0.34 });
+    }
+    const textX = iconData ? x + 0.55 : x + 0.15;
+    slide.addText(header, {
+      x: textX, y: CONTENT_Y + 0.02, w: w - (textX - x) - 0.1, h: headerH - 0.04,
+      fontSize: 18, fontFace: theme.fonts.heading,
+      color: C.text_primary, bold: true, valign: "middle",
+    });
+  }
+
+  if (leftHeader) addColumnHeader(M, col1W, leftHeader, leftIcon);
+  if (rightHeader) addColumnHeader(col2X, col2W, rightHeader, rightIcon);
+
+  slide.addShape(pptx.ShapeType.rect, {
+    x: M + col1W + gutter / 2 - 0.01, y: CONTENT_Y, w: 0.02, h: CONTENT_H,
+    fill: { color: C.surface },
+  });
+
+  const bodyY = CONTENT_Y + headerH + 0.15;
+  const bodyH = CONTENT_H - headerH - 0.15;
+
+  slide.addText(leftContent.map(item => ({
+    text: item, options: { fontSize: 16, fontFace: theme.fonts.body, color: C.text_body, bullet: true, breakLine: true, paraSpaceAfter: 8 },
+  })), { x: M, y: bodyY, w: col1W, h: bodyH, valign: "top" });
+
+  slide.addText(rightContent.map(item => ({
+    text: item, options: { fontSize: 16, fontFace: theme.fonts.body, color: C.text_body, bullet: true, breakLine: true, paraSpaceAfter: 8 },
+  })), { x: col2X, y: bodyY, w: col2W, h: bodyH, valign: "top" });
+
+  addFooter(slide, slideNum, theme);
+  return slide;
+}
+```
+
+**When to use:** Both columns represent named technologies or products with recognizable logos. Falls back to `addTwoColumn` when columns are generic concepts (e.g., "Pros" vs "Cons").
 
 ### addCardGrid(deck, title, cards, slideNum, notes?)
 
@@ -275,6 +421,34 @@ Numbered panel on left, title on right (rich mode only).
 - "SECTION" label with letter-spacing, title at 42pt
 
 **Corporate-match mode (AMD default):** Skip section dividers entirely — do not render a slide for section headings with no content.
+
+**Conservative snazz variant** — for corporate themes that want minimal section markers without the numbered panel:
+
+```javascript
+function addSectionDividerConservative(pptx, title, theme) {
+  const C = theme.colors;
+  const slide = pptx.addSlide();
+  slide.background = { color: C.background };
+
+  // Full-width accent bar at top
+  slide.addShape(pptx.ShapeType.rect, {
+    x: 0, y: 0, w: SW, h: 0.08,
+    fill: { color: C.accent },
+  });
+
+  // Section title — vertically centered
+  slide.addText(title.toUpperCase(), {
+    x: M, y: 0, w: CONTENT_W, h: SH,
+    fontSize: 36, fontFace: theme.fonts.heading,
+    color: C.text_primary, bold: true,
+    charSpacing: 4,
+    valign: "middle",
+  });
+
+  addFooter(slide, slideNum, theme);
+  return slide;
+}
+```
 
 ### addClosingSlide(deck, slideNum, notes?)
 
@@ -418,6 +592,124 @@ const {
 ```
 
 ## Advanced: Custom Layouts Beyond Helpers
+
+For layouts not covered by the helper library, access the raw `deck.pptx` and `deck.theme` directly. The patterns below are ready-to-use implementations of the most common custom layouts.
+
+### Logo Grid (Technology Stack)
+
+A grid of named technologies with brand logos. Use when a slide lists 4–8 named products/tools. Each cell shows the tool's logo circle, name, and a one-line description.
+
+**Corporate-match mode (AMD default):** Use plain icon+text rows or bullets instead — card surfaces and shadows violate the no-decorative-shapes rule. Logo grid is rich-mode only.
+
+**Trigger signals (rich mode):** Slide title contains "Stack", "Tools", "Platform", "Services", or "Components" AND content is a list of 4–8 named product names.
+
+**Grid sizing:** `cols = n <= 4 ? n : (n <= 6 ? 3 : 4)`
+
+```javascript
+function addLogoGrid(pptx, title, items, iconImages, brandColors, theme, slideNum) {
+  const C = theme.colors;
+  const { M, CONTENT_W, CONTENT_Y, CONTENT_H } = layout;
+  const slide = pptx.addSlide();
+  slide.background = { color: C.background };
+
+  slide.addText(title, {
+    x: M, y: 0.3, w: CONTENT_W, h: 0.7,
+    fontSize: 28, fontFace: theme.fonts.heading,
+    color: C.text_primary, bold: true,
+  });
+
+  const n = items.length;
+  const cols = n <= 4 ? n : (n <= 6 ? 3 : 4);
+  const rows = Math.ceil(n / cols);
+  const gap = 0.3;
+  const cardW = (CONTENT_W - (cols - 1) * gap) / cols;
+  const cardH = (CONTENT_H - (rows - 1) * gap) / rows;
+  const circleSize = Math.min(0.8, cardH * 0.35);
+
+  items.forEach((item, i) => {
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    const x = M + col * (cardW + gap);
+    const y = CONTENT_Y + row * (cardH + gap);
+
+    slide.addShape(pptx.ShapeType.rect, { x, y, w: cardW, h: cardH, fill: { color: C.surface }, shadow: cardShadow() });
+
+    const brandColor = brandColors[i] || C.accent;
+    slide.addShape(pptx.ShapeType.rect, { x, y, w: cardW, h: 0.06, fill: { color: brandColor } });
+
+    const circleX = x + (cardW - circleSize) / 2;
+    const circleY = y + 0.25;
+    slide.addShape(pptx.ShapeType.ellipse, { x: circleX, y: circleY, w: circleSize, h: circleSize, fill: { color: C.background } });
+
+    if (iconImages[i]) {
+      const inset = circleSize * 0.15;
+      slide.addImage({ data: iconImages[i], x: circleX + inset, y: circleY + inset, w: circleSize - 2 * inset, h: circleSize - 2 * inset });
+    }
+
+    slide.addText(item.name, {
+      x: x + 0.1, y: circleY + circleSize + 0.1, w: cardW - 0.2, h: 0.4,
+      fontSize: 16, fontFace: theme.fonts.heading, color: C.text_primary, bold: true, align: "center",
+    });
+    slide.addText(item.description, {
+      x: x + 0.1, y: circleY + circleSize + 0.5, w: cardW - 0.2, h: cardH - circleSize - 1.0,
+      fontSize: 12, fontFace: theme.fonts.body, color: C.text_body, align: "center", valign: "top",
+    });
+  });
+
+  addFooter(slide, slideNum, theme);
+  return slide;
+}
+```
+
+**Usage with Simple Icons:**
+
+```javascript
+const { SiNomad, SiConsul, SiTerraform, SiDocker, SiTraefikproxy, SiMinio } = require("react-icons/si");
+const tools = [
+  { name: "Nomad",     description: "Workload orchestration",      icon: SiNomad,       color: "00CA8E" },
+  { name: "Consul",    description: "Service discovery & mesh",    icon: SiConsul,      color: "F24C53" },
+  { name: "Terraform", description: "Infrastructure as code",      icon: SiTerraform,   color: "844FBA" },
+  { name: "Docker",    description: "Container runtime",           icon: SiDocker,      color: "2496ED" },
+  { name: "Traefik",  description: "Edge routing & load balancing",icon: SiTraefikproxy,color: "24A1C1" },
+  { name: "MinIO",     description: "S3-compatible object storage", icon: SiMinio,      color: "C72E49" },
+];
+const iconImages = await Promise.all(tools.map(t => iconToBase64(renderIconSvg(t.icon, 256, t.color))));
+const brandColors = tools.map(t => t.color);
+addLogoGrid(pptx, "Platform Stack", tools, iconImages, brandColors, theme, sn++);
+```
+
+---
+
+### Brand Badge
+
+When a slide is specifically about a vendor product (e.g., "AMD MI300X Performance"), add a small badge in the top-right corner. Low-effort, high-impact — signals "this slide is about [product]" without changing the content structure.
+
+```javascript
+function addBrandBadge(slide, pptx, vendorLogo, productName, theme) {
+  const C = theme.colors;
+  const badgeW = 1.8;
+  const badgeX = RIGHT_EDGE - badgeW;
+  const badgeY = 0.2;
+
+  slide.addShape(pptx.ShapeType.rect, {
+    x: badgeX, y: badgeY, w: badgeW, h: 0.8,
+    fill: { color: C.surface }, rectRadius: 0.05,
+  });
+  if (vendorLogo) {
+    slide.addImage({ data: vendorLogo, x: badgeX + 0.1, y: badgeY + 0.08, w: 0.64, h: 0.64 });
+  }
+  slide.addText(productName, {
+    x: badgeX + 0.82, y: badgeY + 0.15, w: badgeW - 0.92, h: 0.5,
+    fontSize: 14, fontFace: theme.fonts.heading, color: C.text_primary, bold: true, valign: "middle",
+  });
+}
+```
+
+**When to use:** Slides about specific vendor hardware (GPUs, CPUs), named cloud services, or branded product lines. Call `addBrandBadge(slide, pptx, logo, "MI300X", theme)` after building the slide with any helper.
+
+**When NOT to use:** Generic concept slides, section dividers, title/closing slides, or slides comparing multiple vendors.
+
+---
 
 For layouts not covered by the helper library (e.g., logo grid, three-column cards, brand badges), access the raw `deck.pptx` and `deck.theme` directly:
 
