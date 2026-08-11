@@ -31,9 +31,9 @@ Scripts are ES modules (`.mjs`) that import from the helper library:
 import {
   createDeck, addTitleSlide, addBulletSlide, addImageSlide,
   addImageBulletsSlide, addProcessFlow, addTwoColumn, addCardGrid,
-  addStatCallout, addCodeSlide, addIconRowsSlide, addSectionDivider,
-  addClosingSlide, addFooter, renderIconSvg, iconToBase64,
-  preRenderIcons, cardShadow, SW, SH,
+  addStatCallout, addCodeSlide, addIconRowsSlide, addLogoGridSlide,
+  addSectionDivider, addClosingSlide, addFooter, renderIconSvg,
+  iconToBase64, preRenderIcons, cardShadow, SW, SH,
 } from '../lib/pptxgenjs-helpers.mjs';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
@@ -425,7 +425,7 @@ Numbered panel on left, title on right (rich mode only).
 **Conservative snazz variant** — for corporate themes that want minimal section markers without the numbered panel:
 
 ```javascript
-function addSectionDividerConservative(pptx, title, theme) {
+function addSectionDividerConservative(pptx, title, theme, slideNum) {
   const C = theme.colors;
   const slide = pptx.addSlide();
   slide.background = { color: C.background };
@@ -597,7 +597,7 @@ For layouts not covered by the helper library, access the raw `deck.pptx` and `d
 
 ### Logo Grid (Technology Stack)
 
-A grid of named technologies with brand logos. Use when a slide lists 4–8 named products/tools. Each cell shows the tool's logo circle, name, and a one-line description.
+A grid of named technologies with brand logos. Use when a slide lists 4–8 named products/tools. Each cell shows the tool's logo circle, name, and a one-line description. Use `addLogoGridSlide` from the helper library — no boilerplate needed.
 
 **Corporate-match mode (AMD default):** Use plain icon+text rows or bullets instead — card surfaces and shadows violate the no-decorative-shapes rule. Logo grid is rich-mode only.
 
@@ -605,77 +605,34 @@ A grid of named technologies with brand logos. Use when a slide lists 4–8 name
 
 **Grid sizing:** `cols = n <= 4 ? n : (n <= 6 ? 3 : 4)`
 
-```javascript
-function addLogoGrid(pptx, title, items, iconImages, brandColors, theme, slideNum) {
-  const C = theme.colors;
-  const { M, CONTENT_W, CONTENT_Y, CONTENT_H } = layout;
-  const slide = pptx.addSlide();
-  slide.background = { color: C.background };
+### addLogoGridSlide(deck, title, items, iconImages, brandColors, slideNum, notes?)
 
-  slide.addText(title, {
-    x: M, y: 0.3, w: CONTENT_W, h: 0.7,
-    fontSize: 28, fontFace: theme.fonts.heading,
-    color: C.text_primary, bold: true,
-  });
-
-  const n = items.length;
-  const cols = n <= 4 ? n : (n <= 6 ? 3 : 4);
-  const rows = Math.ceil(n / cols);
-  const gap = 0.3;
-  const cardW = (CONTENT_W - (cols - 1) * gap) / cols;
-  const cardH = (CONTENT_H - (rows - 1) * gap) / rows;
-  const circleSize = Math.min(0.8, cardH * 0.35);
-
-  items.forEach((item, i) => {
-    const col = i % cols;
-    const row = Math.floor(i / cols);
-    const x = M + col * (cardW + gap);
-    const y = CONTENT_Y + row * (cardH + gap);
-
-    slide.addShape(pptx.ShapeType.rect, { x, y, w: cardW, h: cardH, fill: { color: C.surface }, shadow: cardShadow() });
-
-    const brandColor = brandColors[i] || C.accent;
-    slide.addShape(pptx.ShapeType.rect, { x, y, w: cardW, h: 0.06, fill: { color: brandColor } });
-
-    const circleX = x + (cardW - circleSize) / 2;
-    const circleY = y + 0.25;
-    slide.addShape(pptx.ShapeType.ellipse, { x: circleX, y: circleY, w: circleSize, h: circleSize, fill: { color: C.background } });
-
-    if (iconImages[i]) {
-      const inset = circleSize * 0.15;
-      slide.addImage({ data: iconImages[i], x: circleX + inset, y: circleY + inset, w: circleSize - 2 * inset, h: circleSize - 2 * inset });
-    }
-
-    slide.addText(item.name, {
-      x: x + 0.1, y: circleY + circleSize + 0.1, w: cardW - 0.2, h: 0.4,
-      fontSize: 16, fontFace: theme.fonts.heading, color: C.text_primary, bold: true, align: "center",
-    });
-    slide.addText(item.description, {
-      x: x + 0.1, y: circleY + circleSize + 0.5, w: cardW - 0.2, h: cardH - circleSize - 1.0,
-      fontSize: 12, fontFace: theme.fonts.body, color: C.text_body, align: "center", valign: "top",
-    });
-  });
-
-  addFooter(slide, slideNum, theme);
-  return slide;
-}
-```
+- `items` — Array of `{ name, description }` objects
+- `iconImages` — Array of base64 data URIs from `preRenderIcons` (or null for no icon)
+- `brandColors` — Array of hex color strings (no `#`) — used for the brand accent bar per card
+- `notes` — Optional speaker notes string
 
 **Usage with Simple Icons:**
 
 ```javascript
 const { SiNomad, SiConsul, SiTerraform, SiDocker, SiTraefikproxy, SiMinio } = require("react-icons/si");
+
 const tools = [
-  { name: "Nomad",     description: "Workload orchestration",      icon: SiNomad,       color: "00CA8E" },
-  { name: "Consul",    description: "Service discovery & mesh",    icon: SiConsul,      color: "F24C53" },
-  { name: "Terraform", description: "Infrastructure as code",      icon: SiTerraform,   color: "844FBA" },
-  { name: "Docker",    description: "Container runtime",           icon: SiDocker,      color: "2496ED" },
-  { name: "Traefik",  description: "Edge routing & load balancing",icon: SiTraefikproxy,color: "24A1C1" },
-  { name: "MinIO",     description: "S3-compatible object storage", icon: SiMinio,      color: "C72E49" },
+  { name: "Nomad",     description: "Workload orchestration",       icon: SiNomad,        color: "00CA8E" },
+  { name: "Consul",    description: "Service discovery & mesh",     icon: SiConsul,       color: "F24C53" },
+  { name: "Terraform", description: "Infrastructure as code",       icon: SiTerraform,    color: "844FBA" },
+  { name: "Docker",    description: "Container runtime",            icon: SiDocker,       color: "2496ED" },
+  { name: "Traefik",   description: "Edge routing & load balancing",icon: SiTraefikproxy, color: "24A1C1" },
+  { name: "MinIO",     description: "S3-compatible object storage", icon: SiMinio,        color: "C72E49" },
 ];
-const iconImages = await Promise.all(tools.map(t => iconToBase64(renderIconSvg(t.icon, 256, t.color))));
+
+const icons = await preRenderIcons(
+  Object.fromEntries(tools.map(t => [t.name, { component: t.icon, color: t.color }]))
+);
+const iconImages = tools.map(t => icons[t.name]);
 const brandColors = tools.map(t => t.color);
-addLogoGrid(pptx, "Platform Stack", tools, iconImages, brandColors, theme, sn++);
+
+addLogoGridSlide(deck, "Platform Stack", tools, iconImages, brandColors, sn++);
 ```
 
 ---
@@ -740,8 +697,8 @@ This works seamlessly with helper-built slides in the same deck. Use the theme c
 import {
   createDeck, addTitleSlide, addBulletSlide, addImageSlide,
   addImageBulletsSlide, addProcessFlow, addTwoColumn, addCardGrid,
-  addCodeSlide, addClosingSlide, renderIconSvg, iconToBase64,
-  preRenderIcons,
+  addStatCallout, addCodeSlide, addIconRowsSlide, addLogoGridSlide,
+  addClosingSlide, renderIconSvg, iconToBase64, preRenderIcons, cardShadow,
 } from '../lib/pptxgenjs-helpers.mjs';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
