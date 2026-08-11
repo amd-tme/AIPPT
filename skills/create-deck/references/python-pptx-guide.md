@@ -2,6 +2,46 @@
 
 Reference for generating PowerPoint decks using python-pptx with the helper library and an existing corporate template. Claude reads this when creating template-based deck scripts.
 
+## Template Setup
+
+### corp.pptx
+
+The AMD corporate template is at `templates/corp.pptx`. It has **31 layouts** mapped to specific content types.
+
+If only a `.potx` file is available (e.g., downloaded from SharePoint), convert it before use — python-pptx rejects `.potx` files:
+
+```python
+import zipfile, shutil, os
+
+def potx_to_pptx(src, dst):
+    shutil.copy(src, dst)
+    with zipfile.ZipFile(dst, 'r') as z:
+        data = z.read('[Content_Types].xml')
+    data = data.replace(
+        b'presentationml.template.main+xml',
+        b'presentationml.presentation.main+xml',
+    )
+    with zipfile.ZipFile(dst, 'a') as z:
+        z.writestr('[Content_Types].xml', data)
+
+potx_to_pptx('corp.potx', 'templates/corp.pptx')
+```
+
+### Key Layout Indices
+
+| Index | Name (approx.) | Use for |
+|-------|---------------|---------|
+| 0 | Title slide | Opening title |
+| 3 | Content | Bullets, numbered lists |
+| 5 | Two-column | Side-by-side content |
+| 7 | Blank | Custom layouts |
+| 17 | Section break | Chapter / section dividers |
+| 26 | Image + content | Photo + bullets |
+| 28 | Code / monospace | Code examples |
+| 30 | Closing | Final slide |
+
+Run the enumeration script to confirm exact indices for any template — indices can shift between template versions.
+
 ## Template Analysis
 
 ### Enumerating Layouts and Placeholders
