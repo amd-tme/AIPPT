@@ -37,16 +37,30 @@ script that uses the AIPPT helper library.
 
 createDeck(themePath, opts?)           — initialise deck, returns deck object
 addTitleSlide(deck, title, subtitle, slideNum)
+addTitleAlt(deck, title, subtitle, slideNum)           — alternate title layout
 addBulletSlide(deck, title, bullets, slideNum, notes)
 addTwoColumn(deck, title, leftHeader, rightHeader, leftItems, rightItems, slideNum, notes, opts?)
+addTwoColNumbered(deck, title, leftHeader, rightHeader, leftItems, rightItems, slideNum, notes)
 addCardGrid(deck, title, cards, slideNum, notes)
 addStatCallout(deck, title, stats, slideNum, notes)
 addProcessFlow(deck, title, steps, slideNum, notes)
 addIconRowsSlide(deck, title, items, iconImages, slideNum, notes)
+addLogoGridSlide(deck, title, items, iconImages, brandColors, slideNum, notes?)
+  — partner/ecosystem logo grid; items=[{name, description}], iconImages=preRendered[], brandColors=hex[]
 addImageSlide(deck, title, imagePath, slideNum, notes, opts?)
 addImageBulletsSlide(deck, title, imagePath, bullets, slideNum, notes)
+addTitleWithImage(deck, title, imagePath, slideNum, notes)
+addSplitImageContent(deck, title, imagePath, bullets, slideNum, notes)
 addCodeSlide(deck, title, code, slideNum, notes)
 addSectionDivider(deck, sectionNumber, title, slideNum)
+addSectionContent(deck, title, body, slideNum, notes)
+addCinematicSlide(deck, title, subtitle, imagePath, slideNum, notes)
+addThreeColContent(deck, title, col1Header, col2Header, col3Header, col1Items, col2Items, col3Items, slideNum, notes)
+addThreeColImageText(deck, title, items, slideNum, notes)   — items=[{image, header, body}]
+addTwoImageGallery(deck, title, img1, img2, cap1, cap2, slideNum, notes)
+addThreeImageGallery(deck, title, img1, img2, img3, cap1, cap2, cap3, slideNum, notes)
+addFourImageGallery(deck, title, images, captions, slideNum, notes)
+addPictureCaption(deck, title, imagePath, caption, slideNum, notes)
 addClosingSlide(deck, slideNum, notes)
 cardShadow(theme)                      — shadow factory (never reuse objects)
 
@@ -57,6 +71,11 @@ array of objects, `steps` takes an array of PLAIN STRINGS — one per step.
 To show a bold label plus description, join them with a literal newline in
 the string: "Label\nDescription text". Do NOT pass {label, description}
 objects here.
+
+Note on `addLogoGridSlide`: requires pre-rendered icon images from
+`preRenderIcons()`. Only use it when you have actual brand/partner logos to
+show — do NOT fabricate icon data. If no icons are available, use addCardGrid
+with text-only cards instead.
 
 ## Script skeleton
 
@@ -113,16 +132,24 @@ Map each slide's content to the best layout:
 | Prominent number or statistic | addStatCallout |
 | Code blocks or CLI commands | addCodeSlide |
 | Two contrasting topics / compare | addTwoColumn |
+| Numbered two-column list | addTwoColNumbered |
 | Sequential steps or process (3-6 items) | addProcessFlow |
-| 3 parallel items with headings | addCardGrid (3 cards) |
+| 3 parallel items with headings | addThreeColContent |
+| Partner logos / ecosystem / technology stack | addLogoGridSlide (requires preRenderIcons) |
+| Image + supporting text | addSplitImageContent or addImageBulletsSlide |
+| Image + caption only | addPictureCaption |
+| Hero/cinematic image with title overlay | addCinematicSlide |
+| 2-4 image gallery | addTwoImageGallery / addThreeImageGallery / addFourImageGallery |
+| Section intro with body paragraphs | addSectionContent |
 | Simple list with NO natural grouping | addBulletSlide (last resort) |
 | IMAGE: with no bullets | addImageSlide |
 | IMAGE: with bullets | addImageBulletsSlide |
 | Last slide / thank you | addClosingSlide |
 
 Variety Rule: NEVER use the same layout on two consecutive slides.
-Substitution: if you would use addBulletSlide twice in a row, use addCardGrid or addTwoColumn instead.
-Preference: addBulletSlide is the LAST RESORT — always prefer addCardGrid, addTwoColumn, addProcessFlow, or addStatCallout when the content fits.
+Substitution: if you would use addBulletSlide twice in a row, use addCardGrid, addTwoColumn, addThreeColContent, or addProcessFlow instead.
+Preference: addBulletSlide is the LAST RESORT — always prefer richer layouts when the content fits.
+Gallery preference: for 2 images use addTwoImageGallery; for 3 use addThreeImageGallery; for 4+ use addFourImageGallery.
 
 ## Speaker Notes Metadata
 

@@ -88,12 +88,13 @@ _HELPER_FUNCTIONS: frozenset[str] = frozenset({
     "addBulletSlide", "addCardGrid", "addCinematicSlide", "addClosingSlide",
     "addCodeSlide", "addEyebrowText", "addFooter", "addFourImageGallery",
     "addIconRowsSlide", "addImageBulletsSlide", "addImageSlide",
-    "addPictureCaption", "addProcessFlow", "addSectionContent",
-    "addSectionDivider", "addSplitImageContent", "addStatCallout",
-    "addThreeColContent", "addThreeColImageText", "addThreeImageGallery",
-    "addTitleAlt", "addTitleSlide", "addTitleWithImage", "addTwoColNumbered",
-    "addTwoColumn", "addTwoImageGallery", "cardShadow", "computeLayout",
-    "createDeck", "iconToBase", "loadTheme", "preRenderIcons", "renderIconSvg",
+    "addLogoGridSlide", "addPictureCaption", "addProcessFlow",
+    "addSectionContent", "addSectionDivider", "addSplitImageContent",
+    "addStatCallout", "addThreeColContent", "addThreeColImageText",
+    "addThreeImageGallery", "addTitleAlt", "addTitleSlide", "addTitleWithImage",
+    "addTwoColNumbered", "addTwoColumn", "addTwoImageGallery", "cardShadow",
+    "computeLayout", "createDeck", "iconToBase64", "loadTheme",
+    "preRenderIcons", "renderIconSvg",
 })
 
 

@@ -1848,12 +1848,15 @@ async def create_deck_stream(
         loop = asyncio.get_running_loop()
 
         def _worker():
-            if engine == "pptxgenjs":
+            if engine in ("pptxgenjs", "pptxgenjs-direct"):
                 return _worker_pptxgenjs()
             return _worker_python_pptx()
 
         def _worker_pptxgenjs():
-            from aippt.pptxgenjs_gen import generate_script, ScriptGenerationError
+            if engine == "pptxgenjs-direct":
+                from aippt.pptxgenjs_direct import generate_script, ScriptGenerationError
+            else:
+                from aippt.pptxgenjs_gen import generate_script, ScriptGenerationError
             from aippt.preview import Renderer
 
             # Stage a per-job workspace so the generated script's ``../lib``
@@ -1864,23 +1867,36 @@ async def create_deck_stream(
             script_path, render_out_dir = _stage_render_workspace(
                 uploads_dir, _short_id, _base_name, project_root
             )
-            try:
-                llm = _make_llm_client(request, operation="create", model_override=model, user_ntid=ntid)
-            except ValueError as exc:
-                event_q.put(("error", {"message": str(exc)}))
-                return None
+            if engine == "pptxgenjs-direct":
+                # Deterministic path — no LLM needed
+                try:
+                    generate_script(
+                        outline_text=md_text,
+                        output_script_path=script_path,
+                        theme="amd",
+                        progress_callback=create_progress,
+                    )
+                except ScriptGenerationError as exc:
+                    event_q.put(("error", {"message": str(exc)}))
+                    return None
+            else:
+                try:
+                    llm = _make_llm_client(request, operation="create", model_override=model, user_ntid=ntid)
+                except ValueError as exc:
+                    event_q.put(("error", {"message": str(exc)}))
+                    return None
 
-            try:
-                generate_script(
-                    outline_text=md_text,
-                    output_script_path=script_path,
-                    llm_client=llm,
-                    theme="amd",
-                    progress_callback=create_progress,
-                )
-            except ScriptGenerationError as exc:
-                event_q.put(("error", {"message": str(exc)}))
-                return None
+                try:
+                    generate_script(
+                        outline_text=md_text,
+                        output_script_path=script_path,
+                        llm_client=llm,
+                        theme="amd",
+                        progress_callback=create_progress,
+                    )
+                except ScriptGenerationError as exc:
+                    event_q.put(("error", {"message": str(exc)}))
+                    return None
 
             persist_file(request.app.state, script_path)
             create_progress("render", "Executing script…")
