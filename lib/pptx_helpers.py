@@ -6,6 +6,7 @@ Usage from output/ scripts:
     from pptx_helpers import load_template, save_deck, set_placeholder, add_bullets, ...
 """
 
+import copy
 import os
 import re
 
@@ -328,3 +329,223 @@ def set_notes(slide, text):
     """Set speaker notes on a slide."""
     notes_slide = slide.notes_slide
     notes_slide.notes_text_frame.text = text
+
+
+# ---------------------------------------------------------------------------
+# Title slide library
+# ---------------------------------------------------------------------------
+
+# Variants available in templates/title-slides/
+#   "default" — dot/pattern background, general use
+#   "rocm"    — full-bleed photo + AMD Instinct graphic, ROCm-specific
+#   "corp"    — corporate template title slide (from templates/corp.pptx)
+_TITLE_SLIDE_DIR  = os.path.join(os.path.dirname(__file__), '..', 'templates', 'title-slides')
+_AGENDA_SLIDE_DIR = os.path.join(os.path.dirname(__file__), '..', 'templates', 'agenda-slides')
+_CORP_TEMPLATE    = os.path.join(os.path.dirname(__file__), '..', 'templates', 'corp.pptx')
+
+
+def open_title_deck(title, subtitle='', variant='default'):
+    """Load a branded title slide PPTX as a fresh deck base.
+
+    The title slide files carry the full AMD slide master (33 layouts), so
+    you can add content slides directly to the returned Presentation using
+    the same layout indices as corp.pptx.  Call ``save_deck`` when done.
+
+    Parameters
+    ----------
+    title : str
+        Main title text.
+    subtitle : str
+        Subtitle, speaker name, or date string (e.g. "August 2026").
+    variant : str
+        ``"default"`` (dot/pattern background, general use),
+        ``"rocm"``    (full-bleed photo + AMD Instinct graphic),
+        ``"corp"``    (corporate template title from corp.pptx layout 0).
+
+    Returns
+    -------
+    Presentation
+        A Presentation with the title slide as slide 0, ready for
+        ``prs.slides.add_slide(prs.slide_layouts[N])``.
+    """
+    if variant == 'corp':
+        src_path = _CORP_TEMPLATE
+    else:
+        src_path = os.path.join(_TITLE_SLIDE_DIR, f'{variant}.pptx')
+        if not os.path.exists(src_path):
+            raise FileNotFoundError(
+                f"Title slide variant '{variant}' not found at {src_path}. "
+                "Available: default, rocm, corp"
+            )
+
+    prs = Presentation(src_path)
+    title_slide = prs.slides[0]
+
+    for shape in title_slide.shapes:
+        if not shape.has_text_frame:
+            continue
+        name = shape.name.lower()
+        tf = shape.text_frame
+        if 'title' in name and title:
+            if tf.paragraphs and tf.paragraphs[0].runs:
+                tf.paragraphs[0].runs[0].text = title
+            else:
+                tf.paragraphs[0].text = title
+        elif any(k in name for k in ('placeholder', 'speaker', 'subtitle', 'date')) and subtitle:
+            if tf.paragraphs and tf.paragraphs[0].runs:
+                tf.paragraphs[0].runs[0].text = subtitle
+            else:
+                tf.paragraphs[0].text = subtitle
+
+    return prs
+
+
+def add_agenda_slide(prs, section_title, items, variant='full'):
+    """Append a branded agenda slide to *prs*.
+
+    Parameters
+    ----------
+    prs : Presentation
+        The deck to append into (use ``open_title_deck`` or ``load_template``).
+    section_title : str
+        Left-side section label (e.g. "Test" or "What's New: August 2026").
+    items : list of str
+        Agenda line items — up to 6. Each becomes a numbered row (01, 02…).
+    variant : str
+        ``"full"`` — standard agenda with photo background.
+        ``"whats-new"`` — alternate background, suited for update decks.
+
+    Returns
+    -------
+    Presentation
+        Updated presentation with the agenda slide appended. Use this
+        return value — do not continue using the original *prs* reference.
+    """
+    import zipfile, tempfile, re as _re
+
+    src_path = os.path.join(_AGENDA_SLIDE_DIR, f'{variant}.pptx')
+    if not os.path.exists(src_path):
+        raise FileNotFoundError(
+            f"Agenda variant '{variant}' not found at {src_path}. "
+            "Available: full, whats-new"
+        )
+
+    with tempfile.NamedTemporaryFile(suffix='.pptx', delete=False) as tf:
+        tmp_deck = tf.name
+    prs.save(tmp_deck)
+
+    out_path = tmp_deck + '_merged.pptx'
+    rel_ns = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
+    prs_ns = 'http://schemas.openxmlformats.org/presentationml/2006/main'
+    ct_ns  = 'http://schemas.openxmlformats.org/package/2006/content-types'
+
+    with zipfile.ZipFile(src_path, 'r') as za, \
+         zipfile.ZipFile(tmp_deck, 'r') as zd, \
+         zipfile.ZipFile(out_path, 'w', zipfile.ZIP_DEFLATED) as zo:
+
+        # Detect actual slide filename (may be slide1.xml or slide2.xml depending on extraction)
+        a_slides = sorted([f for f in za.namelist() if _re.match(r'ppt/slides/slide\d+\.xml$', f)])
+        A_SLIDE = a_slides[0]
+        A_REL   = A_SLIDE.replace('slides/', 'slides/_rels/') + '.rels'
+        N_SLIDE = 'ppt/slides/slide_agenda.xml'
+        N_REL   = 'ppt/slides/_rels/slide_agenda.xml.rels'
+
+        # Collect agenda media
+        agenda_media = {}
+        if A_REL in za.namelist():
+            rroot = etree.fromstring(za.read(A_REL))
+            for r in rroot:
+                tgt = r.get('Target', '')
+                if '../media/' in tgt:
+                    fname = tgt.split('/')[-1]
+                    mpath = f'ppt/media/{fname}'
+                    if mpath in za.namelist():
+                        agenda_media[fname] = za.read(mpath)
+
+        zo.writestr(N_SLIDE, za.read(A_SLIDE))
+        if A_REL in za.namelist():
+            zo.writestr(N_REL, za.read(A_REL))
+        for fname, data in agenda_media.items():
+            zo.writestr(f'ppt/media/{fname}', data)
+
+        ct_map = {'jpeg': 'image/jpeg', 'jpg': 'image/jpeg', 'png': 'image/png',
+                  'svg': 'image/svg+xml', 'wdp': 'image/vnd.ms-photo'}
+
+        for item in zd.infolist():
+            if item.filename.startswith('ppt/media/') and \
+               item.filename.split('/')[-1] in agenda_media:
+                continue
+
+            data = zd.read(item.filename)
+
+            if item.filename == 'ppt/presentation.xml':
+                root = etree.fromstring(data)
+                sldIdLst = root.find(f'.//{{{prs_ns}}}sldIdLst')
+                if sldIdLst is not None:
+                    existing_ids = [int(s.get('id', 256)) for s in sldIdLst]
+                    new_id = max(existing_ids) + 1 if existing_ids else 257
+                    new_sld = etree.SubElement(sldIdLst, f'{{{prs_ns}}}sldId')
+                    new_sld.set('id', str(new_id))
+                    new_sld.set(f'{{{rel_ns}}}id', 'rIdAgenda')
+                data = etree.tostring(root, xml_declaration=True, encoding='UTF-8', standalone=True)
+
+            elif item.filename == 'ppt/_rels/presentation.xml.rels':
+                root = etree.fromstring(data)
+                new_rel = etree.SubElement(root, 'Relationship')
+                new_rel.set('Id', 'rIdAgenda')
+                new_rel.set('Type', f'{rel_ns}/slide')
+                new_rel.set('Target', 'slides/slide_agenda.xml')
+                data = etree.tostring(root, xml_declaration=True, encoding='UTF-8', standalone=True)
+
+            elif item.filename == '[Content_Types].xml':
+                root = etree.fromstring(data)
+                new_ct = etree.SubElement(root, f'{{{ct_ns}}}Override')
+                new_ct.set('PartName', '/ppt/slides/slide_agenda.xml')
+                new_ct.set('ContentType',
+                    'application/vnd.openxmlformats-officedocument.presentationml.slide+xml')
+                existing_ext = {e.get('Extension') for e in root.findall(f'{{{ct_ns}}}Default')}
+                for fname in agenda_media:
+                    ext = fname.rsplit('.', 1)[-1].lower()
+                    if ext not in existing_ext:
+                        dm = etree.SubElement(root, f'{{{ct_ns}}}Default')
+                        dm.set('Extension', ext)
+                        dm.set('ContentType', ct_map.get(ext, f'image/{ext}'))
+                        existing_ext.add(ext)
+                data = etree.tostring(root, xml_declaration=True, encoding='UTF-8', standalone=True)
+
+            zo.writestr(item, data)
+
+    merged = Presentation(out_path)
+    os.unlink(tmp_deck)
+    os.unlink(out_path)
+
+    # Populate section title
+    agenda_slide = merged.slides[-1]
+    for shape in agenda_slide.shapes:
+        if shape.has_text_frame and 'title' in shape.name.lower() and section_title:
+            tf = shape.text_frame
+            if tf.paragraphs and tf.paragraphs[0].runs:
+                tf.paragraphs[0].runs[0].text = section_title
+            else:
+                tf.paragraphs[0].text = section_title
+
+    # Populate table rows
+    for shape in agenda_slide.shapes:
+        if shape.shape_type == 19:
+            table = shape.table
+            for ri, row in enumerate(table.rows):
+                if ri < len(items):
+                    if row.cells[0].text_frame.paragraphs[0].runs:
+                        row.cells[0].text_frame.paragraphs[0].runs[0].text = f'{ri+1:02d}'
+                    txt_para = row.cells[1].text_frame.paragraphs[0]
+                    if txt_para.runs:
+                        txt_para.runs[0].text = items[ri]
+                    else:
+                        txt_para.text = items[ri]
+                else:
+                    for cell in row.cells:
+                        for para in cell.text_frame.paragraphs:
+                            for run in para.runs:
+                                run.text = ''
+
+    return merged
