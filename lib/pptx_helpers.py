@@ -328,7 +328,9 @@ def add_column_divider(slide, prs):
 def set_notes(slide, text):
     """Set speaker notes on a slide."""
     notes_slide = slide.notes_slide
-    notes_slide.notes_text_frame.text = text
+    tf = notes_slide.notes_text_frame
+    if tf is not None:
+        tf.text = text
 
 
 # ---------------------------------------------------------------------------
@@ -692,4 +694,309 @@ def add_stat_callout_slide(prs, title, body, bg_image=None, title_color='FFFFFF'
             run2.font.size = Pt(14)
             run2.font.color.rgb = body_color_rgb
 
+    return slide
+
+
+# ---------------------------------------------------------------------------
+# Closing slide
+# ---------------------------------------------------------------------------
+
+def add_closing_slide(prs):
+    """Append the AMD branded closing slide (logo centered, dark background).
+
+    Uses slide layout index 30 ('Closing logo slide') from the AMD master.
+    No parameters needed — the layout carries all branding.
+
+    Returns
+    -------
+    slide
+    """
+    layout = prs.slide_layouts[30]
+    return prs.slides.add_slide(layout)
+
+
+# ---------------------------------------------------------------------------
+# Section divider slide
+# ---------------------------------------------------------------------------
+
+def add_section_divider_slide(prs, section_title, subtitle=''):
+    """Append a section divider slide.
+
+    Full-bleed photo background (section-divider-bg.jpeg) with a dark overlay
+    on the left ~55%, large section title, and optional subtitle below.
+
+    Layout mirrors AMD Deck 1 slide 10:
+    - Background photo covers full slide
+    - Dark gradient rect left 55%
+    - Title at x=0.64" y=3.29" (large, white, bold)
+    - Subtitle at x=0.64" y=4.10" (smaller, light gray)
+    - Right panel (x=7.0") left clear so photo shows through
+
+    Parameters
+    ----------
+    prs : Presentation
+    section_title : str
+        Large section label, e.g. "What's New?" or "Inference Performance".
+    subtitle : str
+        Optional descriptor line below the title.
+
+    Returns
+    -------
+    slide
+    """
+    bg_image = os.path.join(_ASSETS_DIR, 'section-divider-bg.jpeg')
+
+    blank_layout = None
+    for layout in prs.slide_layouts:
+        if layout.name.lower() in ('blank', '1_blank', 'blank slide'):
+            blank_layout = layout
+            break
+    if blank_layout is None:
+        blank_layout = prs.slide_layouts[-1]
+
+    slide = prs.slides.add_slide(blank_layout)
+    W, H = Inches(13.33), Inches(7.5)
+
+    # Background image
+    if os.path.exists(bg_image):
+        pic = slide.shapes.add_picture(bg_image, 0, 0, W, H)
+        slide.shapes._spTree.remove(pic._element)
+        slide.shapes._spTree.insert(2, pic._element)
+
+    # Dark overlay left 55%
+    overlay = slide.shapes.add_shape(1, 0, 0, Inches(7.0), H)
+    overlay.line.fill.background()
+    overlay.fill.solid()
+    overlay.fill.fore_color.rgb = RGBColor(0x00, 0x00, 0x00)
+    solidFill = overlay.fill._xPr.find(qn('a:solidFill'))
+    if solidFill is not None:
+        srgb = solidFill.find(qn('a:srgbClr'))
+        if srgb is not None:
+            alpha = etree.SubElement(srgb, qn('a:alpha'))
+            alpha.set('val', '60000')  # 60% opaque
+
+    # Section title
+    title_box = slide.shapes.add_textbox(Inches(0.64), Inches(3.10), Inches(6.0), Inches(0.9))
+    tf = title_box.text_frame
+    tf.word_wrap = True
+    p = tf.paragraphs[0]
+    run = p.add_run()
+    run.text = section_title
+    run.font.bold = True
+    run.font.size = Pt(32)
+    run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+
+    # Subtitle
+    if subtitle:
+        sub_box = slide.shapes.add_textbox(Inches(0.64), Inches(4.10), Inches(6.0), Inches(1.2))
+        tf2 = sub_box.text_frame
+        tf2.word_wrap = True
+        p2 = tf2.paragraphs[0]
+        run2 = p2.add_run()
+        run2.text = subtitle
+        run2.font.size = Pt(16)
+        run2.font.color.rgb = RGBColor(0xCC, 0xCC, 0xCC)
+
+    return slide
+
+
+# ---------------------------------------------------------------------------
+# Performance image slide  ("Title Slide with Picture" pattern)
+# ---------------------------------------------------------------------------
+
+def add_performance_image_slide(prs, title, image_path, subtitle=''):
+    """Append a full-bleed performance/chart image slide with title bar on left.
+
+    Replicates AMD Deck 1 slides 21–28 ('Title Slide with Picture' pattern):
+    - Full-bleed chart/screenshot image on the right ~48% of slide
+    - Dark left panel (~53%) with large title and optional subtitle
+    - Thin vertical separator rect between the two panels
+
+    Parameters
+    ----------
+    prs : Presentation
+    title : str
+        Section title, e.g. "Inference Performance".
+    image_path : str
+        Path to the chart screenshot or benchmark image (JPEG/PNG).
+    subtitle : str
+        Optional one-liner below the title, e.g. "Serving on Instinct GPUs".
+
+    Returns
+    -------
+    slide
+    """
+    blank_layout = None
+    for layout in prs.slide_layouts:
+        if layout.name.lower() in ('blank', '1_blank', 'blank slide'):
+            blank_layout = layout
+            break
+    if blank_layout is None:
+        blank_layout = prs.slide_layouts[-1]
+
+    slide = prs.slides.add_slide(blank_layout)
+    W, H = Inches(13.33), Inches(7.5)
+
+    img_x = Inches(7.0)
+    panel_w = Inches(6.33)
+
+    # Left panel: dark background (pushed to back)
+    left_bg = slide.shapes.add_shape(1, 0, 0, Inches(7.0), H)
+    left_bg.fill.solid()
+    left_bg.fill.fore_color.rgb = RGBColor(0x0A, 0x0A, 0x0A)
+    left_bg.line.fill.background()
+    slide.shapes._spTree.remove(left_bg._element)
+    slide.shapes._spTree.insert(2, left_bg._element)
+
+    # Right panel: chart image — aspect-ratio preserved, centered in panel
+    if os.path.exists(image_path):
+        # Add with only width set so pptx auto-calculates height from aspect ratio
+        pic = slide.shapes.add_picture(image_path, img_x, 0, panel_w)
+        if pic.height > H:
+            # Too tall — fit to height instead and center horizontally
+            scale = H / pic.height
+            pic.height = H
+            pic.width = int(pic.width * scale)
+            pic.left = img_x + (panel_w - pic.width) // 2
+        else:
+            # Center vertically within the panel
+            pic.top = (H - pic.height) // 2
+    else:
+        ph = slide.shapes.add_shape(1, img_x, 0, panel_w, H)
+        ph.fill.solid()
+        ph.fill.fore_color.rgb = RGBColor(0x22, 0x22, 0x22)
+        ph.line.fill.background()
+
+    # Title text
+    font_size = 40 if len(title) <= 20 else (32 if len(title) <= 35 else 24)
+    title_box = slide.shapes.add_textbox(Inches(0.64), Inches(2.5), Inches(6.0), Inches(1.5))
+    tf = title_box.text_frame
+    tf.word_wrap = True
+    p = tf.paragraphs[0]
+    run = p.add_run()
+    run.text = title
+    run.font.bold = True
+    run.font.size = Pt(font_size)
+    run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+
+    # Subtitle
+    if subtitle:
+        sub_box = slide.shapes.add_textbox(Inches(0.64), Inches(4.15), Inches(5.5), Inches(0.6))
+        tf2 = sub_box.text_frame
+        p2 = tf2.paragraphs[0]
+        run2 = p2.add_run()
+        run2.text = subtitle
+        run2.font.size = Pt(16)
+        run2.font.color.rgb = RGBColor(0xAA, 0xAA, 0xAA)
+
+    return slide
+
+
+# ---------------------------------------------------------------------------
+# Two-column text slide
+# ---------------------------------------------------------------------------
+
+def add_two_column_slide(prs, title, left_header, left_items,
+                         right_header, right_items, notes=''):
+    """Append a two-column content slide with optional column headers.
+
+    Replicates the AMD 'Two Content' layout:
+    - Title bar at top
+    - Left column: header + bulleted items
+    - Right column: header + bulleted items
+    - Thin gray vertical rule between columns
+
+    Parameters
+    ----------
+    prs : Presentation
+    title : str
+        Slide title shown at top.
+    left_header : str
+        Bold teal header for the left column (empty string to omit).
+    left_items : list of str
+        Bullet items for the left column. Bold lead-in (**bold** text) supported.
+    right_header : str
+        Bold teal header for the right column.
+    right_items : list of str
+        Bullet items for the right column.
+    notes : str
+        Optional speaker notes.
+
+    Returns
+    -------
+    slide
+    """
+    # Always use blank layout — Two Content layout causes inherited title to
+    # double-render alongside any textbox title we add.
+    blank_layout = None
+    for layout in prs.slide_layouts:
+        if layout.name.lower() in ('blank', '1_blank', 'blank slide'):
+            blank_layout = layout
+            break
+    if blank_layout is None:
+        blank_layout = prs.slide_layouts[-1]
+
+    slide = prs.slides.add_slide(blank_layout)
+    W, H = Inches(13.33), Inches(7.5)
+
+    # Title
+    title_box = slide.shapes.add_textbox(Inches(0.5), Inches(0.3), Inches(12.3), Inches(0.65))
+    tf = title_box.text_frame
+    p = tf.paragraphs[0]
+    run = p.add_run()
+    run.text = title
+    run.font.bold = True
+    run.font.size = Pt(24)
+    run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+
+    # Vertical rule
+    rule = slide.shapes.add_shape(1, Inches(6.66), Inches(1.1), Inches(0.02), Inches(5.8))
+    rule.fill.solid()
+    rule.fill.fore_color.rgb = RGBColor(0x63, 0x64, 0x66)
+    rule.line.fill.background()
+
+    TEAL = RGBColor(0x00, 0xC2, 0xDE)
+
+    def _fill_column(x_in, header, items):
+        y = Inches(1.15)
+        col_w = Inches(6.0)
+        if header:
+            hbox = slide.shapes.add_textbox(Inches(x_in), y, col_w, Inches(0.45))
+            htf = hbox.text_frame
+            hp = htf.paragraphs[0]
+            hp.alignment = PP_ALIGN.CENTER
+            hr = hp.add_run()
+            hr.text = header
+            hr.font.bold = True
+            hr.font.size = Pt(18)
+            hr.font.color.rgb = TEAL
+            y += Inches(0.55)
+        bbox = slide.shapes.add_textbox(Inches(x_in), y, col_w, Inches(5.5))
+        btf = bbox.text_frame
+        btf.word_wrap = True
+        for i, item in enumerate(items):
+            bp = btf.paragraphs[0] if i == 0 else btf.add_paragraph()
+            m = re.match(r'^\*\*(.+?)\*\*(.*)', item)
+            if m:
+                r1 = bp.add_run()
+                r1.text = m.group(1)
+                r1.font.bold = True
+                r1.font.size = Pt(16)
+                r1.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+                if m.group(2).strip():
+                    r2 = bp.add_run()
+                    r2.text = m.group(2)
+                    r2.font.size = Pt(15)
+                    r2.font.color.rgb = RGBColor(0xCC, 0xCC, 0xCC)
+            else:
+                br = bp.add_run()
+                br.text = item
+                br.font.size = Pt(15)
+                br.font.color.rgb = RGBColor(0xCC, 0xCC, 0xCC)
+
+    _fill_column(0.5, left_header, left_items)
+    _fill_column(6.83, right_header, right_items)
+
+    if notes:
+        set_notes(slide, notes)
     return slide
