@@ -549,3 +549,147 @@ def add_agenda_slide(prs, section_title, items, variant='full'):
                                 run.text = ''
 
     return merged
+
+
+# ---------------------------------------------------------------------------
+# Stat-callout slide  ("Title and text side by side 2" pattern)
+# ---------------------------------------------------------------------------
+
+_ASSETS_DIR = os.path.join(os.path.dirname(__file__), '..', 'themes', 'assets')
+
+
+def add_stat_callout_slide(prs, title, body, bg_image=None, title_color='FFFFFF',
+                           body_color='E5E5E5'):
+    """Append a full-bleed photo slide with large left title and right body text.
+
+    Replicates the AMD 'Title and text side by side 2' pattern:
+    - Full-bleed background image (or solid black if omitted)
+    - Left panel: large bold title (up to ~36pt, ~4" wide, vertically centered)
+    - Right panel: body text / quote (14pt, ~7" wide, vertically centered)
+    - Thin white rule separating the two panels
+
+    Parameters
+    ----------
+    prs : Presentation
+        Deck to append to.
+    title : str
+        Left-side headline. Can be a stat ("3.7× faster"), a phrase, or a claim.
+        Keep to 2–5 words — this is meant to be large and punchy.
+    body : str
+        Right-side supporting text. Can be a quote, explanation, or bullets
+        separated by newlines.
+    bg_image : str or None
+        Path to a full-bleed background image (JPEG/PNG). Defaults to
+        ``themes/assets/title-bg.jpeg`` if None.
+    title_color : str
+        Hex RGB for the left title text (default white ``'FFFFFF'``).
+    body_color : str
+        Hex RGB for the right body text (default light gray ``'E5E5E5'``).
+
+    Returns
+    -------
+    slide
+        The newly added slide object.
+    """
+    if bg_image is None:
+        bg_image = os.path.join(_ASSETS_DIR, 'title-bg.jpeg')
+
+    # Slide dimensions (widescreen 13.33" × 7.5")
+    W, H = Inches(13.33), Inches(7.5)
+
+    # Use a blank layout (last layout that is truly blank, or layout 6 on AMD master)
+    blank_layout = None
+    for layout in prs.slide_layouts:
+        if layout.name.lower() in ('blank', '1_blank', 'blank slide'):
+            blank_layout = layout
+            break
+    if blank_layout is None:
+        blank_layout = prs.slide_layouts[-1]
+
+    slide = prs.slides.add_slide(blank_layout)
+
+    # --- Background image (behind everything) ---
+    if os.path.exists(bg_image):
+        pic = slide.shapes.add_picture(bg_image, 0, 0, W, H)
+        # Push to back by moving its XML element before all others
+        slide.shapes._spTree.remove(pic._element)
+        slide.shapes._spTree.insert(2, pic._element)
+
+    # --- Dark semi-transparent overlay (left ~40% of slide) so text pops ---
+    # We achieve this with a solid rect at low alpha; python-pptx doesn't expose
+    # alpha directly so we patch the XML
+    OVERLAY_W = Inches(5.0)
+    overlay = slide.shapes.add_shape(1, 0, 0, OVERLAY_W, H)
+    overlay.line.fill.background()
+    overlay.fill.solid()
+    overlay.fill.fore_color.rgb = RGBColor(0x00, 0x00, 0x00)
+    # Set 55% transparency via XML solidFill → alpha
+    solidFill = overlay.fill._xPr.find(qn('a:solidFill'))
+    if solidFill is not None:
+        srgb = solidFill.find(qn('a:srgbClr'))
+        if srgb is not None:
+            alpha = etree.SubElement(srgb, qn('a:alpha'))
+            alpha.set('val', '45000')  # 45000/100000 = 45% opaque (55% transparent)
+
+    # --- Thin vertical rule between panels ---
+    rule = slide.shapes.add_shape(1, Inches(5.0), Inches(0.8), Inches(0.02), Inches(5.9))
+    rule.fill.solid()
+    rule.fill.fore_color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+    rule.line.fill.background()
+
+    # --- Left: large title text box ---
+    title_box = slide.shapes.add_textbox(Inches(0.32), Inches(1.8), Inches(4.5), Inches(4.0))
+    tf = title_box.text_frame
+    tf.word_wrap = True
+    tf.auto_size = None
+
+    # Size the font based on title length
+    font_size = 36 if len(title) <= 30 else (28 if len(title) <= 50 else 22)
+
+    p = tf.paragraphs[0]
+    p.alignment = PP_ALIGN.LEFT
+    run = p.add_run()
+    run.text = title
+    run.font.bold = True
+    run.font.size = Pt(font_size)
+    run.font.color.rgb = RGBColor(
+        int(title_color[0:2], 16),
+        int(title_color[2:4], 16),
+        int(title_color[4:6], 16),
+    )
+
+    # --- Right: body text box ---
+    body_box = slide.shapes.add_textbox(Inches(5.30), Inches(0.5), Inches(7.6), Inches(6.7))
+    tf2 = body_box.text_frame
+    tf2.word_wrap = True
+
+    body_color_rgb = RGBColor(
+        int(body_color[0:2], 16),
+        int(body_color[2:4], 16),
+        int(body_color[4:6], 16),
+    )
+
+    lines = body.split('\n')
+    for i, line in enumerate(lines):
+        p2 = tf2.paragraphs[0] if i == 0 else tf2.add_paragraph()
+        p2.alignment = PP_ALIGN.LEFT
+        # Detect bold lead-in pattern
+        m = re.match(r'^\*\*(.+?)\*\*(.*)', line)
+        if m:
+            r1 = p2.add_run()
+            r1.text = m.group(1)
+            r1.font.bold = True
+            r1.font.size = Pt(16)
+            r1.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+            if m.group(2).strip():
+                r2 = p2.add_run()
+                r2.text = m.group(2)
+                r2.font.size = Pt(14)
+                r2.font.color.rgb = body_color_rgb
+        else:
+            run2 = p2.add_run()
+            run2.text = line
+            run2.font.size = Pt(14)
+            run2.font.color.rgb = body_color_rgb
+
+    return slide
