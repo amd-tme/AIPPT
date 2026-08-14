@@ -561,7 +561,7 @@ _ASSETS_DIR = os.path.join(os.path.dirname(__file__), '..', 'themes', 'assets')
 
 
 def add_stat_callout_slide(prs, title, body, bg_image=None, title_color='FFFFFF',
-                           body_color='E5E5E5'):
+                           body_color='E5E5E5', notes=''):
     """Append a full-bleed photo slide with large left title and right body text.
 
     Replicates the AMD 'Title and text side by side 2' pattern:
@@ -694,6 +694,8 @@ def add_stat_callout_slide(prs, title, body, bg_image=None, title_color='FFFFFF'
             run2.font.size = Pt(14)
             run2.font.color.rgb = body_color_rgb
 
+    if notes:
+        set_notes(slide, notes)
     return slide
 
 

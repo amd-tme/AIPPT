@@ -58,7 +58,7 @@ add_section_divider_slide(prs, section_title, subtitle='') -> slide
     # Keep section_title to 2-5 words.
 
 add_stat_callout_slide(prs, title, body, bg_image=None,
-                       title_color='FFFFFF', body_color='E5E5E5') -> slide
+                       title_color='FFFFFF', body_color='E5E5E5', notes='') -> slide
     # Left panel: large punchy title (2-5 words, e.g. "3.7× Better TCO")
     # Right panel: supporting body text. Use \\n to separate paragraphs.
     # Bold lead-in syntax: **Bold text** rest of sentence
