@@ -1848,15 +1848,14 @@ async def create_deck_stream(
         loop = asyncio.get_running_loop()
 
         def _worker():
-            if engine in ("pptxgenjs", "pptxgenjs-direct"):
+            if engine == "pptxgenjs":
                 return _worker_pptxgenjs()
+            if engine == "python-pptx-amd":
+                return _worker_python_pptx_amd()
             return _worker_python_pptx()
 
         def _worker_pptxgenjs():
-            if engine == "pptxgenjs-direct":
-                from aippt.pptxgenjs_direct import generate_script, ScriptGenerationError
-            else:
-                from aippt.pptxgenjs_gen import generate_script, ScriptGenerationError
+            from aippt.pptxgenjs_gen import generate_script, ScriptGenerationError
             from aippt.preview import Renderer
 
             # Stage a per-job workspace so the generated script's ``../lib``
@@ -1867,36 +1866,23 @@ async def create_deck_stream(
             script_path, render_out_dir = _stage_render_workspace(
                 uploads_dir, _short_id, _base_name, project_root
             )
-            if engine == "pptxgenjs-direct":
-                # Deterministic path — no LLM needed
-                try:
-                    generate_script(
-                        outline_text=md_text,
-                        output_script_path=script_path,
-                        theme="amd",
-                        progress_callback=create_progress,
-                    )
-                except ScriptGenerationError as exc:
-                    event_q.put(("error", {"message": str(exc)}))
-                    return None
-            else:
-                try:
-                    llm = _make_llm_client(request, operation="create", model_override=model, user_ntid=ntid)
-                except ValueError as exc:
-                    event_q.put(("error", {"message": str(exc)}))
-                    return None
+            try:
+                llm = _make_llm_client(request, operation="create", model_override=model, user_ntid=ntid)
+            except ValueError as exc:
+                event_q.put(("error", {"message": str(exc)}))
+                return None
 
-                try:
-                    generate_script(
-                        outline_text=md_text,
-                        output_script_path=script_path,
-                        llm_client=llm,
-                        theme="amd",
-                        progress_callback=create_progress,
-                    )
-                except ScriptGenerationError as exc:
-                    event_q.put(("error", {"message": str(exc)}))
-                    return None
+            try:
+                generate_script(
+                    outline_text=md_text,
+                    output_script_path=script_path,
+                    llm_client=llm,
+                    theme="amd",
+                    progress_callback=create_progress,
+                )
+            except ScriptGenerationError as exc:
+                event_q.put(("error", {"message": str(exc)}))
+                return None
 
             persist_file(request.app.state, script_path)
             create_progress("render", "Executing script…")
@@ -1951,6 +1937,82 @@ async def create_deck_stream(
 
             return {"output_path": pptx_path, "slide_count": ingest_result.get("slide_count", 0),
                     "title": _base_name, **ingest_result}
+
+        def _worker_python_pptx_amd():
+            from aippt.pptx_amd_gen import generate_script, ScriptGenerationError
+            from aippt.preview import Renderer
+
+            project_root = str(Path(__file__).resolve().parents[2])
+            # Reuse the same per-job workspace layout as pptxgenjs — script
+            # sits in <uploads>/<short_id>/script/<name>.py, rendered to out/
+            script_path, render_out_dir = _stage_render_workspace(
+                uploads_dir, _short_id, _base_name, project_root
+            )
+            # Stage produces a .mjs path — rename to .py
+            script_path = re.sub(r'\.mjs$', '.py', script_path)
+
+            try:
+                llm = _make_llm_client(request, operation="create", model_override=model, user_ntid=ntid)
+            except ValueError as exc:
+                event_q.put(("error", {"message": str(exc)}))
+                return None
+
+            try:
+                generate_script(
+                    outline_text=md_text,
+                    output_script_path=script_path,
+                    llm_client=llm,
+                    theme="amd",
+                    progress_callback=create_progress,
+                )
+            except ScriptGenerationError as exc:
+                event_q.put(("error", {"message": str(exc)}))
+                return None
+
+            persist_file(request.app.state, script_path)
+            create_progress("render", "Running AMD template script…")
+
+            renderer = Renderer(project_root=project_root)
+            render_result = renderer.render(script_path, render_out_dir)
+            if not render_result.success:
+                msg = render_result.stderr_tail or "Script render failed (no .pptx produced)"
+                event_q.put(("error", {"message": msg}))
+                return None
+
+            pptx_path = render_result.pptx_path
+            persist_file(request.app.state, pptx_path)
+            event_q.put(("progress", {"step": "ingest", "status": "running", "detail": "Cataloging generated deck…"}))
+
+            per_deck_images = _per_deck_images_dir(request, pptx_path)
+            ingest_result = ingest_deck(
+                pptx_path,
+                db_path=db_path,
+                images_dir=per_deck_images,
+                deck_name=_base_name,
+            )
+
+            stable_dir = os.path.join(uploads_dir, "scripts")
+            os.makedirs(stable_dir, exist_ok=True)
+            stable_script = os.path.join(stable_dir, f"{_base_name}.py")
+            shutil.copy2(script_path, stable_script)
+            persist_file(request.app.state, stable_script)
+
+            now_iso = datetime.utcnow().isoformat() + "Z"
+            deck_id = ingest_result.get("deck_id")
+            if deck_id:
+                with _db_conn(db_path) as conn:
+                    conn.execute(
+                        "UPDATE decks SET outline_path = ?, source_engine = ?, source_script_path = ?, "
+                        "source_theme = ?, updated_at = ? WHERE id = ?",
+                        (outline_save_path, "python-pptx-amd", stable_script,
+                         "amd", now_iso, deck_id),
+                    )
+
+            event_q.put(("complete", {
+                "deck_id": deck_id,
+                "title": _base_name,
+                **ingest_result,
+            }))
 
         def _worker_python_pptx():
             pipeline_config = PipelineConfig(
