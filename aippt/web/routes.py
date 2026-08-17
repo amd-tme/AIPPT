@@ -1996,24 +1996,29 @@ async def create_deck_stream(
                 ntid=ntid,
             )
 
-            import shutil as _shutil
-            stable_dir = os.path.join(uploads_dir, "scripts")
-            os.makedirs(stable_dir, exist_ok=True)
-            stable_script = os.path.join(stable_dir, f"{_base_name}.py")
-            _shutil.copy2(script_path, stable_script)
-            persist_file(request.app.state, stable_script)
-
-            from datetime import datetime as _datetime
-            now_iso = _datetime.utcnow().isoformat() + "Z"
             deck_id = ingest_result.get("deck_id")
-            if deck_id:
-                with _db_conn(db_path) as conn:
-                    conn.execute(
+            try:
+                import shutil as _shutil
+                stable_dir = _sources_dir(uploads_dir, deck_id) if deck_id else os.path.join(uploads_dir, "scripts")
+                os.makedirs(stable_dir, exist_ok=True)
+                stable_outline = os.path.join(stable_dir, "outline.md")
+                stable_script = os.path.join(stable_dir, f"{_base_name}.py")
+                _shutil.copy2(outline_save_path, stable_outline)
+                _shutil.copy2(script_path, stable_script)
+                persist_file(request.app.state, stable_outline)
+                persist_file(request.app.state, stable_script)
+                if deck_id:
+                    _conn = get_db(db_path)
+                    _conn.execute(
                         "UPDATE decks SET outline_path = ?, source_engine = ?, source_script_path = ?, "
-                        "source_theme = ?, updated_at = ? WHERE id = ?",
-                        (outline_save_path, "python-pptx-amd", stable_script,
-                         "amd", now_iso, deck_id),
+                        "source_theme = ?, source_generated_at = datetime('now'), updated_at = datetime('now') "
+                        "WHERE id = ?",
+                        (stable_outline, "python-pptx-amd", stable_script, "amd", deck_id),
                     )
+                    _conn.commit()
+                    _conn.close()
+            except Exception as _exc:
+                logger.warning("Failed to persist AMD template origin for deck %s: %s", deck_id, _exc)
 
             event_q.put(("complete", {
                 "deck_id": deck_id,
