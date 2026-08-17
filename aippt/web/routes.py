@@ -1996,10 +1996,11 @@ async def create_deck_stream(
                 ntid=ntid,
             )
 
+            import shutil as _shutil
             stable_dir = os.path.join(uploads_dir, "scripts")
             os.makedirs(stable_dir, exist_ok=True)
             stable_script = os.path.join(stable_dir, f"{_base_name}.py")
-            shutil.copy2(script_path, stable_script)
+            _shutil.copy2(script_path, stable_script)
             persist_file(request.app.state, stable_script)
 
             now_iso = datetime.utcnow().isoformat() + "Z"
