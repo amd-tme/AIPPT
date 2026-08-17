@@ -53,7 +53,7 @@ addTitleWithImage(deck, title, imagePath, slideNum, notes)
 addSplitImageContent(deck, title, imagePath, bullets, slideNum, notes)
 addCodeSlide(deck, title, code, slideNum, notes)
 addSectionDivider(deck, sectionNumber, title, slideNum)
-addSectionContent(deck, title, body, slideNum, notes)
+addSectionContent(deck, title, bullets, slideNum, notes)  — bullets MUST be an array of strings, never a plain string
 addCinematicSlide(deck, title, subtitle, imagePath, slideNum, notes)
 addThreeColContent(deck, title, col1Header, col2Header, col3Header, col1Items, col2Items, col3Items, slideNum, notes)
 addThreeColImageText(deck, title, items, slideNum, notes)   — items=[{image, header, body}]

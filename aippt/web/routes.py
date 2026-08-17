@@ -1989,7 +1989,7 @@ async def create_deck_stream(
                 db_path=db_path,
                 images_dir=per_deck_images,
                 gateway_config=gateway_config,
-                require_images=_require_images_for_render(),
+                require_images=False,
                 progress_callback=ingest_progress,
                 source_script_path=script_path,
                 outline_path=outline_save_path,
