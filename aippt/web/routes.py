@@ -1985,10 +1985,15 @@ async def create_deck_stream(
 
             per_deck_images = _per_deck_images_dir(request, pptx_path)
             ingest_result = ingest_deck(
-                pptx_path,
+                deck_path=pptx_path,
                 db_path=db_path,
                 images_dir=per_deck_images,
-                deck_name=_base_name,
+                gateway_config=gateway_config,
+                require_images=_require_images_for_render(),
+                progress_callback=ingest_progress,
+                source_script_path=script_path,
+                outline_path=outline_save_path,
+                ntid=ntid,
             )
 
             stable_dir = os.path.join(uploads_dir, "scripts")
