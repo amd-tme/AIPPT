@@ -330,8 +330,14 @@ def _resolve_slide_title(slide):
     used), so the caller can skip it when building ``content_text`` and
     avoid duplicating the title into the body.
     """
-    if slide.shapes.title and slide.shapes.title.text.strip():
-        return slide.shapes.title.text.strip(), None
+    _title_shape = slide.shapes.title
+    if _title_shape is not None:
+        try:
+            _title_text = _title_shape.text.strip()
+        except Exception:
+            _title_text = ""
+        if _title_text:
+            return _title_text, None
 
     for shape in slide.shapes:
         if not shape.has_text_frame:
@@ -542,7 +548,11 @@ def catalog_deck(
         # Notes
         notes = ""
         if slide.has_notes_slide:
-            notes = slide.notes_slide.notes_text_frame.text.strip()
+            try:
+                _ntf = slide.notes_slide.notes_text_frame
+                notes = _ntf.text.strip() if _ntf is not None else ""
+            except Exception:
+                notes = ""
 
         # Image path
         image_path = None
