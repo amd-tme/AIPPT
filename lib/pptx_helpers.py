@@ -327,10 +327,13 @@ def add_column_divider(slide, prs):
 
 def set_notes(slide, text):
     """Set speaker notes on a slide."""
-    notes_slide = slide.notes_slide
-    tf = notes_slide.notes_text_frame
-    if tf is not None:
-        tf.text = text
+    try:
+        notes_slide = slide.notes_slide
+        tf = notes_slide.notes_text_frame
+        if tf is not None:
+            tf.text = text
+    except Exception:
+        pass  # notes are non-critical; swallow errors silently
 
 
 # ---------------------------------------------------------------------------
