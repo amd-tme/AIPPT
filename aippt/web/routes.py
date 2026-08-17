@@ -1215,6 +1215,63 @@ def _stage_render_workspace(uploads_dir: str, short_id: str, base_name: str, pro
     return str(script_dir / f"{base_name}.mjs"), str(out_dir)
 
 
+def _export_images_libreoffice(pptx_path: str, images_dir: str) -> bool:
+    """Export PPTX slides to PNGs via LibreOffice + pdftoppm.
+
+    Falls back silently if either tool is missing or conversion fails.
+    Produces Slide1.png, Slide2.png, … matching catalog.py's naming convention.
+    Returns True if at least one image was written.
+    """
+    import shutil as _shutil
+    import subprocess
+    import tempfile
+    import glob as _glob
+
+    if not _shutil.which("libreoffice") or not _shutil.which("pdftoppm"):
+        return False
+
+    os.makedirs(images_dir, exist_ok=True)
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            # Step 1: PPTX → PDF
+            r = subprocess.run(
+                ["libreoffice", "--headless", "--convert-to", "pdf",
+                 "--outdir", tmp, pptx_path],
+                capture_output=True, timeout=120,
+            )
+            if r.returncode != 0:
+                logger.warning("LibreOffice PDF conversion failed: %s", r.stderr.decode()[:200])
+                return False
+
+            pdfs = _glob.glob(os.path.join(tmp, "*.pdf"))
+            if not pdfs:
+                return False
+            pdf_path = pdfs[0]
+
+            # Step 2: PDF → per-page PNGs (150 dpi ≈ 1600×900 for 16:9)
+            prefix = os.path.join(tmp, "slide")
+            r2 = subprocess.run(
+                ["pdftoppm", "-png", "-r", "150", pdf_path, prefix],
+                capture_output=True, timeout=120,
+            )
+            if r2.returncode != 0:
+                logger.warning("pdftoppm failed: %s", r2.stderr.decode()[:200])
+                return False
+
+            # Step 3: rename slide-1.png … slide-N.png → Slide1.png … SlideN.png
+            pages = sorted(_glob.glob(os.path.join(tmp, "slide-*.png")))
+            for idx, src in enumerate(pages, start=1):
+                dst = os.path.join(images_dir, f"Slide{idx}.png")
+                _shutil.copy2(src, dst)
+
+            written = len(pages)
+            logger.info("LibreOffice exported %d slide images to %s", written, images_dir)
+            return written > 0
+    except Exception as exc:
+        logger.warning("LibreOffice image export error: %s", exc)
+        return False
+
+
 def _per_deck_images_dir(request: Request, deck_path: str) -> str:
     """Resolve the per-deck images directory under app.state.images_dir.
 
@@ -1981,9 +2038,12 @@ async def create_deck_stream(
 
             pptx_path = render_result.pptx_path
             persist_file(request.app.state, pptx_path)
-            event_q.put(("progress", {"step": "ingest", "status": "running", "detail": "Cataloging generated deck…"}))
+            event_q.put(("progress", {"step": "ingest", "status": "running", "detail": "Exporting slide images…"}))
 
             per_deck_images = _per_deck_images_dir(request, pptx_path)
+            _export_images_libreoffice(pptx_path, per_deck_images)
+
+            event_q.put(("progress", {"step": "ingest", "status": "running", "detail": "Cataloging generated deck…"}))
             ingest_result = ingest_deck(
                 deck_path=pptx_path,
                 db_path=db_path,
