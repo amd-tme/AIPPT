@@ -2003,7 +2003,8 @@ async def create_deck_stream(
             _shutil.copy2(script_path, stable_script)
             persist_file(request.app.state, stable_script)
 
-            now_iso = datetime.utcnow().isoformat() + "Z"
+            from datetime import datetime as _datetime
+            now_iso = _datetime.utcnow().isoformat() + "Z"
             deck_id = ingest_result.get("deck_id")
             if deck_id:
                 with _db_conn(db_path) as conn:
