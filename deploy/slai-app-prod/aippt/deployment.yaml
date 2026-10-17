@@ -34,7 +34,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: app
-          # Stamped at deploy time with the Harbor digest of the image built from
+          # Stamped at deploy time with the Harbor-served digest of the image built from
           # this repo's merge commit by the Factory slai-app-platform adapter.
           image: mkmhub.amd.com/hw-slaiapp-dev/aippt@sha256:aef5a90933c9988d6436dd4d7fd7108d39fa85f372c650a8e03ed18ec993aa75
           securityContext:
