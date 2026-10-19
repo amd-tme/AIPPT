@@ -1,11 +1,11 @@
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: hosted-slai-aippt
+  name: aippt
   namespace: slai-app-prod
   labels:
     app.kubernetes.io/name: aippt
-    app.kubernetes.io/instance: hosted-slai-aippt
+    app.kubernetes.io/instance: aippt
     app.kubernetes.io/managed-by: slai-app-platform
     hosted-by: slai-app-platform
     customer-team: tme-dcgpu
@@ -13,42 +13,115 @@ spec:
   podSelector:
     matchLabels:
       app.kubernetes.io/name: aippt
-      app.kubernetes.io/instance: hosted-slai-aippt
+      app.kubernetes.io/instance: aippt
   policyTypes:
     - Ingress
     - Egress
   ingress:
-    # Match the pattern used by other slai-app-prod apps (dremio-cli,
-    # hello-demo, dcgpu-hub, harbor-cli-proxy): no `from:` restriction
-    # so the nginx-ingress controller can reach the pod regardless of
-    # which namespace it lives in on this cluster.
-    - ports:
+    # Only the platform ingress controller (rke2-ingress-nginx in kube-system)
+    # may reach the app port; the platform validator requires explicit peers.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/component: controller
+              app.kubernetes.io/instance: rke2-ingress-nginx
+              app.kubernetes.io/name: rke2-ingress-nginx
+      ports:
         - protocol: TCP
           port: 8000
   egress:
+    # The platform validator allows only individual /32 destinations or
+    # in-cluster namespace-and-pod selectors. NetworkPolicy has no FQDN peers,
+    # so these addresses were resolved on 2026-10-19 (UTC) and must be
+    # re-resolved when a dependency's DNS changes. The Microsoft endpoints
+    # rotate the most; SharePoint render and device-code sign-in fail first.
     # DNS
     - to:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
       ports:
         - protocol: UDP
           port: 53
         - protocol: TCP
           port: 53
     # OTLP gRPC -> platform collector (atlvslaiapp03:4317)
-    - ports:
+    - to:
+        - ipBlock:
+            cidr: 10.180.94.126/32
+      ports:
         - protocol: TCP
           port: 4317
-    # TCP 443 covers:
-    #   - LLM Gateway (llm-api.amd.com)
-    #   - Microsoft Graph (graph.microsoft.com) for SharePoint PPTX render
-    #   - Azure AD device-code auth (login.microsoftonline.com)
-    - ports:
+    # LLM Gateway (llm-api.amd.com)
+    - to:
+        - ipBlock:
+            cidr: 10.214.150.4/32
+      ports:
+        - protocol: TCP
+          port: 443
+    # Microsoft Graph (graph.microsoft.com) for SharePoint PPTX render
+    - to:
+        - ipBlock:
+            cidr: 20.190.151.100/32
+        - ipBlock:
+            cidr: 20.190.151.101/32
+        - ipBlock:
+            cidr: 20.190.151.33/32
+        - ipBlock:
+            cidr: 40.126.23.26/32
+        - ipBlock:
+            cidr: 40.126.23.38/32
+        - ipBlock:
+            cidr: 40.126.23.96/32
+        - ipBlock:
+            cidr: 40.126.23.97/32
+        - ipBlock:
+            cidr: 40.126.23.99/32
+      ports:
+        - protocol: TCP
+          port: 443
+    # Azure AD device-code auth (login.microsoftonline.com)
+    - to:
+        - ipBlock:
+            cidr: 20.190.157.0/32
+        - ipBlock:
+            cidr: 20.190.157.11/32
+        - ipBlock:
+            cidr: 20.190.157.12/32
+        - ipBlock:
+            cidr: 20.190.157.14/32
+        - ipBlock:
+            cidr: 20.190.157.9/32
+        - ipBlock:
+            cidr: 40.126.29.11/32
+        - ipBlock:
+            cidr: 40.126.29.7/32
+        - ipBlock:
+            cidr: 40.126.29.8/32
+      ports:
         - protocol: TCP
           port: 443
     # MinIO S3 API (s3minio.amd.com:21000) for object-storage persistence
     # (uploads/images/output + SQLite catalog snapshot under asic/aippt/).
-    - ports:
+    - to:
+        - ipBlock:
+            cidr: 10.180.196.19/32
+        - ipBlock:
+            cidr: 10.180.196.20/32
+        - ipBlock:
+            cidr: 10.180.196.21/32
+        - ipBlock:
+            cidr: 10.180.196.22/32
+        - ipBlock:
+            cidr: 10.180.196.23/32
+        - ipBlock:
+            cidr: 10.180.196.24/32
+      ports:
         - protocol: TCP
           port: 21000
