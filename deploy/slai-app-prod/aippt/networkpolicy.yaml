@@ -1,7 +1,7 @@
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: hosted-slai-aippt
+  name: aippt
   namespace: slai-app-prod
   labels:
     app.kubernetes.io/name: aippt
@@ -18,37 +18,76 @@ spec:
     - Ingress
     - Egress
   ingress:
-    # Match the pattern used by other slai-app-prod apps (dremio-cli,
-    # hello-demo, dcgpu-hub, harbor-cli-proxy): no `from:` restriction
-    # so the nginx-ingress controller can reach the pod regardless of
-    # which namespace it lives in on this cluster.
-    - ports:
+    # Only the RKE2 ingress controller may reach the pod (platform template
+    # selectors). Port is the container listener, not the Service port.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/component: controller
+              app.kubernetes.io/instance: rke2-ingress-nginx
+              app.kubernetes.io/name: rke2-ingress-nginx
+      ports:
         - protocol: TCP
           port: 8000
+  # Kubernetes NetworkPolicy has no FQDN destinations, so each dependency is
+  # pinned to the addresses it resolved to on the AMD network on 2026-10-22.
+  # If a host is renumbered, that dependency fails closed: re-resolve from the
+  # cluster network and update the addresses here.
   egress:
-    # DNS
+    # Cluster DNS
     - to:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
       ports:
         - protocol: UDP
           port: 53
         - protocol: TCP
           port: 53
-    # OTLP gRPC -> platform collector (atlvslaiapp03:4317)
-    - ports:
+    # OTLP gRPC -> platform collector atlvslaiapp03.amd.com:4317
+    - to:
+        - ipBlock:
+            cidr: 10.180.94.126/32
+      ports:
         - protocol: TCP
           port: 4317
-    # TCP 443 covers:
-    #   - LLM Gateway (llm-api.amd.com)
-    #   - Microsoft Graph (graph.microsoft.com) for SharePoint PPTX render
-    #   - Azure AD device-code auth (login.microsoftonline.com)
-    - ports:
+    # AMD LLM Gateway llm-api.amd.com (CNAME llm-api.ecs-dtc.amd.com).
+    # 10.214.150.4 is its address inside the AMD network, as other platform
+    # apps also pin; laptops on VPN may resolve it to 100.64.x.x instead.
+    - to:
+        - ipBlock:
+            cidr: 10.214.150.4/32
+      ports:
         - protocol: TCP
           port: 443
-    # MinIO S3 API (s3minio.amd.com:21000) for object-storage persistence
-    # (uploads/images/output + SQLite catalog snapshot under asic/aippt/).
-    - ports:
+    # MinIO S3 API s3minio.amd.com:21000 (CNAME s3ozn.wip.amd.com, a
+    # load-balanced name) for object-storage persistence (uploads, images,
+    # output and the SQLite catalog snapshot under asic/aippt/).
+    - to:
+        - ipBlock:
+            cidr: 10.180.196.19/32
+        - ipBlock:
+            cidr: 10.180.196.20/32
+        - ipBlock:
+            cidr: 10.180.196.21/32
+        - ipBlock:
+            cidr: 10.180.196.22/32
+        - ipBlock:
+            cidr: 10.180.196.23/32
+        - ipBlock:
+            cidr: 10.180.196.24/32
+      ports:
         - protocol: TCP
           port: 21000
+    # No egress to Microsoft Graph (graph.microsoft.com) or Entra ID
+    # (login.microsoftonline.com). Both are served from Microsoft ranges that
+    # rotate without notice, and the validator accepts only single-address
+    # destinations, so SharePoint render and device-code sign-in are
+    # unavailable in production until the platform offers an egress proxy or
+    # a reviewed exception. Those features fail with a visible HTTP error.
