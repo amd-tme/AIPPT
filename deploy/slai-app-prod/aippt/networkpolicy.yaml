@@ -85,9 +85,122 @@ spec:
       ports:
         - protocol: TCP
           port: 21000
-    # No egress to Microsoft Graph (graph.microsoft.com) or Entra ID
-    # (login.microsoftonline.com). Both are served from Microsoft ranges that
-    # rotate without notice, and the validator accepts only single-address
-    # destinations, so SharePoint render and device-code sign-in are
-    # unavailable in production until the platform offers an egress proxy or
-    # a reviewed exception. Those features fail with a visible HTTP error.
+    # Microsoft Graph and Entra ID are served from Microsoft ranges whose DNS
+    # answers rotate every few minutes, and the validator accepts only
+    # single-address destinations. These are every IPv4 address seen in about
+    # 25 minutes of lookups on 2026-10-22; the hosts will resolve outside this
+    # list, so SharePoint render and device-code sign-in can fail
+    # intermittently. Accepted knowingly until the platform offers an egress
+    # proxy or a reviewed exception.
+    # graph.microsoft.com (24 addresses): SharePoint PPTX render
+    - to:
+        - ipBlock:
+            cidr: 20.190.151.33/32
+        - ipBlock:
+            cidr: 20.190.151.37/32
+        - ipBlock:
+            cidr: 20.190.151.38/32
+        - ipBlock:
+            cidr: 20.190.151.91/32
+        - ipBlock:
+            cidr: 20.190.151.101/32
+        - ipBlock:
+            cidr: 20.190.152.24/32
+        - ipBlock:
+            cidr: 20.190.152.88/32
+        - ipBlock:
+            cidr: 20.190.152.102/32
+        - ipBlock:
+            cidr: 20.190.152.103/32
+        - ipBlock:
+            cidr: 20.190.152.104/32
+        - ipBlock:
+            cidr: 20.190.152.105/32
+        - ipBlock:
+            cidr: 20.190.152.106/32
+        - ipBlock:
+            cidr: 20.190.152.152/32
+        - ipBlock:
+            cidr: 20.190.152.153/32
+        - ipBlock:
+            cidr: 40.126.23.26/32
+        - ipBlock:
+            cidr: 40.126.23.38/32
+        - ipBlock:
+            cidr: 40.126.23.96/32
+        - ipBlock:
+            cidr: 40.126.23.98/32
+        - ipBlock:
+            cidr: 40.126.23.99/32
+        - ipBlock:
+            cidr: 40.126.23.163/32
+        - ipBlock:
+            cidr: 40.126.24.24/32
+        - ipBlock:
+            cidr: 40.126.24.26/32
+        - ipBlock:
+            cidr: 40.126.24.152/32
+        - ipBlock:
+            cidr: 40.126.24.153/32
+      ports:
+        - protocol: TCP
+          port: 443
+    # login.microsoftonline.com (27 addresses): device-code sign-in
+    - to:
+        - ipBlock:
+            cidr: 20.190.151.6/32
+        - ipBlock:
+            cidr: 20.190.151.8/32
+        - ipBlock:
+            cidr: 20.190.151.67/32
+        - ipBlock:
+            cidr: 20.190.151.69/32
+        - ipBlock:
+            cidr: 20.190.151.70/32
+        - ipBlock:
+            cidr: 20.190.151.131/32
+        - ipBlock:
+            cidr: 20.190.151.133/32
+        - ipBlock:
+            cidr: 20.190.151.134/32
+        - ipBlock:
+            cidr: 20.190.157.13/32
+        - ipBlock:
+            cidr: 20.190.157.14/32
+        - ipBlock:
+            cidr: 20.190.157.15/32
+        - ipBlock:
+            cidr: 20.190.190.129/32
+        - ipBlock:
+            cidr: 20.190.190.130/32
+        - ipBlock:
+            cidr: 20.190.190.131/32
+        - ipBlock:
+            cidr: 20.190.190.132/32
+        - ipBlock:
+            cidr: 20.190.190.193/32
+        - ipBlock:
+            cidr: 20.190.190.194/32
+        - ipBlock:
+            cidr: 20.190.190.195/32
+        - ipBlock:
+            cidr: 40.126.29.7/32
+        - ipBlock:
+            cidr: 40.126.29.9/32
+        - ipBlock:
+            cidr: 40.126.29.12/32
+        - ipBlock:
+            cidr: 40.126.29.13/32
+        - ipBlock:
+            cidr: 40.126.29.15/32
+        - ipBlock:
+            cidr: 40.126.62.129/32
+        - ipBlock:
+            cidr: 40.126.62.130/32
+        - ipBlock:
+            cidr: 40.126.62.131/32
+        - ipBlock:
+            cidr: 40.126.62.132/32
+      ports:
+        - protocol: TCP
+          port: 443
