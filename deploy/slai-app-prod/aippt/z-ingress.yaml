@@ -42,7 +42,7 @@ spec:
             pathType: ImplementationSpecific
             backend:
               service:
-                name: hosted-slai-aippt
+                name: aippt
                 port:
                   name: http
   tls:
