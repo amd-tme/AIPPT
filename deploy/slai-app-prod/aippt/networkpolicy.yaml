@@ -1,7 +1,7 @@
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: hosted-slai-aippt
+  name: aippt
   namespace: slai-app-prod
   labels:
     app.kubernetes.io/name: aippt
@@ -18,37 +18,189 @@ spec:
     - Ingress
     - Egress
   ingress:
-    # Match the pattern used by other slai-app-prod apps (dremio-cli,
-    # hello-demo, dcgpu-hub, harbor-cli-proxy): no `from:` restriction
-    # so the nginx-ingress controller can reach the pod regardless of
-    # which namespace it lives in on this cluster.
-    - ports:
+    # Only the RKE2 ingress controller may reach the pod (platform template
+    # selectors). Port is the container listener, not the Service port.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/component: controller
+              app.kubernetes.io/instance: rke2-ingress-nginx
+              app.kubernetes.io/name: rke2-ingress-nginx
+      ports:
         - protocol: TCP
           port: 8000
+  # Kubernetes NetworkPolicy has no FQDN destinations, so each dependency is
+  # pinned to the addresses it resolved to on the AMD network on 2026-10-22.
+  # If a host is renumbered, that dependency fails closed: re-resolve from the
+  # cluster network and update the addresses here.
   egress:
-    # DNS
+    # Cluster DNS
     - to:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
       ports:
         - protocol: UDP
           port: 53
         - protocol: TCP
           port: 53
-    # OTLP gRPC -> platform collector (atlvslaiapp03:4317)
-    - ports:
+    # OTLP gRPC -> platform collector atlvslaiapp03.amd.com:4317
+    - to:
+        - ipBlock:
+            cidr: 10.180.94.126/32
+      ports:
         - protocol: TCP
           port: 4317
-    # TCP 443 covers:
-    #   - LLM Gateway (llm-api.amd.com)
-    #   - Microsoft Graph (graph.microsoft.com) for SharePoint PPTX render
-    #   - Azure AD device-code auth (login.microsoftonline.com)
-    - ports:
+    # AMD LLM Gateway llm-api.amd.com (CNAME llm-api.ecs-dtc.amd.com).
+    # 10.214.150.4 is its address inside the AMD network, as other platform
+    # apps also pin; laptops on VPN may resolve it to 100.64.x.x instead.
+    - to:
+        - ipBlock:
+            cidr: 10.214.150.4/32
+      ports:
         - protocol: TCP
           port: 443
-    # MinIO S3 API (s3minio.amd.com:21000) for object-storage persistence
-    # (uploads/images/output + SQLite catalog snapshot under asic/aippt/).
-    - ports:
+    # MinIO S3 API s3minio.amd.com:21000 (CNAME s3ozn.wip.amd.com, a
+    # load-balanced name) for object-storage persistence (uploads, images,
+    # output and the SQLite catalog snapshot under asic/aippt/).
+    - to:
+        - ipBlock:
+            cidr: 10.180.196.19/32
+        - ipBlock:
+            cidr: 10.180.196.20/32
+        - ipBlock:
+            cidr: 10.180.196.21/32
+        - ipBlock:
+            cidr: 10.180.196.22/32
+        - ipBlock:
+            cidr: 10.180.196.23/32
+        - ipBlock:
+            cidr: 10.180.196.24/32
+      ports:
         - protocol: TCP
           port: 21000
+    # Microsoft Graph and Entra ID are served from Microsoft ranges whose DNS
+    # answers rotate every few minutes, and the validator accepts only
+    # single-address destinations. These are every IPv4 address seen in about
+    # 25 minutes of lookups on 2026-10-22; the hosts will resolve outside this
+    # list, so SharePoint render and device-code sign-in can fail
+    # intermittently. Accepted knowingly until the platform offers an egress
+    # proxy or a reviewed exception.
+    # graph.microsoft.com (24 addresses): SharePoint PPTX render
+    - to:
+        - ipBlock:
+            cidr: 20.190.151.33/32
+        - ipBlock:
+            cidr: 20.190.151.37/32
+        - ipBlock:
+            cidr: 20.190.151.38/32
+        - ipBlock:
+            cidr: 20.190.151.91/32
+        - ipBlock:
+            cidr: 20.190.151.101/32
+        - ipBlock:
+            cidr: 20.190.152.24/32
+        - ipBlock:
+            cidr: 20.190.152.88/32
+        - ipBlock:
+            cidr: 20.190.152.102/32
+        - ipBlock:
+            cidr: 20.190.152.103/32
+        - ipBlock:
+            cidr: 20.190.152.104/32
+        - ipBlock:
+            cidr: 20.190.152.105/32
+        - ipBlock:
+            cidr: 20.190.152.106/32
+        - ipBlock:
+            cidr: 20.190.152.152/32
+        - ipBlock:
+            cidr: 20.190.152.153/32
+        - ipBlock:
+            cidr: 40.126.23.26/32
+        - ipBlock:
+            cidr: 40.126.23.38/32
+        - ipBlock:
+            cidr: 40.126.23.96/32
+        - ipBlock:
+            cidr: 40.126.23.98/32
+        - ipBlock:
+            cidr: 40.126.23.99/32
+        - ipBlock:
+            cidr: 40.126.23.163/32
+        - ipBlock:
+            cidr: 40.126.24.24/32
+        - ipBlock:
+            cidr: 40.126.24.26/32
+        - ipBlock:
+            cidr: 40.126.24.152/32
+        - ipBlock:
+            cidr: 40.126.24.153/32
+      ports:
+        - protocol: TCP
+          port: 443
+    # login.microsoftonline.com (27 addresses): device-code sign-in
+    - to:
+        - ipBlock:
+            cidr: 20.190.151.6/32
+        - ipBlock:
+            cidr: 20.190.151.8/32
+        - ipBlock:
+            cidr: 20.190.151.67/32
+        - ipBlock:
+            cidr: 20.190.151.69/32
+        - ipBlock:
+            cidr: 20.190.151.70/32
+        - ipBlock:
+            cidr: 20.190.151.131/32
+        - ipBlock:
+            cidr: 20.190.151.133/32
+        - ipBlock:
+            cidr: 20.190.151.134/32
+        - ipBlock:
+            cidr: 20.190.157.13/32
+        - ipBlock:
+            cidr: 20.190.157.14/32
+        - ipBlock:
+            cidr: 20.190.157.15/32
+        - ipBlock:
+            cidr: 20.190.190.129/32
+        - ipBlock:
+            cidr: 20.190.190.130/32
+        - ipBlock:
+            cidr: 20.190.190.131/32
+        - ipBlock:
+            cidr: 20.190.190.132/32
+        - ipBlock:
+            cidr: 20.190.190.193/32
+        - ipBlock:
+            cidr: 20.190.190.194/32
+        - ipBlock:
+            cidr: 20.190.190.195/32
+        - ipBlock:
+            cidr: 40.126.29.7/32
+        - ipBlock:
+            cidr: 40.126.29.9/32
+        - ipBlock:
+            cidr: 40.126.29.12/32
+        - ipBlock:
+            cidr: 40.126.29.13/32
+        - ipBlock:
+            cidr: 40.126.29.15/32
+        - ipBlock:
+            cidr: 40.126.62.129/32
+        - ipBlock:
+            cidr: 40.126.62.130/32
+        - ipBlock:
+            cidr: 40.126.62.131/32
+        - ipBlock:
+            cidr: 40.126.62.132/32
+      ports:
+        - protocol: TCP
+          port: 443

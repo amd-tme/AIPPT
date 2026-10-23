@@ -1,9 +1,9 @@
 # Path-under-apex routing: https://slai-app.amd.com/aippt/...
 #
 # Pattern (mirrors slai-app-platform/deploy/slai-app-prod/ldap-oauth):
-# - Shared apex TLS Secret (slai-app-amd-com-tls), copied from
-#   slai-app-platform/deploy/platform-tls/prod/tls-secret.enc.yaml as
-#   tls-secret.enc.yaml in this folder.
+# - Grandfathered apex route: host, path and pathType must stay exactly as
+#   reviewed in the platform's ingress policy. TLS uses the platform-managed
+#   slai-app-wildcard-tls Secret; the bundle carries no TLS ciphertext.
 # - AIPPT's FastAPI app + static SPA serve routes at root (/healthz, /api/...,
 #   /static/..., /slide-image/..., /docs/...). nginx-ingress strips /aippt with
 #   the rewrite-target annotation before forwarding so the app does not need
@@ -42,10 +42,10 @@ spec:
             pathType: ImplementationSpecific
             backend:
               service:
-                name: hosted-slai-aippt
+                name: aippt
                 port:
                   name: http
   tls:
     - hosts:
         - slai-app.amd.com
-      secretName: slai-app-amd-com-tls
+      secretName: slai-app-wildcard-tls
