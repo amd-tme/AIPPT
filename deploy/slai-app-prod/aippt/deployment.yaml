@@ -36,7 +36,7 @@ spec:
         - name: app
           # Stamped at deploy time with the Harbor-served digest of the image built from
           # this repo's merge commit; Factory submits it through the hosted service.
-          image: mkmhub.amd.com/hw-slaiapp-dev/aippt@sha256:aef5a90933c9988d6436dd4d7fd7108d39fa85f372c650a8e03ed18ec993aa75
+          image: mkmhub.amd.com/hw-slaiapp-dev/aippt@sha256:29d88a42eb251ed6400f35da3bef16baee1ebf5238cfbab6d5e2b7ed6f9aa264
           securityContext:
             privileged: false
             allowPrivilegeEscalation: false
