@@ -89,3 +89,4 @@ llm-examples/
 skills-lock.json
 skills/orca-linear/
 skills/orchestration/
+.factory/

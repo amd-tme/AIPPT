@@ -1,0 +1,18 @@
+# Factory deploys this repo's app to the SLAI app platform through the private
+# slai-app-platform adapter. Host-only settings (credentials, CA bundle) live in the
+# Factory host's config, never here.
+[repo]
+slug = "amd-tme/AIPPT"
+main = "main"
+
+[apply]
+enabled = true
+# Adoption baseline: the merge of PR #40, whose bundle was deployed through the hosted
+# flow by hand in October 2026 (platform PR #2556). Changes after it must arrive
+# through approved agent/<ticket> PRs.
+baseline = "44baf05008f30b3a6755ed7b1938a130641efe5a"
+
+[apply.targets.aippt]
+dir = "deploy/slai-app-prod/aippt"
+adapter = "slai-app-platform"
+supersession = "latest"
