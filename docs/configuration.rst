@@ -371,3 +371,14 @@ cutover), use ``aippt storage backfill`` (``--dry-run`` to preview)::
 
 The production cutover, sealed-secret, and TLS-trust steps are documented in
 ``deploy/slai-app-prod/aippt/OBJECT-STORAGE.md``.
+
+Developer Runtime and Testing
+-----------------------------
+
+The preview renderer runs generated scripts under Node's stable
+``--permission`` model, which requires Node 22.13+ LTS or >= 23.5. ``node`` must be on
+``PATH`` and the npm dependencies installed (``npm ci``). Runtime sandbox
+tests skip when Node is missing or older; the version gate itself is tested
+independently. Focused sandbox test command::
+
+    venv/bin/python -m pytest tests/test_preview_sandbox_gate.py tests/test_preview_sandbox.py -q
