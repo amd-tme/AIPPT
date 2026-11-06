@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Factory app gate and CI.** Node permission preflight, offline locked npm
+  setup, the full fast suite and Sphinx checks now have matching local and
+  pull-request checks. Agent issue templates and observation-only control bands
+  support manual onboarding without enabling a queue.
 - **Deck Review mode in the web chat interface.** A new ★ Review radio button
   alongside Ask / Edit sends the full deck through a structured visual-QA pass:
   each slide is reviewed against a rubric (layout variety, text overflow, visual
@@ -182,6 +186,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Factory deployment is disabled by default.** Worker readiness and app checks
+  do not connect automatic apply; production remains separately scoped and
+  approved. Factory documentation covers durable state, identity boundaries and
+  a bounded manual dispatch.
 - **Proportionate contribution guidance.** Planning, TDD, changelog and docs
   practices now scale with the change, allowing owner-approved review alongside
   bounded work while preserving repository, credential and deployment safeguards.

@@ -1,12 +1,11 @@
-# Factory deploys this repo's app to the SLAI app platform through the private
-# slai-app-platform adapter. Host-only settings (credentials, CA bundle) live in the
-# Factory host's config, never here.
+# App checks are portable; interpreters, credentials and wrappers are host-owned.
+# Deployment stays disabled until a separately scoped operator approval.
 [repo]
 slug = "amd-tme/AIPPT"
 main = "main"
 
 [apply]
-enabled = true
+enabled = false
 # Adoption baseline: the merge of PR #40, whose bundle was deployed through the hosted
 # flow by hand in October 2026 (platform PR #2556). Changes after it must arrive
 # through approved agent/<ticket> PRs.
@@ -16,3 +15,25 @@ baseline = "44baf05008f30b3a6755ed7b1938a130641efe5a"
 dir = "deploy/slai-app-prod/aippt"
 adapter = "slai-app-platform"
 supersession = "latest"
+
+[dispatch]
+max_active = 1
+
+[gate]
+protected_paths = [".factory.toml", "factory-bands.toml", ".github/**", "deploy/**", "AGENTS.md", "CONTRIBUTING.md", "REVIEW.md"]
+
+[[gate.check]]
+name = "node-permission"
+run = ["node", "--permission", "--eval", "if (!process.permission) process.exit(1)"]
+
+[[gate.check]]
+name = "node-dependencies"
+run = ["npm", "ci", "--offline", "--ignore-scripts", "--no-audit", "--no-fund", "--logs-max=0"]
+
+[[gate.check]]
+name = "tests"
+run = ["python", "-m", "pytest", "tests/", "-q"]
+
+[[gate.check]]
+name = "docs"
+run = ["python", "-m", "sphinx", "-M", "html", "docs", "docs/_build", "-W"]
