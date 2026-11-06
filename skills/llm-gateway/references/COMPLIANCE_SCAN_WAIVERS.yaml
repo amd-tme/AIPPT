@@ -1,0 +1,32 @@
+- asset: skills/llm-gateway
+  file: SKILL.md
+  check_id: DAT-001
+  span_hash: sha256:d3be84ef0ca7acbe6e3d6ce92ef39dd7ebc94b0fb110d24ff6a4620b9b3c337b
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: Intentional non-secret placeholder required by the SDK; the real Gateway
+    subscription key is loaded separately from the environment.
+  approver: ctung
+  approved_date: '2026-08-27T13:05:23Z'
+  expiry: null
+  file_hash: null
+  line_start: null
+  line_end: null
+  original_description: null
+- asset: skills/llm-gateway
+  file: scripts/main.py
+  check_id: DAT-001
+  span_hash: sha256:d3be84ef0ca7acbe6e3d6ce92ef39dd7ebc94b0fb110d24ff6a4620b9b3c337b
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: Intentional non-secret placeholder in generated SDK examples; the real
+    Gateway subscription key is loaded separately from the environment.
+  approver: ctung
+  approved_date: '2026-08-27T13:06:02Z'
+  expiry: null
+  file_hash: null
+  line_start: null
+  line_end: null
+  original_description: null

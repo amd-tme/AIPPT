@@ -20,7 +20,11 @@ using the anthropic and openai Python SDKs with correct authentication headers, 
 and model parameters. Special handling is included for O1 models (max_completion_tokens)
 and embedding endpoints.
 
-Tool stack: Python 3.9+, official Anthropic SDK for Claude models, official OpenAI SDK
+Authentication guidance distinguishes personal and application keys. Application keys
+require `user` attribution with the caller's AMD NTID. Local validation may use a
+confirmed OS login; obtaining production user identity is outside this skill's scope.
+
+Tool stack: Python 3.10+, official Anthropic SDK for Claude models, official OpenAI SDK
 for GPT models, requests library for gateway validation. Code examples use standard
 environment variables for authentication and are designed to work with any Python
 project without AMD-specific wrapper libraries.
