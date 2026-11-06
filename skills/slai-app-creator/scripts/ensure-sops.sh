@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-# Ensure a sops binary is available for SOPS encrypt/decrypt (secrets.enc.yaml, tls-secret.enc.yaml).
+# Ensure a sops binary is available for application Secret encryption/decryption.
 #
 # - Uses SOPS_BIN if set to an executable absolute path.
 # - Else uses sops on PATH.
-# - Else on Linux x86_64/amd64 downloads a pinned release under /tmp (default
-#   /tmp/slai-app-platform-sops-<user>) with checksum verification.
+# - Else on Linux x86_64/amd64 downloads a pinned release under a private user cache (default
+#   ~/.cache/slai-app-creator) with checksum verification.
 #
 # Usage:
 #   SOPS_BIN="$(./ensure-sops.sh)"
 #   "$SOPS_BIN" encrypt ...
 #
 # Env: SOPS_VERSION (default 3.9.4), SOPS_BIN (optional absolute path to existing binary),
-#      SOPS_CACHE_DIR (override download directory; default /tmp/slai-app-platform-sops-<user>)
+#      SOPS_CACHE_DIR (override download directory; default ~/.cache/slai-app-creator)
 #
 # Other OS: install sops from https://github.com/getsops/sops — see references/sops-platform-repo-clone.md
 
