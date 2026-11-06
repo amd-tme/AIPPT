@@ -143,6 +143,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Preview sandbox test Node gate.** `tests/test_preview_sandbox.py` now requires
+  Node 22.13+ LTS or >= 23.5 (stable `--permission`) instead of >= 20, and rejects nonzero
+  `node --version` exits; gate covered by `tests/test_preview_sandbox_gate.py`.
 - **Thumbnail invalidation never fired for script-origin decks.** Real chat
   Edit patches wrap the changed text in code (e.g.
   `addBulletSlide(deck, 'Title', [`), so the raw patch text was never a
