@@ -1,7 +1,5 @@
 # Example Response: How to use claude-sonnet-4-5
 
-Before returning this example, ask whether the key is personal or application. If it is an application key, add `user: <calling user's AMD NTID>` to every request. Production code must supply the actual calling user's NTID using the application's established identity mechanism; obtaining or validating that identity is outside this skill's scope. `getpass.getuser()` is only acceptable for a local test after confirming the OS login equals the NTID.
-
 ## Setup
 
 ```bash

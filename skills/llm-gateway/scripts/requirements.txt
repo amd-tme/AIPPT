@@ -1,7 +1,8 @@
-# LLM Gateway Skill Script Dependencies
+# LLM Gateway Skill Dependencies
 
-# The bundled helper script is stdlib-only and requires Python 3.10+.
+# Required for validation testing
+requests>=2.28.0
 
-# Optional SDK dependencies for generated examples only:
+# SDK dependencies (installed by users, not required for skill)
 # anthropic>=0.18.0
 # openai>=1.0.0

@@ -185,7 +185,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   stays editable and the gate still trusts only the explicit header.
 
 ### Changed
-- Refresh the bundled LLM Gateway and SLAI app creator skills and align contributor deployment guidance with Harbor-verified digests and hosted submission.
 
 - **Factory deployment is disabled by default.** Worker readiness and app checks
   do not connect automatic apply; production remains separately scoped and

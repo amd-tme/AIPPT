@@ -1,29 +1,21 @@
 #!/usr/bin/env bash
-# OPTIONAL convenience: SOPS-encrypt a plaintext Kubernetes Secret using the
-# skill-vendored public .sops.yaml (assets/platform.sops.yaml). Does not clone
-# or read AMD-SLAI/slai-app-platform.
+# OPTIONAL convenience: SOPS-encrypt a plaintext Kubernetes Secret using slai-app-platform .sops.yaml.
+# Canonical steps (any OS, full control) are in references/sops-platform-repo-clone.md -- prefer that
+# when you need flexibility (macOS, ARM, airgap, custom paths).
 #
-# Canonical steps (any OS, full control) are in references/sops-platform-repo-clone.md.
+# This script: shallow-clone SLAI_PLATFORM_CLONE_DIR, chmod 700, optionally download sops (linux amd64 only),
+# then sops encrypt with --filename-override for deploy/slai-app-prod/<app_id>/secrets.enc.yaml
+# (use deploy/slai-app-prod/<app_id>/... manually for prod ciphertext — see sops-platform-repo-clone.md).
 #
-# This script: optionally download sops (linux amd64 only), then sops encrypt
-# with --config (vendored public recipient) and --filename-override for
-# deploy/slai-app-prod/<app_id>/secrets.enc.yaml.
-#
-# After encrypting, merge application-repo .gitignore entries from SKILL.md §0d /
-# platform-context.md (*.enc.yaml, *.raw.yaml, .env).
+# After encrypting, merge application-repo .gitignore entries from SKILL.md §0d / platform-context.md
+# (*.enc.yaml, *.raw.yaml, .env) -- do not commit local *.enc.yaml in the app repo.
 #
 # Usage:
 #   ./encrypt-secrets-yaml.sh --app-id <app_id> --raw /path/to/secrets.raw.yaml [--out /path/to/secrets.enc.yaml]
 #
-# Env (optional): SOPS_BIN (SOPS_VERSION set after --app-id validation)
+# Env (optional): SLAI_PLATFORM_CLONE_DIR, SOPS_BIN (SOPS_VERSION set after --app-id validation)
 
 set -euo pipefail
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=lib/ensure-sops.inc.sh
-source "${SCRIPT_DIR}/lib/ensure-sops.inc.sh"
-
-SOPS_CONFIG="${SCRIPT_DIR}/../assets/platform.sops.yaml"
 
 # Reject paths that enable traversal or odd option-like names (called before dirname/cd).
 _require_safe_user_path() {
@@ -105,13 +97,15 @@ if [[ -z "$OUT" ]]; then
 else
   _require_safe_user_path "$OUT" "--out" || exit 1
 fi
-OUT="$(python3 "${SCRIPT_DIR}/atomic-secret-output.py" --validate "$OUT")"
+OUT="$(cd "$(dirname "$OUT")" && pwd)/$(basename "$OUT")"
+mkdir -p "$(dirname "$OUT")"
+rm -f "$OUT"
 
-if [[ ! -f "$SOPS_CONFIG" ]]; then
-  echo "Missing vendored SOPS config: $SOPS_CONFIG" >&2
+SLAI_PLATFORM_CLONE_DIR="${SLAI_PLATFORM_CLONE_DIR:-/tmp/${USER:-user}/slai-app-platform}"
+if [[ "$SLAI_PLATFORM_CLONE_DIR" == *..* ]] || [[ "$SLAI_PLATFORM_CLONE_DIR" =~ [[:cntrl:]] ]]; then
+  echo "Invalid SLAI_PLATFORM_CLONE_DIR" >&2
   exit 1
 fi
-
 if [[ -n "${SOPS_BIN:-}" ]]; then
   case "$SOPS_BIN" in
     /*) ;;
@@ -125,12 +119,74 @@ if [[ -n "${SOPS_BIN:-}" ]]; then
     exit 1
   fi
 fi
+mkdir -p "$(dirname "$SLAI_PLATFORM_CLONE_DIR")"
+if [[ ! -d "$SLAI_PLATFORM_CLONE_DIR/.git" ]]; then
+  git clone --depth 1 https://github.com/AMD-SLAI/slai-app-platform.git "$SLAI_PLATFORM_CLONE_DIR"
+else
+  git -C "$SLAI_PLATFORM_CLONE_DIR" pull --ff-only
+fi
+chmod 700 "$SLAI_PLATFORM_CLONE_DIR"
 
-ensure_sops || exit 1
+if [[ ! -f "$SLAI_PLATFORM_CLONE_DIR/.sops.yaml" ]]; then
+  echo "Missing .sops.yaml in $SLAI_PLATFORM_CLONE_DIR" >&2
+  exit 1
+fi
 
-python3 "${SCRIPT_DIR}/atomic-secret-output.py" "$OUT" \
-  "$SOPS_BIN" --config "$SOPS_CONFIG" encrypt \
-  --filename-override "deploy/slai-app-prod/${APP_ID}/secrets.enc.yaml" \
-  --input-type yaml "$RAW"
+ensure_sops() {
+  if [[ -n "${SOPS_BIN:-}" && -x "$SOPS_BIN" ]]; then
+    return 0
+  fi
+  if command -v sops >/dev/null 2>&1; then
+    SOPS_BIN=$(command -v sops)
+    return 0
+  fi
+  case "$(uname -s)/$(uname -m)" in
+    Linux/x86_64|Linux/amd64)
+      local cache="${HOME}/.cache/slai-app-platform-sops"
+      mkdir -p "$cache"
+      SOPS_BIN="${cache}/sops-${SOPS_VERSION}"
+      if [[ ! -x "$SOPS_BIN" ]]; then
+        echo "Downloading sops v${SOPS_VERSION}..." >&2
+        _sops_bin_name="sops-v${SOPS_VERSION}.linux.amd64"
+        _sops_url="https://github.com/getsops/sops/releases/download/v${SOPS_VERSION}/${_sops_bin_name}"
+        _sums_url="https://github.com/getsops/sops/releases/download/v${SOPS_VERSION}/sops-v${SOPS_VERSION}.checksums.txt"
+        _sums_file="${cache}/sops-v${SOPS_VERSION}.checksums.txt"
+        curl -fsSL -o "$SOPS_BIN.part" -- "${_sops_url}"
+        curl -fsSL -o "$_sums_file" -- "${_sums_url}"
+        _want_sha256=""
+        _want_sha256="$(awk -v "fn=${_sops_bin_name}" '$2 == fn { print $1; exit }' "$_sums_file")"
+        if [[ -z "$_want_sha256" ]]; then
+          echo "Checksum list missing entry for ${_sops_bin_name}" >&2
+          rm -f "$SOPS_BIN.part" "$_sums_file"
+          exit 1
+        fi
+        _got_sha256=""
+        _got_sha256="$(sha256sum "$SOPS_BIN.part" | awk '{ print $1 }')"
+        if [[ "$_got_sha256" != "$_want_sha256" ]]; then
+          echo "SHA256 mismatch for downloaded sops (expected integrity check failed)" >&2
+          rm -f "$SOPS_BIN.part" "$_sums_file"
+          exit 1
+        fi
+        mv -f "$SOPS_BIN.part" "$SOPS_BIN"
+        chmod +x "$SOPS_BIN"
+      fi
+      return 0
+      ;;
+    *)
+      echo "Install sops (https://github.com/getsops/sops) and use references/sops-platform-repo-clone.md, or set SOPS_BIN." >&2
+      exit 1
+      ;;
+  esac
+}
+
+ensure_sops
+
+(
+  cd "$SLAI_PLATFORM_CLONE_DIR"
+  "$SOPS_BIN" encrypt \
+    --filename-override "deploy/slai-app-prod/${APP_ID}/secrets.enc.yaml" \
+    --input-type yaml \
+    "$RAW" > "$OUT"
+)
 
 echo "Wrote $OUT"

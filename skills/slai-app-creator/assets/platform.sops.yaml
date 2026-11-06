@@ -1,7 +1,0 @@
-# Vendored public recipient for slai-app-creator encrypt (no platform-repo clone).
-# Must stay identical to repository-root .sops.yaml creation_rules.
-# Rotated 2026-04-27: prior ciphertext replaced (no old private key); re-encrypted from plaintext sources.
-creation_rules:
-  - path_regex: \.enc\.yaml$
-    encrypted_regex: '^(data|stringData)$'
-    age: age1r5cjptkyd4wn82y5flfte4lm7y67nk2wxqhm7ncg5v23ea6seq9sfyjl0l

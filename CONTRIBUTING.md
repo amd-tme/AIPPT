@@ -460,25 +460,19 @@ description rather than claiming success.
 The production deployment lives at `https://slai-app.amd.com/aippt/`. The
 flow:
 
-1. **Publish an image** to Harbor with the app's canonical publisher,
-   `scripts/publish-image-harbor.sh`, outside GitHub-hosted Actions. Use the
-   installed `slai-app-creator` skill to select a supported build/publish path.
-2. **Stamp the Deployment** with the Harbor-verified digest from the publisher's
-   receipt (`repository@sha256:...`), and retain any required image-release
-   authorization evidence. A commit-SHA tag alone is not a digest.
-3. **Submit the reviewed bundle** through the skill's hosted
-   `scripts/submit_app.py` helper. The hosted GitHub App owns the scoped platform
-   PR and merge request. Preserve the submission ID and use it to resume; do not
-   create a platform PR manually or replay an uncertain submission blindly.
-4. **Validate the rollout** through the submission status/logs and the app's
-   HTTPS/SSO behavior. A merged platform PR alone does not establish a successful
-   deployment.
+1. **Bake an image** to Harbor:
+   `mkmhub.amd.com/hw-slaiapp-dev/aippt:<short-sha>` — CI handles this on
+   merge to `main`.
+2. **Stamp the deployment** manifest at
+   `deploy/slai-app-prod/aippt/deployment.yaml` — bump the `image:` tag
+   to the new sha.
+3. **Submit** via the platform's helper script (the hosted GitHub App
+   opens the PR against `AMD-SLAI/slai-app-platform` — never `git push`
+   directly to that repo from your laptop).
+4. **Validate in production** with Playwright after the rollout.
 
-Use the current `skills/slai-app-creator/SKILL.md` and its applicable references
-for the complete contract. Existing apps retain their reviewed TLS bindings;
-ordinary updates do not migrate them. Live deployments require separately scoped
-approval. Factory app checks and reviewed source merges leave scheduling and
-apply disconnected during onboarding.
+The `app-platform` and `slai-app-creator` project skills automate steps
+2–4. See `skills/app-platform/` for details.
 
 ## 11. Submitting work
 

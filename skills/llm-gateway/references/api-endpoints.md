@@ -21,11 +21,9 @@ https://llm-api.amd.com
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/openai/deployments/{id}/chat/completions` | POST | Deployment-specific Chat Completions (`api-version` e.g. `2024-02-01`) |
-| `/openai/responses` | POST | Azure Responses API — Codex / `responses: true` models (`api-version` ≥ `2025-03-01-preview`) |
+| `/OpenAI/v1/chat/completions` | POST | Chat completion |
+| `/openai/deployments/{id}/chat/completions` | POST | Deployment-specific |
 | `/OpenAI/v1/embeddings` | POST | Embeddings |
-
-**Deployment path `{id}`:** Use the catalog **`id`** from `GET /models` (same string as in the JSON **`model`** field). Do **not** use synthetic names like `deployment-gpt-4o`.
 
 **Models**: `gpt-4`, `gpt-4-turbo`, `gpt-3.5-turbo`, `o1-mini`
 
@@ -48,14 +46,6 @@ https://llm-api.amd.com
 
 ## Request Examples
 
-The examples below show personal-key authentication. For an application key, add the calling user's AMD NTID to every request:
-
-```bash
--H "user: $AMD_LLM_USER_NTID"
-```
-
-How an application obtains the correct production NTID is outside this Gateway reference's scope.
-
 ### Claude Chat Completion
 
 ```bash
@@ -72,11 +62,11 @@ curl -X POST "https://llm-api.amd.com/Anthropic/v1/messages" \
 ### GPT Chat Completion
 
 ```bash
-curl -X POST "https://llm-api.amd.com/openai/deployments/gpt-4o/chat/completions?api-version=2024-02-01" \
+curl -X POST "https://llm-api.amd.com/OpenAI/v1/chat/completions" \
   -H "Content-Type: application/json" \
   -H "Ocp-Apim-Subscription-Key: $AMD_LLM_API_KEY" \
   -d '{
-    "model": "gpt-4o",
+    "model": "gpt-4",
     "max_tokens": 1000,
     "messages": [{"role": "user", "content": "Hello!"}]
   }'
