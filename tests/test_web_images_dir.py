@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import os
+from pathlib import Path
 from unittest.mock import patch, ANY
 
 import pytest
@@ -132,7 +133,7 @@ class TestRoutesPassImagesDirToIngest:
         prs.save(path)
         catalog_deck(path, db_path=db_path)
         app = create_app(
-            db_path=db_path, uploads_dir=uploads_dir, images_dir=images_dir,
+            db_path=db_path, uploads_dir=uploads_dir, images_dir=images_dir, view_only=False,
         )
         return TestClient(app), images_dir
 
@@ -183,17 +184,32 @@ class TestRoutesPassImagesDirToIngest:
                                 "presentationml.presentation")},
                 headers={"Authorization": "Bearer tok"},
             )
-            _ = resp.text  # drain SSE
+            assert resp.status_code == 200
+        assert "event: error" not in resp.text, resp.text
+        assert "event: complete" in resp.text, resp.text
         assert mock_ingest.called
         passed = mock_ingest.call_args.kwargs.get("images_dir")
         assert passed and passed.startswith(images_dir), (
             f"upload-stream must use app.state.images_dir, got {passed!r}"
         )
 
+    @pytest.mark.parametrize("engine", ["python-pptx", "pptxgenjs"])
     @patch("aippt.web.routes.ingest_deck")
     def test_create_passes_app_state_images_dir(
-        self, mock_ingest, client, template_setup,
+        self, mock_ingest, client, template_setup, engine, monkeypatch,
     ):
+        from aippt.preview import RenderResult
+
+        monkeypatch.setattr("aippt.web.routes._make_llm_client", lambda *args, **kwargs: object())
+
+        def generate_script(**kwargs):
+            Path(kwargs["output_script_path"]).write_text("// generated test script\n", encoding="utf-8")
+
+        monkeypatch.setattr("aippt.pptxgenjs_gen.generate_script", generate_script)
+        monkeypatch.setattr(
+            "aippt.preview.Renderer.render",
+            lambda *args, **kwargs: RenderResult(success=True, pptx_path=template_setup),
+        )
         tc, images_dir = client
         mock_ingest.return_value = {
             "deck_id": 1, "deck_name": "d", "slide_count": 1,
@@ -202,10 +218,12 @@ class TestRoutesPassImagesDirToIngest:
         }
         resp = tc.post(
             "/api/decks/create",
-            data={"outline_text": "# T\n## S1\n- x\n", "enhance": "false"},
+            data={"outline_text": "# T\n## S1\n- x\n", "enhance": "false", "engine": engine},
             headers={"Authorization": "Bearer tok"},
         )
-        _ = resp.text  # drain SSE
+        assert resp.status_code == 200
+        assert "event: error" not in resp.text, resp.text
+        assert "event: complete" in resp.text, resp.text
         assert mock_ingest.called
         passed = mock_ingest.call_args.kwargs.get("images_dir")
         assert passed and passed.startswith(images_dir), (
