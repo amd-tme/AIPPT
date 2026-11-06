@@ -93,8 +93,8 @@ Gateway models and bounded validation
 -------------------------------------
 
 Reviewed Factory supports host-owned ``triage.headers`` and
-``triage.api = "anthropic"``. Point ``triage.endpoint`` at the complete native
-``/v1/messages`` URL. The gateway catalog model IDs are ``Claude-Sonnet-5-5``
+``triage.api = "anthropic"``. Set ``url`` in the triage table to the complete native
+``/v1/messages`` URL (the key is ``url``, not ``endpoint``). The gateway catalog model IDs are ``Claude-Sonnet-5-5``
 and ``Claude-Opus-5-5``. The existing OMP workers and reviewer also use the
 native Anthropic API.
 
@@ -104,13 +104,12 @@ This example uses placeholders only:
 
 .. code-block:: toml
 
-   [triage]
+   [repo."owner/name".triage]
+   url = "https://gateway.example.invalid/v1/messages"
    api = "anthropic"
-   endpoint = "https://gateway.example.invalid/v1/messages"
    model = "Claude-Sonnet-5-5"
-   repo = "owner/name"
 
-   [triage.headers]
+   [repo."owner/name".triage.headers]
    Ocp-Apim-Subscription-Key = "<application-key>"
    user = "<user-header-value>"
 
