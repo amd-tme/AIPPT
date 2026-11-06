@@ -143,6 +143,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Portable fast-test baseline.** Route tests select full mode explicitly,
+  template-merge tests use generated PPTX fixtures, and theme/master assertions
+  verify legacy input and content branding without relying on developer
+  credentials, proprietary templates or obsolete bundled-theme values.
 - **Preview sandbox test Node gate.** `tests/test_preview_sandbox.py` now requires
   Node 22.13+ LTS or >= 23.5 (stable `--permission`) instead of >= 20, and rejects nonzero
   `node --version` exits; gate covered by `tests/test_preview_sandbox_gate.py`.
@@ -178,6 +182,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Proportionate contribution guidance.** Planning, TDD, changelog and docs
+  practices now scale with the change, allowing owner-approved review alongside
+  bounded work while preserving repository, credential and deployment safeguards.
 - **Slide thumbnails invalidate on content change.** When a slide's content
   changes via chat Edit apply/revert, the affected slides' thumbnails are nulled
   (precise, per-slide) so the deck view falls back to a placeholder rather than

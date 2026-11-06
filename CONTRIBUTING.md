@@ -13,24 +13,28 @@ python -m venv venv
 source venv/bin/activate          # WSL/Linux/macOS
 # venv/Scripts/activate           # Windows Git Bash / PowerShell
 pip install -r requirements.txt
-pytest tests/ -v                   # fast suite (~5s, 1343 tests)
+pytest tests/ -v                   # fast suite (no live/e2e calls)
 ```
 
 If that passes, you are ready to work.
 
-The five hard rules:
+The workflow below is a set of defaults, applied in proportion to the change.
+The project owner can choose a lighter process or allow review and implementation
+to proceed together. Workflow flexibility does not authorize publishing or
+production deployment; repository and credential safeguards still apply.
 
-1. Every non-trivial change starts with a **PRD** in the shared `swproductmgmt`
-   repo at `~/git/swproductmgmt/projects/aippt/prds/`, built from
-   `~/git/swproductmgmt/projects/aippt/PRD-TEMPLATE.md` and published for review
-   (see §4).
-2. Feature work happens on a **branch** (and ideally a **git worktree**),
-   never directly on `main`.
-3. Tests come **first** — TDD discipline. The fast `pytest` suite must pass
-   before every commit.
-4. Every PR updates **`CHANGELOG.md`** under the `[Unreleased]` heading.
-5. Every PR that changes user-visible behavior updates the relevant
-   **Sphinx documentation** in `docs/`.
+1. Prefer a **PRD** for new features and substantial behavior, architecture or
+   operational changes. Use a scoped issue or short plan for bounded repairs,
+   test work, documentation and routine maintenance (see §4).
+2. Work on a **branch**, never directly on `main`. Use an isolated worktree when
+   it helps; an existing suitable checkout is fine.
+3. Prefer a failing regression test **first** for behavior fixes. An existing
+   failing test can provide the reproduction. Run relevant checks and the fast
+   suite before publishing code when practical; report remaining failures.
+4. Material user/developer-workflow changes update **`CHANGELOG.md`** under
+   `[Unreleased]`; routine prose edits need no entry.
+5. Changes to behavior or setup update the relevant **documentation**. Build
+   changed Sphinx pages with warnings treated as errors.
 
 ## 2. Repository structure
 
@@ -104,8 +108,9 @@ repo at **`~/git/swproductmgmt/projects/aippt/prds/`** — the single source of 
 PRD content, and where collaboration and review happen. **Where you personally
 track status, daily notes, or follow-ups is up to you** — the maintained
 dashboard is the `AIPPT PRD Tracker` note in the Obsidian vault, but Kanban,
-plain text, or anything else works. The repo only requires that work is
-captured in a PRD before implementation begins.
+plain text, or anything else works. A scoped issue and validation evidence are
+sufficient for bounded repairs.
+Prefer a PRD when the scope needs design review or coordination.
 
 > **Migration note (2026-06):** PRDs previously lived in the gitignored
 > `.local-docs/plans/` tree and were mirrored into the Obsidian vault at
@@ -176,14 +181,18 @@ House docs: `~/git/swproductmgmt/docs/getting_started/05_publishing_a_prd.md`
 and `~/git/swproductmgmt/docs/getting_started/06_adding_a_project.md` (PRDs are
 "Pattern A — commit directly").
 
-### When you can skip the PRD
+### Choosing the planning detail
 
-- Typo fixes, comment-only changes, dependency bumps with no behavior change.
-- Hot-fix one-liners under operational pressure (still requires a changelog
-  entry and a follow-up retrospective PRD if it touched anything non-trivial).
-- Test additions for already-implemented code.
+A scoped issue or short plan is normally enough for typo/comment fixes,
+dependency maintenance with no behavior change, bounded bug fixes, test/fixture
+repairs and documentation. Existing failing tests and a clear acceptance check
+can provide the plan for a small repair.
 
-When in doubt, write the PRD. PRDs are cheap, surprises are expensive.
+Prefer a PRD when introducing a feature or making a substantial behavior,
+architecture or operational change, especially when design choices affect other
+contributors. Fill every section of the template; use explicit "No CLI changes"
+or equivalent where a section does not apply. A PRD is a coordination tool, not
+a reason to stop independent investigation or owner-authorized bounded work.
 
 ## 5. Authoring a PRD
 
@@ -203,9 +212,10 @@ When in doubt, write the PRD. PRDs are cheap, surprises are expensive.
      extend. TDD means these get written first.
    - **Implementation Tasks** — ordered, independently committable tasks.
      Each row becomes a commit (or close to it).
-4. **Request review** before starting implementation — publish the PRD to
-   swproductmgmt and request a reviewer (see "Collaborating on PRDs" in §4).
-   A 15-minute review up front saves hours of rework.
+4. **Request review** for the proposed design — publish the PRD to swproductmgmt
+   and request a reviewer (see §4). For bounded work, review and implementation
+   can proceed together when the owner agrees. Preserve explicit review gates
+   for production deployment, auth/secrets changes and migrations.
 
 ### Documentation discipline
 
@@ -313,23 +323,31 @@ git branch -d fix/ingress-413
 
 ## 8. Test discipline (TDD)
 
-### Run the fast suite before every commit
+### Choose checks that establish the change
 
 ```bash
 $VENV_PYTHON -m pytest tests/ -v
 ```
 
+Prefer a green full fast suite before publishing code. If it fails, compare
+against the same base and environment, investigate the failures, and report
+regressions separately from existing failures. Agree on any material validation
+limitation with the owner; a bounded exception does not silently waive future
+checks. Do not hide failures with blanket skips or xfail. Documentation-only
+edits need relevant rendering/link checks, not a ceremonial test run.
+
 The default `pytest` invocation excludes `e2e` and `live` markers via
-`pyproject.toml`'s `addopts`. Fast suite is ~406 tests in ~5 seconds, fully
-mocked, no API calls.
+`pyproject.toml`'s `addopts`. The fast suite uses mocked provider calls and real
+local filesystem/SQLite/PPTX checks; Node-dependent checks need Node/npm on PATH.
+Counts and duration change as coverage grows, so use the current pytest summary.
 
 ### Marker reference
 
 | Marker  | Count  | What it does                                       |
 | ------- | -----: | -------------------------------------------------- |
-| default | ~1343  | Fully mocked, no network, runs in ~5s              |
-| `e2e`   | ~24    | Real LLM calls. Requires `AMD_LLM_KEY`. Slow.      |
-| `live`  | ~3     | Gateway connectivity checks. Requires creds.       |
+| default | varies | Mocked providers; real local database/files/PPTX and Node checks |
+| `e2e`   | varies | Real external calls; requires relevant credentials |
+| `live`  | varies | Gateway connectivity checks; requires credentials |
 
 ```bash
 pytest -m e2e               # run e2e suite
@@ -339,7 +357,10 @@ pytest -m ""                # run everything (override default exclusion)
 
 ### Test-driven development
 
-1. Write the failing test that captures the behavior you want.
+Prefer this loop for behavior fixes and new logic:
+
+1. Write the failing test that captures the behavior you want, or reproduce an
+   existing failure that already captures it.
 2. Run the test, confirm it fails for the *right reason*.
 3. Implement the minimum code that makes it pass.
 4. Refactor while keeping the test green.
@@ -364,7 +385,8 @@ new module under test. Use the existing fixture patterns
 ## 9. Changelog and versioning
 
 `CHANGELOG.md` follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
-format. Every PR adds an entry under `[Unreleased]`.
+format. User-visible and material developer-workflow changes add an entry under
+`[Unreleased]`. Routine prose corrections do not need one.
 
 ### Section conventions
 

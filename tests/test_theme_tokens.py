@@ -164,13 +164,26 @@ class TestCreateDeckOverrides:
         assert result["background"] == "1E293B"
 
 
+
+@pytest.fixture
+def legacy_theme(tmp_path):
+    path = tmp_path / "legacy.yaml"
+    path.write_text(
+        'colors:\n  background: "000000"\n  accent: "00C2DE"\n'
+        '  text_primary: "FFFFFF"\n  surface: "636466"\n'
+        'fonts:\n  heading: Arial\n  body: Arial\n  mono: Consolas\n',
+        encoding="utf-8",
+    )
+    return path
+
+
 class TestBackwardCompatibility:
     """Existing themes without new sections produce identical base token objects."""
 
-    def test_existing_colors_unchanged(self):
-        theme = run_node("""
-            import { loadTheme } from './lib/pptxgenjs-helpers.mjs';
-            const t = loadTheme('themes/amd.yaml');
+    def test_existing_colors_unchanged(self, legacy_theme):
+        theme = run_node(f"""
+            import {{ loadTheme }} from './lib/pptxgenjs-helpers.mjs';
+            const t = loadTheme({json.dumps(str(legacy_theme))});
             console.log(JSON.stringify(t.colors));
         """)
         assert theme["background"] == "000000"
@@ -178,10 +191,10 @@ class TestBackwardCompatibility:
         assert theme["text_primary"] == "FFFFFF"
         assert theme["surface"] == "636466"
 
-    def test_existing_fonts_unchanged(self):
-        theme = run_node("""
-            import { loadTheme } from './lib/pptxgenjs-helpers.mjs';
-            const t = loadTheme('themes/amd.yaml');
+    def test_existing_fonts_unchanged(self, legacy_theme):
+        theme = run_node(f"""
+            import {{ loadTheme }} from './lib/pptxgenjs-helpers.mjs';
+            const t = loadTheme({json.dumps(str(legacy_theme))});
             console.log(JSON.stringify(t.fonts));
         """)
         assert theme["heading"] == "Arial"

@@ -38,7 +38,7 @@ def client(tmp_path, deck_path):
     db_path = str(tmp_path / "test.db")
     uploads_dir = str(tmp_path / "uploads")
     catalog_deck(deck_path, db_path=db_path)
-    app = create_app(db_path=db_path, uploads_dir=uploads_dir)
+    app = create_app(db_path=db_path, uploads_dir=uploads_dir, view_only=False)
     app.state.admin_ntids = {"admin"}
     return TestClient(app)
 
@@ -909,6 +909,7 @@ class TestDeleteDeckRoute:
             db_path=db_path,
             uploads_dir=str(tmp_path / "u"),
             images_dir=images_dir,
+            view_only=False,
         )
         app.state.admin_ntids = {"admin"}
         purge_client = TestClient(app)
@@ -943,6 +944,7 @@ class TestDeleteDeckRoute:
             db_path=db_path,
             uploads_dir=str(tmp_path / "u"),
             images_dir=images_dir,
+            view_only=False,
         )
         app.state.admin_ntids = {"admin"}
         keep_client = TestClient(app)

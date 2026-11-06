@@ -382,3 +382,18 @@ tests skip when Node is missing or older; the version gate itself is tested
 independently. Focused sandbox test command::
 
     venv/bin/python -m pytest tests/test_preview_sandbox_gate.py tests/test_preview_sandbox.py -q
+
+The default fast suite (``venv/bin/python -m pytest tests/``) requires no provider
+credentials or proprietary ``templates/corp.pptx``. Tests of full-mode routes
+select ``view_only=False`` explicitly; view-only and automatic mode detection
+remain covered separately. Model-dependent tests supply temporary configuration
+and mock provider calls. Template-merge tests generate real temporary PPTX files
+with named layouts and verify saved output, notes and metadata. These fixtures
+exercise merge behavior; they do not validate a particular corporate template's
+branding or layout inventory. Validate those separately against an authorized
+local template when that integration changes.
+
+For a reproducible run, install ``requirements.txt`` in the virtual environment,
+run ``npm ci`` with a supported Node runtime on ``PATH``, and run the fast suite
+without ``ANTHROPIC_API_KEY``, ``OPENAI_API_KEY`` or ``AIPPT_VIEW_ONLY`` set. Live
+and end-to-end provider checks remain opt-in through their pytest markers.
