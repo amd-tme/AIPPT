@@ -88,3 +88,54 @@ worked end to end.
 Keep human merge and separately scoped, one-at-a-time production approval.
 Neither a green gate nor successful worker onboarding authorizes reconnecting
 apply, starting a timer, renewing deployment sessions, or deploying an app.
+
+Gateway models and bounded validation
+-------------------------------------
+
+Reviewed Factory supports host-owned ``triage.headers`` and
+``triage.api = "anthropic"``. Point ``triage.endpoint`` at the complete native
+``/v1/messages`` URL. The gateway catalog model IDs are ``Claude-Sonnet-5-5``
+and ``Claude-Opus-5-5``. The existing OMP workers and reviewer also use the
+native Anthropic API.
+
+Application-key authentication requires the ``Ocp-Apim-Subscription-Key`` and
+user headers. Keep them in private host configuration, never in the repository.
+This example uses placeholders only:
+
+.. code-block:: toml
+
+   [triage]
+   api = "anthropic"
+   endpoint = "https://gateway.example.invalid/v1/messages"
+   model = "Claude-Sonnet-5-5"
+   repo = "owner/name"
+
+   [triage.headers]
+   Ocp-Apim-Subscription-Key = "<application-key>"
+   user = "<user-header-value>"
+
+OpenAI triage mode remains the default. The gateway's
+``/api/v1/chat/completions`` answered simple Claude requests but rejected a
+standard ``role=system`` message, so simple connectivity does not establish
+full triage compatibility. The validated native route needs no custom
+translation proxy or tunnel.
+
+Anthropic environment variables, including ``ANTHROPIC_EXTRA_HEADERS`` and
+``ANTHROPIC_CUSTOM_HEADERS``, are not automatically read by this Factory
+client. Configure the explicit host-owned header table instead. The generic
+``triage.key`` / ``FACTORY_LLM_KEY`` supplies ``x-api-key`` in Anthropic mode
+and bearer authentication in OpenAI mode. Custom headers override these
+defaults.
+
+Bounded manual exercise
+~~~~~~~~~~~~~~~~~~~~~~~
+
+Keep the timer disabled and apply disconnected. First run ``factory triage
+--issue N --dry-run``. Then obtain authorization for real triage and for the
+single ``factory dispatch --ticket N`` exercise, including worker commits and
+PR publication. Do not start the general service or queue. Keep human merge
+and separately scoped production approval.
+
+Current deployment guidance lives in the ``slai-app-creator`` skill, with
+Harbor-verified digests and hosted submission. Merging an app PR alone is not
+a deployment or rollout proof.
