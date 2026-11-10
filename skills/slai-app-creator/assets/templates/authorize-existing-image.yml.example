@@ -1,0 +1,7 @@
+# Retired app-repository authorization template.
+# Do not copy or dispatch this template: app repositories do not inherit platform runners.
+# The agent uses the installed slai-app-creator scripts/authorize_image.py helper
+# to request verification and signing of an already-published Harbor digest.
+# Developers own image building and publishing; platform runners only verify/sign.
+
+name: Retired app-repository authorization template

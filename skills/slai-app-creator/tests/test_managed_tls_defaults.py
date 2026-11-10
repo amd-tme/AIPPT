@@ -63,9 +63,9 @@ def test_existing_app_can_migrate_without_changing_its_hostname_or_path(tmp_path
     assert migration_errors(directory) == []
 
 
-def test_legacy_binding_is_preserved_without_opt_in(tmp_path):
+def test_retired_wildcard_is_rejected_even_without_descriptor(tmp_path):
     directory, _ = migration_bundle(tmp_path, descriptor=False, secret_name='slai-app-wildcard-tls')
-    assert migration_errors(directory) == []
+    assert any('wildcard TLS is retired' in error for error in migration_errors(directory))
 
 
 def test_legacy_app_cannot_change_tls_binding_without_enrollment(tmp_path):

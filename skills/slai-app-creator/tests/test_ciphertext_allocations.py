@@ -33,7 +33,8 @@ def test_parent_supplies_verified_allocations_and_retains_sibling_collision_guar
 
 
 @pytest.mark.parametrize('payload', [None, b'{invalid', b'{}', b'["app", "app"]', b'["../outside"]',
-                                   b'[' + b' ' * (1024 * 1024) + b']'])
+                                   b'[' + b' ' * (1024 * 1024) + b']'],
+                         ids=['missing', 'malformed', 'object', 'duplicates', 'unsafe-path', 'oversized'])
 def test_worker_rejects_missing_malformed_or_oversized_production_allocation_data(tmp_path, payload):
     path = secret_file(tmp_path)
     command = [sys.executable, str(SCRIPTS / 'ciphertext_validation.py'), str(path), 'slai-app-prod', 'app']

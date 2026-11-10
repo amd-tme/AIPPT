@@ -156,10 +156,10 @@ def bundle(directory, app_id, title=None, description=None):
     try:
         checked = subprocess.run(
             [sys.executable, "-E", str(Path(__file__).with_name("secret_upload_validation.py"))],
-            input=json.dumps(files).encode(), capture_output=True, timeout=10,
+            input=json.dumps({'app_id': app_id, 'files': files}).encode(), capture_output=True, timeout=10,
             env={key: value for key, value in os.environ.items() if not key.upper().startswith("PYTHON")})
         if checked.returncode or len(checked.stdout) > 1024 or json.loads(checked.stdout) != {"valid": True}:
-            raise ClientError("Bundle rejected before upload: invalid YAML, unencrypted/malformed Secret, or missing Keycloak SSO TCP 443 egress. For SSO bundles run keycloak_egress.py <bundle-directory> --apply, then validate again.")
+            raise ClientError("Bundle rejected before upload: invalid YAML, Secret, TLS binding, or Keycloak SSO egress. Preserve tls-policy.json and the platform-managed exact-host TLS Secret; wildcard TLS is retired except for the LocalAI load-balancer apps. Reconcile the local bundle with the current platform manifest before resubmitting.")
     except (OSError, ValueError, subprocess.TimeoutExpired):
         raise ClientError("Bundle Secret validation failed before upload") from None
     return {"app_id": app_id, "title": title, "description": description, "files": files, 'creator_protocol': CREATOR_PROTOCOL}

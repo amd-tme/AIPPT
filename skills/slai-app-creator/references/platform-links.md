@@ -28,7 +28,7 @@ standalone instructions.
 | [../assets/templates/service.yaml.example](../assets/templates/service.yaml.example) | Service template |
 | [../assets/templates/build-image.sh.example](../assets/templates/build-image.sh.example) | Harbor local build script template |
 | [../assets/templates/publish-image-harbor.sh.example](../assets/templates/publish-image-harbor.sh.example) | Harbor publish + `.cache/harbor-last-image.env` template |
-| [../assets/templates/authorize-existing-image.yml.example](../assets/templates/authorize-existing-image.yml.example) | Produce-phase thin caller: authorize an existing Harbor tag/digest and retain proposed policy/release records without moving image bytes |
+| [../scripts/authorize_image.py](../scripts/authorize_image.py) | Platform verifies/signs the published digest; retain the complete signed handoff. |
 | [../assets/templates/deploy-app-platform-reusable.yml.example](../assets/templates/deploy-app-platform-reusable.yml.example) | App repo **reusable** job: Harbor -> sync handoff -> PR |
 | [../assets/templates/deploy-development.yml.example](../assets/templates/deploy-development.yml.example) | App repo **Deploy development** → PR label **`deploy/slai-app-prod`** |
 | [../assets/templates/deploy-production.yml.example](../assets/templates/deploy-production.yml.example) | App repo **Deploy production** → PR label **`deploy/slai-app-prod`** |

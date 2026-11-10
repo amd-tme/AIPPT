@@ -475,8 +475,10 @@ flow:
    deployment.
 
 Use the current `skills/slai-app-creator/SKILL.md` and its applicable references
-for the complete contract. Existing apps retain their reviewed TLS bindings;
-ordinary updates do not migrate them. Live deployments require separately scoped
+for the complete contract. Existing apps retain their current platform-reviewed
+TLS bindings; reconcile stale local manifests with that baseline before submission.
+AIPPT's existing apex route uses `platform-apex-tls`, with no TLS ciphertext in
+the app bundle. Live deployments require separately scoped
 approval. Factory app checks and reviewed source merges leave scheduling and
 apply disconnected during onboarding.
 

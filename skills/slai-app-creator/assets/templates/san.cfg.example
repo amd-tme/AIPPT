@@ -1,0 +1,26 @@
+# OpenSSL CSR config for AMD internal PKI (ServiceNow → Internal Certificate).
+# Copy to: deploy/slai-app-prod/<app_id>/csr/san.cfg
+# Replace <FQDN> with spec.rules[].host / spec.tls[].hosts[] from z-ingress.yaml (default: <app_id>.slai-app.amd.com).
+# Replace <user-email> with the requester’s corporate email (prefer: git -C <app-repo> config user.email).
+# Then run openssl from that csr/ directory — see app-platform SKILL.md §0f.
+
+[req]
+default_bits = 2048
+distinguished_name = req_distinguished_name
+req_extensions = req_ext
+prompt = no
+
+[req_distinguished_name]
+C = US
+ST = California
+L = Santa Clara
+O = Advanced Micro Devices
+OU = IT
+CN = <FQDN>
+emailAddress = <user-email>
+
+[req_ext]
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = <FQDN>

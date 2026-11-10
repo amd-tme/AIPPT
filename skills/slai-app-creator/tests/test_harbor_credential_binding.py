@@ -37,7 +37,7 @@ EXCEPTION_PULL_SECRET_TEMPLATE = (
 PROBE_SMOKE = REPO_ROOT / "skills/slai-app-creator/scripts/probe-smoke.sh"
 AUTHORIZE_EXISTING_TEMPLATE = (
     REPO_ROOT
-    / "skills/slai-app-creator/assets/templates/authorize-existing-image.yml.example"
+    / "skills/slai-app-creator/references/legacy-authorization.yml.example"
 )
 
 

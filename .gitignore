@@ -16,6 +16,8 @@ output/
 outlines/
 uploads/
 templates/
+!skills/slai-app-creator/assets/templates/
+!skills/slai-app-creator/assets/templates/**
 backup/
 backups/
 

@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- Refresh the complete slai-app-creator asset to 0.1.22 and reconcile AIPPT's
+  existing apex route with the platform-reviewed `platform-apex-tls` binding.
+  Include packaged creator templates previously hidden by the broad template
+  ignore rule, so a fresh checkout has the complete asset.
+  The current helper validates TLS before upload; the app bundle contains no
+  platform certificate material. Deployment remains a separately approved step.
+
 ### Added
 
 - **Factory app gate and CI.** Node permission preflight, offline locked npm

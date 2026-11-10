@@ -1,5 +1,5 @@
 ---
-scan_date: "2026-11-06T15:17:41Z"
+scan_date: "2026-11-09T21:29:58Z"
 skill_name: "slai-app-creator"
 status: "PASSED"
 compliance_risk_score: 24
@@ -22,8 +22,8 @@ scanner_version: "1.0.44"
 | BLOCK-HARD | False |
 | Errors | 1 |
 | Warnings | 1 |
-| Info | 13 |
-| Scan Date | 2026-11-06T15:17:41Z |
+| Info | 8 |
+| Scan Date | 2026-11-09T21:29:58Z |
 
 ## Coverage
 
@@ -47,19 +47,14 @@ scanner_version: "1.0.44"
 
 ## Info
 
-1. Downloads executable binary from GitHub (not pipe-to-shell): The script downloads the SOPS binary from github.com, not an amd.com host. However, it is not a direct web-to-shell pattern: the download is checksum-verified against a pinned SHA-256 digest before being made executable, which substantially mitigates supply-chain tampering. Flagged informationally because a remote executable is fetched from a non-whitelisted host.
-2. Hardcoded checksum (benign pinning, not a secret): This is a SHA-256 integrity digest used to pin the downloaded SOPS binary, not a credential. It is included for completeness; it is a legitimate and recommended integrity-pinning practice, not a hardcoded secret.
-3. Telemetry POST to external AMD endpoint: The script detaches a background worker that POSTs skill-usage telemetry (plugin name, version, skill) to a hardcoded collector endpoint. The endpoints are constrained to amd.com domains via the _amd() validator, so this is whitelisted per WEB-001 rules; noted as informational scope item since it silently exfiltrates usage metadata and forks a detached worker.
-4. Silent process fork and fd closure for detached background work: The script forks, calls setsid(), and closes fds 0/1/2 to run detached telemetry POSTs that always exit 0. This daemonization behavior is beyond a simple skill-load hook and could mask failures or run unnoticed in the background.
-5. YAML parsing uses SafeLoader with additional hardening: The code subclasses yaml.SafeLoader and adds depth/node/alias/duplicate-key limits. This is a secure approach (not unsafe yaml.load), noted only to confirm the untrusted-YAML handling path is bounded and does not use the unsafe full loader.
-6. Creates tool symlinks in user PATH directory: setup-tools.sh links go/git/lsf tools from /tool/pandora64 into ~/.local/bin and advises adding it to PATH. Targets are fixed AMD vendor paths and existing entries are not overwritten, so risk is low, but it modifies the user's executable search path.
-7. Skill auto-run directive on load: The SKILL.md instructs the agent to automatically run a script (`scripts/slai-skill-hit.py`) whenever the skill body is loaded. An auto-execute-on-load instruction can be abused to trigger code execution without explicit user intent, and the referenced script is not provided for review (it is not listed in the validator-contract.json hash manifest).
-8. Suspicious interpreter shebang 'python12': The shebang references 'python12', which is not a real Python interpreter name (current versions are 3.x). This could silently fail or, worse, resolve to a maliciously planted binary named 'python12' on PATH. The usage docstring repeats 'python12 main.py'. This is anomalous and could be a typosquat/PATH-hijack vector.
-9. Remote binary download (github.com, not amd.com) later executed: The script downloads a SOPS binary from github.com and subsequently makes it executable and runs it elsewhere. The remote host is github.com, which is not on the amd.com whitelist. This is mitigated by a pinned SHA-256 digest verification (DIGEST) before the binary is used, so it is not a blind curl|sh, but the download origin is not whitelisted and the fetched artifact becomes executable.
-10. Error messages include filesystem/app identifiers: Several ValueError messages embed app names and path-derived details. This is low-risk internal tooling output but could disclose internal app inventory/structure if surfaced to untrusted consumers.
-11. Telemetry beacon to external endpoint: The script detaches a background worker that POSTs skill-usage telemetry (plugin name, version, skill name) to external AMD-hosted endpoints. The destination host is validated to be amd.com or a subdomain, so this is whitelisted per WEB-001 rules, but it constitutes network egress of usage data on skill load. Noting for transparency; origin is on the allowed amd.com domain.
-12. Process re-exec and fork/daemonization: The script re-execs itself via os.execvp and forks/daemonizes a detached background worker (os.fork, os.setsid, closing fds) to perform network POSTs. While used for legitimate async telemetry, the daemonization pattern (detach, setsid, close stdio) resembles persistence/background-process techniques and warrants awareness. Endpoints are restricted to *.amd.com.
-13. Shell command string passed to bsub -E hook: A preflight command string is constructed and passed to bsub via -E. The path is shlex.quoted, mitigating injection. Inputs like lsf_project, build_context, dockerfile, probe_port, and probe_path are validated with case patterns before use. This is defensive and low risk; noted for completeness as untrusted-ish arguments flow into an LSF submission command line.
+1. Non-existent Python interpreter in shebang: The shebang references 'python12', which is not a real interpreter name. While likely a typo or intentional placeholder, a non-existent interpreter would cause the script to fail to execute directly, and a 'python12' shim placed on PATH by an attacker could be invoked instead. This is a minor supply-chain / correctness concern rather than an active exploit.
+2. Hardcoded SHA-256 digest (not a secret): This is a pinned checksum used for integrity verification of the downloaded SOPS binary, not a credential. It is reported only for completeness; pinning a verified digest is a security best practice and this constant is being used correctly to reject mismatched downloads.
+3. Telemetry beacon posts skill-usage data to external endpoint: The script detaches (forks/daemonizes) and POSTs skill-hit telemetry to a remote collector. While the hostnames default to AMD-owned endpoints and are validated against amd.com via _amd(), the beaconing behavior (forking into the background, closing stdio, and silently emitting usage events) runs on every skill load. If SLAI_OTEL_ENDPOINT/SLAI_PLUGINS_ORIGIN point elsewhere, _amd() restricts them to *.amd.com, so exfiltration risk is bounded but the silent telemetry is notable.
+4. Daemonizing fork with setsid and stdio closing for telemetry: The script forks, calls setsid() to detach from the controlling terminal, and closes file descriptors 0/1/2 to run as a background daemon purely to send telemetry. This daemonization/backgrounding behavior exceeds the apparent simple purpose of a skill and could mask activity from the user.
+5. Error handling deliberately bounds disclosure (positive note): The code generally takes care to avoid leaking credentials/tokens in errors and logs (safe_reason, clean, redaction regexes). This is defensive and not a vulnerability, but the verbose status/log handling surfaces internal state codes. Low risk; redaction is applied.
+6. Telemetry posted to external endpoint via detached worker: The script forks a detached background worker, closes stdio, and POSTs skill-usage telemetry (plugin name, version, skill name) to external endpoints. Although the _amd() helper restricts destinations to amd.com/*.amd.com hosts, the detaching/daemonizing behavior combined with silent network POSTs is worth noting. The endpoints are validated to AMD domains, so this is informational rather than a confirmed exfiltration.
+7. Process forking and daemonization with stdio closing: The script forks, calls setsid(), and closes file descriptors 0,1,2 to detach into a background worker. This daemonization pattern is unusual for a skill helper and could mask activity; however it is bounded (single fork, exits 0) and not a fork bomb.
+8. Creates symlinks in ~/.local/bin for tools including go/git: setup-tools.sh links vendor tools (git, lsf_bsub, go) from /tool/pandora64 into ~/.local/bin and prompts the user to add it to PATH. If ~/.local/bin precedes trusted paths, this could shadow system binaries. The targets are fixed vendor paths and symlinks are only created when non-existent, limiting risk.
 
 ---
 

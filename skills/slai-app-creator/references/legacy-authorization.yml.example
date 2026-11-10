@@ -1,0 +1,107 @@
+# TEMPLATE — copy to .github/workflows/authorize-existing-image.yml in the application repository.
+# Canonical: skills/slai-app-creator/assets/templates/authorize-existing-image.yml.example
+#
+# Produce-phase bring-your-own-image release authorization. The developer must build,
+# test, and push the image before running this workflow. GitHub Actions verifies
+# only the existing Harbor manifest; it does not build, pull layers, or push.
+#
+# Required repository variable:
+#   APP_ID — DNS-safe platform application ID (may differ from the GitHub repository name)
+#
+# Required repository secrets for a private Harbor manifest read:
+#   HARBOR_USERNAME, HARBOR_PASSWORD — the existing short-lived Harbor robot
+#
+# Run this workflow from the app repository/ref that is requesting deployment.
+# The image tag remains the developer's build identifier; the signed sourceCommit
+# independently records this authorization workflow's trusted GitHub commit.
+# New supply-chain tags use this reserved format so Harbor can make them
+# immutable without freezing legacy tags:
+#   slai-sc-<full-40-character-commit-sha>-<positive-run-id>-<positive-attempt>
+# In GitHub Actions, build/push with:
+#   slai-sc-${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}
+
+name: Authorize existing Harbor image
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: Existing slai-sc-<full-commit-sha>-<run-id>-<attempt> tag.
+        required: true
+        type: string
+      image_digest:
+        description: "Existing single-platform OCI manifest digest (sha256: plus 64 lowercase hex characters)."
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  authorize:
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    uses: AMD-SLAI/slai-app-platform/.github/workflows/app-image-publish.yml@6d3aaf56c3db7c1d19758c0d3b53ac0d672cd16e
+    with:
+      app_id: ${{ vars.APP_ID }}
+      image_repository: mkmhub.amd.com/hw-slaiapp-dev/${{ vars.APP_ID }}
+      image_tag: ${{ inputs.image_tag }}
+      image_digest: ${{ inputs.image_digest }}
+    secrets:
+      HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
+      HARBOR_PASSWORD: ${{ secrets.HARBOR_PASSWORD }}
+
+  summarize:
+    needs: authorize
+    runs-on: [self-hosted, linux, x64]
+    permissions:
+      contents: read
+    steps:
+      - name: Download proposed policy and release records
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ needs.authorize.outputs.release_artifact_name }}
+          path: release-handoff
+
+      - name: Verify required handoff files
+        run: |
+          set -euo pipefail
+          test -s release-handoff/handoff/image-policy.yaml
+          test -s release-handoff/handoff/image-release.json
+          signed=release-handoff/handoff/image-release.bundle.jsonl
+          for source in release-handoff/offline/attestation-bundle.jsonl release-handoff/image-release.bundle.jsonl; do
+            if [[ -s "$source" ]]; then
+              if [[ -s "$signed" ]]; then cmp -- "$source" "$signed"; else cp -- "$source" "$signed"; fi
+            fi
+          done
+          test -s "$signed"
+          test -s release-handoff/handoff/deployment-image.txt
+          test "$(cat release-handoff/handoff/deployment-image.txt)" = "${{ needs.authorize.outputs.deployment_image }}"
+
+      - name: Retain the complete deployment handoff
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: deployment-handoff-${{ github.run_id }}-${{ github.run_attempt }}
+          path: release-handoff/handoff/
+          if-no-files-found: error
+          retention-days: 45
+
+      - name: Report non-secret authorization result
+        env:
+          IMAGE_REPOSITORY: mkmhub.amd.com/hw-slaiapp-dev/${{ vars.APP_ID }}
+          IMAGE_DIGEST: ${{ needs.authorize.outputs.manifest_digest }}
+          AUTHORIZATION_URL: ${{ needs.authorize.outputs.release_attestation_url }}
+          DEPLOYMENT_IMAGE: ${{ needs.authorize.outputs.deployment_image }}
+          RELEASE_ARTIFACT: deployment-handoff-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          {
+            echo "Authorized image: ${IMAGE_REPOSITORY}@${IMAGE_DIGEST}"
+            echo "Release authorization: ${AUTHORIZATION_URL}"
+            echo "Digest-only deployment image: ${DEPLOYMENT_IMAGE}"
+            echo "Agent handoff: obtain artifact ${RELEASE_ARTIFACT}; copy image-policy.yaml, image-release.json, and image-release.bundle.jsonl together into the deployment bundle."
+            echo "The evidence comes from successful authorization; do not create or edit signed evidence."
+            echo "No image bytes were uploaded to GitHub Actions."
+          } >> "${GITHUB_STEP_SUMMARY}"

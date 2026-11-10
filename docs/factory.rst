@@ -136,5 +136,10 @@ PR publication. Do not start the general service or queue. Keep human merge
 and separately scoped production approval.
 
 Current deployment guidance lives in the ``slai-app-creator`` skill, with
-Harbor-verified digests and hosted submission. Merging an app PR alone is not
+the complete creator asset refreshed through its supported installer. AIPPT's
+existing apex route retains the platform-reviewed ``platform-apex-tls`` binding;
+the application bundle carries no platform TLS ciphertext. Run the current
+helper's offline validation before requesting a live deployment.
+
+The deployment flow requires Harbor-verified digests and hosted submission. Merging an app PR alone is not
 a deployment or rollout proof.

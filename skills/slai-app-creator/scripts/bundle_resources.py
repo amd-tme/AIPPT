@@ -433,6 +433,13 @@ def _resource_errors(files, app_id, allocated_app_ids=None, approved_images=None
                             if file.path.rsplit('/', 1)[-1] == 'tls-policy.json']
             if len(tls_policies) > 1:
                 raise ValueError('duplicate TLS enrollment')
+            baseline_policy = (baseline_files or {}).get('deploy/slai-app-prod/' + app_id + '/tls-policy.json')
+            if baseline_policy is not None:
+                # Omitted files survive the Git tree overlay. Validate against
+                # that authoritative enrollment, never the old legacy allowlist.
+                if tls_policies and json.loads(tls_policies[0]) != json.loads(baseline_policy):
+                    errors.append('Managed TLS enrollment must retain the reviewed platform binding')
+                tls_policies = [baseline_policy]
             errors.extend(ingress_policy.validate_tree(Path('/'), Path(__file__).with_name('ingress-policy.yaml'), Path('/') / app_id,
                           ingress_documents, allocated_app_ids or [], tls_policies[0] if tls_policies else None))
         except (OSError, ValueError, TypeError, KeyError, AttributeError):

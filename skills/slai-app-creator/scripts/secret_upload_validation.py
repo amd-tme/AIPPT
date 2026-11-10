@@ -2,15 +2,17 @@
 """Bounded pre-upload Secret validation; never emit manifest contents."""
 import json
 import sys
+from pathlib import Path
 import yaml
 from ciphertext_validation import check_document, platform_recipients
 from yaml_limits import apply_resource_limits, bounded_loader, MAX_DOCUMENTS
 from keycloak_egress import validate_files
 
 
-def validate(files):
+def validate(files, app_id=None):
     validate_files(files)
     recipients = platform_recipients()
+    ingress_documents = {}
     for item in files:
         name = item['path']
         if not name.endswith(('.yaml', '.yml')):
@@ -32,8 +34,21 @@ def validate(files):
                 if encrypted_file or doc.get('kind') == 'Secret':
                     if not encrypted_file or check_document(doc, recipients):
                         return False
+                if app_id and kind == 'Ingress':
+                    ingress_documents.setdefault(name, []).append(doc)
+                    for entry in doc.get('spec', {}).get('tls', []):
+                        if (entry.get('secretName') == 'slai-app-wildcard-tls'
+                                and app_id not in {'localai', 'llmd-localai', 'localai-router'}):
+                            return False
         finally:
             loader.dispose()
+    if app_id:
+        from ingress_policy import managed_tls_target
+        policies = [item['content'] for item in files if item['path'] == 'tls-policy.json']
+        if len(policies) > 1:
+            return False
+        if policies:
+            managed_tls_target(Path('/') / app_id, ingress_documents, policies[0])
     return True
 
 
@@ -41,7 +56,9 @@ if __name__ == '__main__':
     apply_resource_limits()
     try:
         raw = sys.stdin.buffer.read(8 * 1024 * 1024 + 1)
-        valid = len(raw) <= 8 * 1024 * 1024 and validate(json.loads(raw))
-    except (OSError, ValueError, TypeError, KeyError, yaml.YAMLError, MemoryError, RecursionError):
+        payload = json.loads(raw)
+        valid = len(raw) <= 8 * 1024 * 1024 and (
+            validate(payload['files'], payload['app_id']) if isinstance(payload, dict) else validate(payload))
+    except (OSError, ValueError, TypeError, KeyError, AttributeError, yaml.YAMLError, MemoryError, RecursionError):
         valid = False
     print(json.dumps({'valid': valid}))

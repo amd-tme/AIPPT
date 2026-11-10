@@ -20,7 +20,7 @@
 | Bundled LSF image builder | Trusted-source `linux/amd64` build on native Linux with an authorized project and shared NFS worktree; returns a verified OCI archive without Harbor credentials -- **handoff:** [lsf-build.md](lsf-build.md) |
 | App repo **build-image** script | Local fallback **build only** (no Harbor login) -- **template:** skill **`assets/templates/build-image.sh.example`** |
 | App repo **publish-image-harbor** script | Preferred: validate/load an `IMAGE_BUILD_LSF_JOB_DIR` OCI result and push without rebuilding. Fallback: local Docker/Podman build + push. After push, verifies Harbor manifest bytes against `Docker-Content-Digest` and confirms the manifest is fetchable by digest before writing **`.cache/harbor-last-image.env`**. Discovers Python >=3.12 through `python12`, `python3.12`, or `python3`. -- **template:** skill **`assets/templates/publish-image-harbor.sh.example`** |
-| App repo **authorize-existing-image** workflow | Phase 0 release authorization for an image the developer already pushed. Reads only the Harbor manifest and emits its digest/authorization URL; no build or layer transfer -- **template:** skill **`assets/templates/authorize-existing-image.yml.example`** |
+| Hosted image authorization | The agent runs `scripts/authorize_image.py` to obtain a signed handoff from platform runners; no app-repository runner or Actions secrets are needed. |
 | `.env.example` | Copy to **`.env`** (gitignored) for non-secret **`IMAGE_*`**, **`HARBOR_REGISTRY`**, **`HARBOR_PROJECT`**, **`BUILD_CONTEXT`** -- **template:** skill **`assets/templates/dot-env.harbor.example`** |
 | `docs/publish-image-to-harbor.md` | How to run the publish script |
 | `docs/platform-deploy-github-actions.md` | **Platform deploy** workflow on **`main`** |
@@ -33,7 +33,7 @@
 | `deploy/slai-app-prod/<app_id>/service.yaml` | Handoff **`service.yaml`** |
 | `deploy/slai-app-prod/<app_id>/z-ingress.yaml` | Handoff **`Ingress`** — fixed subdomain host, `/` path, and platform-managed per-app TLS Secret (**SKILL.md §3**) |
 | `deploy/slai-app-prod/<app_id>/secrets.enc.yaml` | SOPS ciphertext -- **commit** (use **`.gitignore`** exception; see **SKILL.md** §0d) so **§4a** can copy it |
-| `.github/workflows/authorize-existing-image.yml` | Authorize an already-pushed Harbor digest -- **`SKILL.md`** §1c |
+| Hosted image authorization | The agent runs `scripts/authorize_image.py` to obtain a signed handoff from platform runners; no app-repository runner or Actions secrets are needed. |
 | `.cache/harbor-last-image.env` | **Gitignored.** After **`publish-image-harbor.sh`**: **`FULL_IMAGE=...`** |
 | `.oci-build/` | **Gitignored.** Owner-only LSF job inputs, results, evidence, and logs; retain deliberately for verification/diagnosis. |
 
