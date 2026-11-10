@@ -20,7 +20,9 @@ def manifests(tmp_path):
     root.mkdir()
     for name in submit.REQUIRED:
         (root / name).write_text(yaml.safe_dump(valid_secret()) if name == "secrets.enc.yaml" else "kind: ConfigMap\n")
-    (root / 'z-ingress.yaml').write_text(yaml.safe_dump({'kind': 'Ingress', 'metadata': {'name': 'my-app'}}))
+    (root / 'z-ingress.yaml').write_text(yaml.safe_dump({'kind': 'Ingress',
+        'metadata': {'name': 'my-app', 'namespace': 'slai-app-prod'},
+        'spec': {'tls': [{'hosts': ['my-app.slai-app.amd.com'], 'secretName': 'my-app-tls'}]}}))
     return root
 
 

@@ -33,8 +33,7 @@ Do **not** tell typical app developers to run **Platform deploy** or cluster wor
 | *Database URL / Postgres / DNS resolution* | **SKILL.md** §0c, **[network-egress.md](network-egress.md)** | Require a complete FQDN in the URL/host field; then allow the database port |
 | *OpenTelemetry* | **[otel-web-semconv.md](otel-web-semconv.md)**, **platform-context.md** § *Observability* | `OTEL_*` in **deployment.yaml** |
 | *PR to slai-app-platform / gh / SSO* | **SKILL.md** | Agent runs hosted `scripts/submit_app.py`; human completes browser sign-in, without platform repository credentials |
-| *Authorize Harbor image / Actions* | **SKILL.md** §1c, **[authorize-existing-image.yml.example](../assets/templates/authorize-existing-image.yml.example)** | Harbor read secrets + `APP_ID`; no platform PR from Actions |
-| *I already pushed an image* / *authorize this Harbor digest* | **SKILL.md** §1, **[authorize-existing-image.yml.example](../assets/templates/authorize-existing-image.yml.example)** | Produce-phase thin caller; verifies the existing tag/digest and emits retained policy/release handoff records without moving image bytes |
+| Authorize an already-published Harbor digest | `scripts/authorize_image.py` and **SKILL.md**, Default workflow | Platform verifies/signs; developer build method is unrestricted; retain the complete signed handoff. |
 | *Something broken after merge* | § *After merge* below, **[guidelines.md](guidelines.md)** § *Troubleshooting* | Browser + health checks; platform team for cluster |
 | *CreateContainerConfigError* / *secret … not found* | **SKILL.md** *Handoff complete gate* item **4**, **[guidelines.md](guidelines.md)** | App-owned refs must match `secrets.enc.yaml`; new apps must not reference the LDAP bind Secret |
 

@@ -353,6 +353,9 @@ def validate_tree(root: Path, policy_path: Path, only_dir: Optional[Path] = None
         seen_routes = set()
         for route in routes:
             key = route.policy_key()
+            if (route.secret_name == 'slai-app-wildcard-tls'
+                    and route.app_id not in {'localai', 'llmd-localai', 'localai-router'}):
+                errors.append(f'{route.label()}: wildcard TLS is retired; preserve the platform-managed dedicated or shared exact-host Secret')
             if managed and route.host == managed['hostname'] and route.secret_name != managed['secret_name']:
                 errors.append(f'{route.label()}: managed app routes must use TLS Secret {managed["secret_name"]!r}')
             identity = (route.host, route.path)

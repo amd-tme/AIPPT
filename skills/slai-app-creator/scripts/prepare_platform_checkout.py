@@ -68,7 +68,7 @@ def validate(path):
 
 
 # Reviewed platform source revision; refresh deliberately with plugin releases.
-PLATFORM_COMMIT = '3d24d6deca664e4c547c9ab18c0720e6ad62c5fd'
+PLATFORM_COMMIT = '8132d30ce647a7e83f81d620085ff16324b586f2'
 PLATFORM_URL = 'https://github.com/AMD-SLAI/slai-app-platform.git'
 
 

@@ -7,7 +7,7 @@ license: Copyright (c) Advanced Micro Devices, Inc., or its affiliates. All righ
   reserved. Portions of this content consists of AI generated content.
 metadata:
   author: ctung
-  version: 0.1.15
+  version: 0.1.22
   category: devops
   tags:
   - harbor
@@ -25,7 +25,7 @@ metadata:
     compliance_risk_score: 24
     waived_compliance_risk_score: 0
     risk_level: LOW
-    scan_date: '2026-11-06T15:17:41+00:00'
+    scan_date: '2026-11-09T21:29:58+00:00'
 compatibility: Primary use is HTTPS web applications on the SLAI app platform; other
   containerized services can follow the same path. Requires browser GitHub sign-in
   for hosted submission (no platform repository credentials), Harbor publish, SOPS/age,
@@ -54,9 +54,13 @@ All certificate ownership uses the platform's `chuck_group` AD group and `SLAI`
 organizational unit; do not ask app owners for certificate groups or notification
 settings. The API-required group email is platform issuance metadata.
 
-Existing apps retain their reviewed certificate bindings until a separate
-migration. Do not convert an existing app's Ingress or copy TLS ciphertext into
-its bundle as part of an ordinary deployment. If the platform returns
+Existing apps must retain their current platform-reviewed certificate bindings
+and `tls-policy.json`. Reconcile an older local bundle with the platform's
+current manifest before resubmitting; updating this plugin does not rewrite
+existing manifests. Never replace a dedicated or shared exact-host Secret with
+`slai-app-wildcard-tls`. Wildcard TLS is retired except for the explicitly
+excluded `localai`, `llmd-localai`, and `localai-router` load-balancer apps.
+Do not copy platform TLS ciphertext into an application bundle. If the platform returns
 `creator_update_required` or HTTP 426, update the complete slai-app-creator plugin,
 restart the agent client, and resume with the current helper. Do not bypass the
 protocol check or manually open an app deployment PR.
@@ -86,6 +90,11 @@ protocol check or manually open an app deployment PR.
 
 ## Default workflow
 
+When the developer supplies an already-published image, reuse it: verify its
+Harbor tag and digest directly, then continue with signed adoption and submission.
+Skip building and publishing. Developers choose their build method; the bundled
+build and publisher paths are available for agents that need to publish an image.
+
 Do not copy the retired app-repository deploy workflow templates. Publish images
 with the developer-owned Harbor identity outside Actions, then use hosted
 submission. The platform deployment coordinator provisions per-app TLS and the
@@ -106,24 +115,45 @@ platform scheduled Action rotates it; app repositories receive no infra API toke
 4. Publish the image to Harbor with the app repository's canonical publisher.
    Follow the selected build path's handoff instructions; the publisher records
    the Harbor image digest for the Deployment.
-5. Require direct destination-manifest verification and retrieval by digest after push; local image `RepoDigests` are not publication evidence. Read `.cache/harbor-last-image.env` and stamp its digest-pinned `FULL_IMAGE`
+5. Require direct destination-manifest verification and retrieval by digest; local image `RepoDigests` are not publication evidence. When the bundled publisher was used, read `.cache/harbor-last-image.env`; otherwise use the directly verified image coordinates. Stamp the digest-pinned `FULL_IMAGE`
    into the Deployment. Keep `IMAGE_TAG` separate for release authorization.
    Use the Harbor manifest digest after push, not an OCI archive checksum or
    local image ID. A standalone push followed by a tag-only manifest edit does
-   not complete publication. Run the app's existing-image authorization workflow
-   when required by its image policy, and retain matching policy/release evidence.
-   Production bundles with additional resources, including a PVC or ConfigMap
-   for a single-image app, need the complete release handoff before upload:
-   `image-policy.yaml`, `image-release.json`, and `image-release.bundle.jsonl`.
-   The agent obtains these from a successful existing-image authorization run
-   and copies all three together from the same successful run and attempt. Prefer
-   the complete handoff. For older runs, recover the original signed bytes from
-   `offline/attestation-bundle.jsonl` (GitHub.com) or `image-release.bundle.jsonl`
-   at the download root (GHE). Reject conflicting copies. The image lives in
-   Harbor and the reviewed manifests and evidence live in the platform repository.
-   For a known legacy app with no local receipt, submit for hosted validation
-   of every workload and init-container image against the reviewed baseline.
-   A partial handoff must be completed before submission.
+   not complete publication.
+   Request signed adoption through the hosted platform using
+   `scripts/authorize_image.py <owned-bundle-directory> --app-id <app_id>
+   --source-repository <owner/repo> --source-repository-id <numeric-id>
+   --source-commit <full-commit> --image-tag <published-tag>
+   --image-digest <verified-sha256-digest>`. The platform records the authenticated
+   developer’s adoption and runs
+   manifest verification and signing on platform runners. Source coordinates
+   are developer declarations; no repository allowlist or platform source access
+   is required. Obtain the repository ID using the developer’s own GitHub access.
+   App teams do not configure runners, copy authorization workflows,
+   or add Harbor secrets to GitHub Actions. Developers may build and publish
+   however they choose; the platform does not build or inspect image layers.
+   The source commit identifies the authorized application revision, not a
+   platform assertion about how the image was built. Any valid published OCI tag
+   is accepted by this platform path; the digest is the deployment identity.
+   Save the authorization ID and its idempotency key. After an uncertain response,
+   retry identical intent with the same key; while pending, resume with
+   `--authorization-id <id>`. Never dispatch another run to resolve a timeout.
+   The helper saves `image-policy.yaml`, `image-release.json`, and
+   `image-release.bundle.jsonl` together, preserving signed bytes and refusing
+   conflicting existing evidence. Hosted submission verifies the signature and
+   every workload image again. Do not fabricate a handoff or fall back to an
+   app-repository Action if the endpoint is unavailable;
+   give the platform agent the authorization ID and app/source context.
+   Team members may authorize new releases or submit a teammate's complete signed
+   handoff. Requester identity is signed attribution for that release, not exclusive
+   app ownership. Use the platform signer; keep the signed handoff unchanged.
+   For a shared image, authorize it for the consuming app ID with
+   `--image-repository mkmhub.amd.com/hw-slaiapp-dev/<image-repository>` and its
+   existing tag and digest. Source context describes the image's application
+   revision. The platform signs a fresh consumer binding; an owner's handoff
+   retains its original app ID and cannot substitute for this receipt.
+   For a known legacy app with no local receipt, hosted validation can verify
+   every workload and init-container image against its reviewed baseline.
 6. For an enabled `auth-policy.json` (Keycloak SSO in either mode), run
    `scripts/keycloak_egress.py <bundle-directory> --apply`. This adds only missing
    configured SSO destination IPs on TCP 443, preserving existing rules and selectors.
@@ -237,7 +267,7 @@ Read the applicable reference when its topic is in scope:
 - `scripts/ensure-sops.sh` resolves SOPS; `scripts/encrypt-secrets-yaml.sh`
   is an optional Linux helper.
 - `assets/templates/` contains the application manifests, Harbor publisher,
-  authorization workflow, and `.env.example` templates. Copy the Harbor
+  and `.env.example` templates. Copy the Harbor
   publisher template into the app repository as `scripts/publish-image-harbor.sh`.
 
 From the platform repository root, validate with:

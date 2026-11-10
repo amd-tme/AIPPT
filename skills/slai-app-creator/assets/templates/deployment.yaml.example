@@ -1,0 +1,118 @@
+# Example — replace placeholders before PR. metadata.namespace must match the handoff path:
+#   metadata.namespace must match deploy/<namespace>/<app_id>/ (default: slai-app-prod).
+# Local testing: patch-k8s-manifests-for-slai-env.sh (namespace, Ingress host, SLAI_*); CI applies YAML as committed.
+# Browser SSO: add auth-policy.json; do not add per-app Okta settings or a
+# sidecar image here. The platform reconciler renders the gateway sidecar.
+# Keep service.yaml namespace in sync with this file.
+#
+# app.kubernetes.io/name on the pod template MUST equal the bundle directory name
+# (deploy/slai-app-prod/<app_id>/). Object metadata.name may differ. Enrollment
+# NetworkPolicy <app_id>-auth-proxy selects that label; a mismatch 504s in default-deny.
+#
+# Hardening: run as UID/GID 65534 (nobody/nogroup), read-only root filesystem where possible,
+# drop capabilities, RuntimeDefault seccomp, emptyDir for /tmp. See references/guidelines.md.
+# Add more emptyDir mounts for any other writable paths your image requires (e.g. nginx often
+# needs /var/cache/nginx, /run). Python/uv images: prefer chown /app to 65534 + USER in Dockerfile;
+# if Podman/overlay rejects chown (invalid argument), omit USER in the image and keep app files
+# world-readable — this block still enforces non-root at runtime. Set UV_NO_CACHE=1 if uv must
+# not write under $HOME/.cache.
+#
+# Egress: if the app reaches MySQL, APIs, etc., add NetworkPolicy with explicit ports — see
+# networkpolicy.yaml.example and references/network-egress.md (whitelist egress: DNS + OTLP :4317 for http://atlvslaiapp03:4317 + each downstream).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: YOUR_DEPLOYMENT_NAME
+  namespace: slai-app-prod
+  labels:
+    app.kubernetes.io/name: YOUR_APP_ID
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: YOUR_APP_ID
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: YOUR_APP_ID
+    spec:
+      automountServiceAccountToken: false
+      # ALTERNATE HARBOR: leave commented for the default flow. When alternate
+      # Harbor requires pull auth, the web-app developer owns this pull-only
+      # kubernetes.io/dockerconfigjson Secret in secrets.enc.yaml.
+      # imagePullSecrets:
+      #   - name: YOUR_APP_NAME-harbor-pull
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        fsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: app
+          # Exact digest-only reference emitted by the image authorizer.
+          # Platform default shown. Alternate hostname/project needs no approval,
+          # but every check and ongoing maintenance is owned by the web-app developer.
+          image: mkmhub.amd.com/hw-slaiapp-dev/YOUR_IMAGE@sha256:YOUR_64_LOWERCASE_HEX_DIGEST
+          # Per-replica starting requests; tune from measured usage. No CPU/memory limits.
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          ports:
+            - containerPort: 8080
+          # OpenTelemetry — inject by default (see skills/slai-app-creator/references/platform-context.md § OpenTelemetry). Opt out only if agreed with platform.
+          env:
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://atlvslaiapp03:4317"
+            - name: OTEL_SERVICE_NAME
+              value: YOUR_APP_NAME
+            # With platform forward-auth, the application consumes only trusted
+            # X-SLAI-* headers injected by the rendered loopback gateway. It does
+            # not implement an Okta/OIDC callback or receive OAuth credentials.
+            # Optional: deployment.environment=production|development, service.namespace=...
+            # - name: OTEL_RESOURCE_ATTRIBUTES
+            #   value: "deployment.environment=development,service.namespace=slai-app-prod"
+            # POSIX-group / point is-member checks may use the standard anonymous
+            # LDAPS profile below. Leave bind DN/password unset; never create an
+            # empty credential Secret. Validate the server certificate and use
+            # the signed-in NTID only from trusted platform SSO headers.
+            # - name: LDAP_URL
+            #   value: "ldaps://ldap.amd.com:636"
+            # - name: LDAP_BASE_DN
+            #   value: "dc=amdldap,dc=com"
+            # - name: LDAP_PEOPLE_BASE_DN
+            #   value: "ou=People,dc=amdldap,dc=com"
+            # - name: LDAP_POSIX_GROUPS_BASE_DN
+            #   value: "ou=UnixGroups,ou=Groups,dc=amdldap,dc=com"
+            # Complete direct-and-transitive AD membership instead uses
+            # auth-policy.json ldapGroups enrollment and the platform resolver
+            # after its readiness gate. Never mount slai-shared-ldap-bind.
+          # Do not hand-add the platform auth-proxy container, its image, or its
+          # generated client/session Secret. auth-policy.json is the source of
+          # enrollment intent; platform reconciliation owns the rendered fields.
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 15
+      volumes:
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 64Mi

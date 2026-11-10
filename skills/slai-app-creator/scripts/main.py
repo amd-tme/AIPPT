@@ -421,12 +421,12 @@ def _reviewed_legacy_deployment(document, path, app_id):
 def _bundle_resource_errors(document, path, app_id=None):
     """Fence resources whose security validators are bound to canonical filenames."""
     canonical = {
-        "deployment.yaml": ("apps/v1", "Deployment"),
-        "service.yaml": ("v1", "Service"),
-        "z-ingress.yaml": ("networking.k8s.io/v1", "Ingress"),
-        "networkpolicy.yaml": ("networking.k8s.io/v1", "NetworkPolicy"),
-        "image-policy.yaml": ("slai.amd.com/v1alpha2", "AppImagePolicy"),
-        "cli-auth-policy.yaml": ("slai.amd.com/v1alpha1", "PlatformCliAuthPolicy"),
+        "deployment.yaml": (("apps/v1",), "Deployment"),
+        "service.yaml": (("v1",), "Service"),
+        "z-ingress.yaml": (("networking.k8s.io/v1",), "Ingress"),
+        "networkpolicy.yaml": (("networking.k8s.io/v1",), "NetworkPolicy"),
+        "image-policy.yaml": (("slai.amd.com/v1alpha2", "slai.amd.com/v1alpha3"), "AppImagePolicy"),
+        "cli-auth-policy.yaml": (("slai.amd.com/v1alpha1",), "PlatformCliAuthPolicy"),
     }
     if not isinstance(document, dict):
         return [f"{path}: expected one supported resource mapping"]
@@ -448,7 +448,7 @@ def _bundle_resource_errors(document, path, app_id=None):
 
     expected = canonical.get(path.name)
     if expected is not None:
-        if (api, kind) != expected:
+        if api not in expected[0] or kind != expected[1]:
             return [f"{path}: resource apiVersion/kind must match the canonical bundle filename"]
         if kind in ('AppImagePolicy', 'PlatformCliAuthPolicy'):
             return []

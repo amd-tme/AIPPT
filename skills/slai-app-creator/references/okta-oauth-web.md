@@ -46,15 +46,46 @@ tokens in the default mode.
 
 The backend may consume only identity headers injected by the trusted sidecar:
 
-- `X-SLAI-Subject`
-- `X-SLAI-NTID`
-- `X-SLAI-Email` when verified and present
-- `X-SLAI-Name` when present
-- `X-SLAI-Issuer`
-- `X-SLAI-Auth-Time` when present
+| Header | Value |
+|---|---|
+| `X-SLAI-Subject` | Stable opaque account subject |
+| `X-SLAI-Issuer` | Validated issuer; use `(issuer, subject)` as the account key |
+| `X-SLAI-NTID` | Validated employee login ID, when present |
+| `X-SLAI-Name-UTF8` | Optional display name, percent-encoded UTF-8 |
+| `X-SLAI-Email-UTF8` | Optional profile email, percent-encoded UTF-8 |
+| `X-SLAI-Name` | Optional display name, present only when Latin-1-compatible |
+| `X-SLAI-Email` | Optional profile email, present only when Latin-1-compatible |
+| `X-SLAI-Auth-Time` | Authentication time, when present |
 
-Never trust browser-supplied copies of those headers. Do not add manual NGINX
-`auth-*` annotations, callback routes, or a parent-domain session cookie.
+For name and email, prefer the corresponding `-UTF8` header when present.
+Percent-decode exactly once, then decode the resulting bytes as UTF-8. This is
+not form encoding: spaces use `%20`, literal plus signs use `%2B`, and literal
+percent signs use `%25`. For example, `大和 太郎` is delivered as
+`%E5%A4%A7%E5%92%8C%20%E5%A4%AA%E9%83%8E`. Do not use a form decoder that turns
+plus signs into spaces. In Python, use
+`urllib.parse.unquote_to_bytes(value).decode("utf-8", errors="strict")`; in
+JavaScript, use `decodeURIComponent(value)`. Treat malformed encoding as a
+missing display/contact value, never as a different account identity.
+
+Updated proxies send the `-UTF8` headers for every present, nonempty name/email
+claim, including ASCII and Latin-1 values. If a new header is absent, fall back
+to its legacy header for compatibility with older proxies. All four profile
+headers are optional; provide a missing-value fallback and never use a display
+name or email as an authorization key. Encoding does not establish email
+verification; applications requiring verified email must use the platform's
+approved verification contract. Original token/session claims retain Unicode.
+
+Existing app images can continue consuming the legacy headers unchanged.
+Adopting the new headers requires an application code update for complete
+Unicode display. The platform rolls out the updated proxy through Pod
+replacement, preserving the application image and policy. An older app may
+show its missing-name fallback when only the UTF-8 name header is available.
+
+Never trust browser-supplied copies of those headers. The sidecar strips all
+incoming `X-SLAI-*` fields, then injects verified identity on the protected
+backend path. Original claims containing control characters are rejected
+before encoding or backend contact. Do not add manual NGINX `auth-*`
+annotations, callback routes, or a parent-domain session cookie.
 
 ## Sidecar image lifecycle
 

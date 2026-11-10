@@ -73,8 +73,12 @@ def test_keycloak_retains_reviewed_routes_but_rejects_added_root(tmp_path, monke
     entries=[e for e in snapshot['grandfathered_routes'] if e['app_id']=='platform-sso-keycloak']
     backend={'service':{'name':'platform-sso-keycloak','port':{'number':80}}}
     routes=[policy.Route(*(e[k] for k in ('app_id','file','host','path','secret_name')),e['path_type'],backend,False) for e in entries]
+    # Exercise path restrictions on the migrated exact-host binding.
+    routes=[route._replace(secret_name='platform-sso-keycloak-tls') for route in routes]
     directory=tmp_path/'platform-sso-keycloak'; directory.mkdir()
     monkeypatch.setattr(policy,'collect_routes',lambda *a:(routes,[]))
+    monkeypatch.setattr(policy,'managed_tls_target',lambda *a: {
+        'hostname': 'sso.slai-app.amd.com', 'secret_name': 'platform-sso-keycloak-tls'})
     assert policy.validate_tree(tmp_path,ROOT/'scripts/ingress-policy.yaml',directory,allocated_app_ids={'platform-sso-keycloak'})==[]
     routes.append(policy.Route('platform-sso-keycloak','z-ingress.yaml','platform-sso-keycloak.slai-app.amd.com','/','slai-app-wildcard-tls','Prefix',backend,False))
     assert any('explicitly reviewed route' in e for e in policy.validate_tree(tmp_path,ROOT/'scripts/ingress-policy.yaml',directory,allocated_app_ids={'platform-sso-keycloak'}))

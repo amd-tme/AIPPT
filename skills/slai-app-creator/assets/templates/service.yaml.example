@@ -1,0 +1,25 @@
+# Example — selector must match Deployment pod template labels.
+#
+# Agent / author responsibility:
+#   Set metadata.namespace to the platform namespace in the handoff path:
+#     deploy/slai-app-prod/<app_id>/  ->  namespace: slai-app-prod
+#   Platform deploy applies manifests as committed; namespace in YAML must match the path (slai-app-prod only in this skill).
+#
+# Platform SSO: keep the committed Service application-only. For an enrolled
+# forward-auth app, the reconciler renders the Service target to the generated
+# gateway listener. Do not handwire a sidecar port or image here.
+apiVersion: v1
+kind: Service
+metadata:
+  name: YOUR_SERVICE_NAME
+  namespace: slai-app-prod
+  labels:
+    app.kubernetes.io/name: YOUR_APP_NAME
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: YOUR_APP_NAME
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
