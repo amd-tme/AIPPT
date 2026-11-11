@@ -1924,7 +1924,7 @@ async def create_deck_stream(
                 uploads_dir, _short_id, _base_name, project_root
             )
             try:
-                llm = _make_llm_client(request, operation="create", model_override=model, user_ntid=ntid)
+                llm = _make_llm_client(request, operation="enhance", model_override=model, user_ntid=ntid)
             except ValueError as exc:
                 event_q.put(("error", {"message": str(exc)}))
                 return None
@@ -2009,7 +2009,7 @@ async def create_deck_stream(
             script_path = re.sub(r'\.mjs$', '.py', script_path)
 
             try:
-                llm = _make_llm_client(request, operation="create", model_override=model, user_ntid=ntid)
+                llm = _make_llm_client(request, operation="enhance", model_override=model, user_ntid=ntid)
             except ValueError as exc:
                 event_q.put(("error", {"message": str(exc)}))
                 return None

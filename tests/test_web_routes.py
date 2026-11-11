@@ -353,7 +353,7 @@ class TestCreateDeckEndpoint:
             "/api/decks/create",
             data={
                 "outline_text": "# Test\n## Slide 1: Hello\n- World\n",
-                "enhance": "false",
+                "enhance": "false", "engine": "python-pptx",
             },
             headers={"Authorization": "Bearer tok"},
         )
@@ -386,7 +386,7 @@ class TestCreateDeckEndpoint:
 
         resp = client.post(
             "/api/decks/create",
-            data={"enhance": "false"},
+            data={"enhance": "false", "engine": "python-pptx"},
             files={"outline_file": ("outline.md", md_content, "text/markdown")},
             headers={"Authorization": "Bearer tok"},
         )
@@ -410,7 +410,7 @@ class TestCreateDeckEndpoint:
         md_content = "# Saved\n## Slide 1: Check\n- Content\n"
         resp = client.post(
             "/api/decks/create",
-            data={"outline_text": md_content, "enhance": "false"},
+            data={"outline_text": md_content, "enhance": "false", "engine": "python-pptx"},
             headers={"Authorization": "Bearer tok"},
         )
         assert resp.status_code == 200
@@ -454,7 +454,7 @@ class TestCreateDeckEndpoint:
         md_content = "# Image Test\n## Slide 1: Photo\nIMAGE: imgs/photo.png\n- Caption\n"
         resp = client.post(
             "/api/decks/create",
-            data={"outline_text": md_content, "enhance": "false"},
+            data={"outline_text": md_content, "enhance": "false", "engine": "python-pptx"},
             files=[("image_files", ("photo.png", test_png, "image/png"))],
             headers={"Authorization": "Bearer tok"},
         )
@@ -498,7 +498,7 @@ class TestCreateDeckEndpoint:
         with patch.object(pipeline_module, 'run_pipeline', side_effect=spy_run_pipeline):
             resp = client.post(
                 "/api/decks/create",
-                data={"outline_text": "# Test\n## Slide 1: Hi\n- OK\n", "enhance": "false"},
+                data={"outline_text": "# Test\n## Slide 1: Hi\n- OK\n", "enhance": "false", "engine": "python-pptx"},
                 headers={"Authorization": "Bearer tok"},
             )
 
@@ -576,7 +576,7 @@ class TestCreateDeckHardening:
     def test_missing_bearer_returns_401(self, client, template_setup):
         resp = client.post(
             "/api/decks/create",
-            data={"outline_text": "# T\n## S1\n- x\n", "enhance": "false"},
+            data={"outline_text": "# T\n## S1\n- x\n", "enhance": "false", "engine": "python-pptx"},
         )
         assert resp.status_code == 401
         assert "sign-in" in resp.json()["error"].lower() or \
@@ -585,7 +585,7 @@ class TestCreateDeckHardening:
     def test_basic_auth_is_rejected(self, client, template_setup):
         resp = client.post(
             "/api/decks/create",
-            data={"outline_text": "# T\n## S1\n- x\n", "enhance": "false"},
+            data={"outline_text": "# T\n## S1\n- x\n", "enhance": "false", "engine": "python-pptx"},
             headers={"Authorization": "Basic dXNlcjpwYXNz"},
         )
         assert resp.status_code == 401
@@ -601,7 +601,7 @@ class TestCreateDeckHardening:
         }
         resp = client.post(
             "/api/decks/create",
-            data={"outline_text": "# T\n## S1\n- x\n", "enhance": "false"},
+            data={"outline_text": "# T\n## S1\n- x\n", "enhance": "false", "engine": "python-pptx"},
             headers={
                 "Authorization": "Bearer tok",
                 "X-AIPPT-NTID": "melliott",
@@ -624,7 +624,7 @@ class TestCreateDeckHardening:
         }
         resp = client.post(
             "/api/decks/create",
-            data={"outline_text": "# T\n## S1\n- x\n", "enhance": "false"},
+            data={"outline_text": "# T\n## S1\n- x\n", "enhance": "false", "engine": "python-pptx"},
             headers={"Authorization": "Bearer tok"},
         )
         assert resp.status_code == 200
@@ -642,7 +642,7 @@ class TestCreateDeckHardening:
         )
         resp = client.post(
             "/api/decks/create",
-            data={"outline_text": "# T\n## S1\n- x\n", "enhance": "false"},
+            data={"outline_text": "# T\n## S1\n- x\n", "enhance": "false", "engine": "python-pptx"},
             headers={"Authorization": "Bearer tok"},
         )
         assert resp.status_code == 200  # SSE always 200
@@ -754,7 +754,7 @@ class TestNtidValidation:
             return
         resp = client.post(
             "/api/decks/create",
-            data={"outline_text": "# T\n## S1\n- x\n", "enhance": "false"},
+            data={"outline_text": "# T\n## S1\n- x\n", "enhance": "false", "engine": "python-pptx"},
             headers={
                 "Authorization": "Bearer tok",
                 "X-AIPPT-NTID": bad,
@@ -779,7 +779,7 @@ class TestNtidValidation:
             resp = client.post(
                 "/api/decks/create",
                 data={"outline_text": "# T\n## S1\n- x\n",
-                      "enhance": "false"},
+                      "enhance": "false", "engine": "python-pptx"},
                 headers={
                     "Authorization": "Bearer tok",
                     "X-AIPPT-NTID": good,

@@ -202,7 +202,7 @@ class TestRoutesPassImagesDirToIngest:
         }
         resp = tc.post(
             "/api/decks/create",
-            data={"outline_text": "# T\n## S1\n- x\n", "enhance": "false"},
+            data={"outline_text": "# T\n## S1\n- x\n", "enhance": "false", "engine": "python-pptx"},
             headers={"Authorization": "Bearer tok"},
         )
         _ = resp.text  # drain SSE
