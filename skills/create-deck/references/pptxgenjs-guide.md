@@ -52,7 +52,8 @@ async function buildDeck() {
   addBulletSlide(deck, "Overview", ["Point 1", "Point 2"], sn++);
   addClosingSlide(deck, sn);
 
-  await deck.save('output/deck.pptx');
+  const outDir = process.env.AIPPT_PREVIEW_OUT || 'output';
+  await deck.save(`${outDir}/deck.pptx`);
 }
 
 buildDeck().catch(console.error);
@@ -74,7 +75,7 @@ These cause **silent file corruption** — PowerPoint will try to repair or refu
 |---------|-------|---------|
 | Hex color prefix | `"#00B4D8"` | `"00B4D8"` |
 | 8-char hex (opacity) | `"00B4D880"` | Use `opacity` property instead |
-| Reusing shadow objects | `const s = {...}; shape1({shadow: s}); shape2({shadow: s})` | Use `cardShadow()` factory from helpers |
+| Reusing shadow objects | `const s = {...}; shape1({shadow: s}); shape2({shadow: s})` | Use the `cardShadow(deck.theme)` factory from helpers |
 | Rounded rect + borders | `ROUNDED_RECTANGLE` with accent border | Use `RECTANGLE` instead |
 
 ### Additional Gotchas
@@ -91,13 +92,13 @@ These cause **silent file corruption** — PowerPoint will try to repair or refu
 |---------|---------|-------------|
 | `rotate` on text | Rotation doesn't render reliably across LibreOffice and PowerPoint — vertical text becomes garbled or mispositioned | Use a thin rect shape or dot row for vertical decoration; keep all text horizontal |
 | All-white SI icons | Simple Icons are designed with brand colors — white versions lose recognition value entirely | Use the actual hex brand color from simpleicons.org |
-| Reusing `cardShadow` objects | Still a corruption risk even with named pattern | Always use the `cardShadow()` factory function from the helper library |
+| Reusing `cardShadow` objects | Still a corruption risk even with named pattern | Always use the `cardShadow(deck.theme)` factory function from the helper library |
 
 ## Helper Library API
 
 All slide builders accept a `deck` object returned by `createDeck()`. The deck bundles `pptx`, `theme`, and `layout` so callers don't juggle multiple arguments.
 
-### createDeck(themePath)
+### createDeck(themePath, opts?)
 
 Creates a new deck with theme and layout computed from a YAML file.
 
@@ -108,6 +109,8 @@ const deck = createDeck('themes/amd.yaml');
 // deck.layout — computed geometry: { M, CONTENT_W, CONTENT_Y, FOOTER_Y, CONTENT_H, RIGHT_EDGE }
 // deck.save(outputPath) — async, writes file and prints size
 ```
+
+- `opts.useSlideMaster` — render on the theme's slide masters (default `false`)
 
 **Theme colors available via `deck.theme.colors`:**
 
@@ -255,7 +258,7 @@ function addIconRows(pptx, title, items, iconImages, theme) {
     }
   });
 
-  addFooter(slide, pptx, theme, slideNum, TOTAL);
+  addFooter(slide, slideNum, theme);
   return slide;
 }
 ```
@@ -352,7 +355,7 @@ function addTwoColumnWithLogos(pptx, title, leftHeader, rightHeader, leftContent
 
 2x2 or 2x3 card grid with accent bars and optional icons.
 
-- `cards` — Array of `{ title, body, iconImg? }` objects
+- `cards` — Array of `{ title, body, accent?, iconImg? }` objects (`accent` = hex colour for the bar)
 - `notes` — Optional speaker notes string
 - ≤4 cards → 2-column layout; 5-6 → 3-column layout
 - Each card has surface background, left accent bar (rotating colors), shadow
@@ -362,7 +365,7 @@ function addTwoColumnWithLogos(pptx, title, leftHeader, rightHeader, leftContent
 
 Large colored numbers with labels.
 
-- `stats` — Array of `{ value, label, desc? }` objects
+- `stats` — Array of `{ value, label, desc?, color? }` objects (1-4)
 - `notes` — Optional speaker notes string
 - `value` renders at 48pt in accent color
 - Columns auto-calculate width: `CONTENT_W / stats.length`
@@ -450,6 +453,25 @@ function addSectionDividerConservative(pptx, title, theme, slideNum) {
 }
 ```
 
+### Corporate layouts (AMD template matches)
+
+Argument order matters — several of these differ from the helpers above.
+
+| Helper | Arguments |
+|---|---|
+| `addTitleAlt(deck, title, subtitle, slideNum)` | Clean title card, wordmark right; no notes arg (chain `.addNotes()`) |
+| `addSectionContent(deck, sectionTitle, bullets, slideNum, notes?)` | `bullets` — `string[]` (never a plain string) |
+| `addTwoColNumbered(deck, sectionTitle, items, slideNum, notes?)` | `items` — `string[]`; the helper numbers them |
+| `addThreeColContent(deck, title, columns, slideNum, notes?)` | `columns` — exactly 3 `{ heading, body }` |
+| `addThreeColImageText(deck, title, columns, slideNum, notes?)` | `columns` — 3 `{ heading, imagePath?, body }` |
+| `addPictureCaption(deck, title, imagePath, caption, slideNum, notes?)` | `caption` — string |
+| `addTwoImageGallery(deck, title, items, slideNum, notes?)` | `items` — exactly 2 `{ imagePath?, caption }` |
+| `addThreeImageGallery(deck, title, items, slideNum, notes?)` | `items` — 3 `{ imagePath?, caption }` |
+| `addFourImageGallery(deck, title, items, slideNum, notes?)` | `items` — exactly 4 `{ imagePath?, caption }` |
+| `addCinematicSlide(deck, title, imagePath, slideNum, notes?)` | No subtitle argument |
+| `addSplitImageContent(deck, title, bullets, imagePath, slideNum, notes?)` | `bullets` comes **before** `imagePath` |
+| `addTitleWithImage(deck, title, subtitle, imagePath, slideNum)` | No notes arg (chain `.addNotes()`) |
+
 ### Shared slide patterns
 
 Additive helpers used by both the LLM engine and the no-LLM engine. A
@@ -502,12 +524,12 @@ Add slide number and logo to a slide. Called automatically by all slide builders
 - `opts.suppressNumber` — Omit slide number (default: false)
 - Use both suppress flags on the closing slide
 
-### cardShadow()
+### cardShadow(theme)
 
 Factory function returning a fresh shadow object. **Never reuse shadow objects** — pptxgenjs mutates them in place.
 
 ```javascript
-slide.addShape(pptx.ShapeType.rect, { shadow: cardShadow() });
+slide.addShape(pptx.ShapeType.rect, { shadow: cardShadow(deck.theme) });
 ```
 
 ## Icon Integration
@@ -797,7 +819,8 @@ async function buildDeck() {
   // Closing
   addClosingSlide(deck, sn);
 
-  await deck.save('output/infra-overview.pptx');
+  const outDir = process.env.AIPPT_PREVIEW_OUT || 'output';
+  await deck.save(`${outDir}/infra-overview.pptx`);
 }
 
 buildDeck().catch(console.error);

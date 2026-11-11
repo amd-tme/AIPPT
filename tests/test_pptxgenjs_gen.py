@@ -212,3 +212,114 @@ def test_prompt_helper_signatures_match_library():
         assert name in actual, f"prompt documents unknown helper {name}"
         assert params == actual[name], (
             f"{name}: prompt says ({', '.join(params)}), library has ({', '.join(actual[name])})")
+
+
+# ---------------------------------------------------------------------------
+# Retry context, truncation, render repair
+# ---------------------------------------------------------------------------
+
+def _fenced(script: str) -> str:
+    return f"```javascript\n{script}\n```"
+
+
+def test_retry_prompt_includes_previous_script(tmp_path):
+    client = MagicMock()
+    client.generate_text.side_effect = [_fenced(_BAD_SCRIPT), _fenced(_GOOD_SCRIPT)]
+    generate_script(_OUTLINE, str(tmp_path / "d.mjs"), client)
+    second_prompt = client.generate_text.call_args_list[1].kwargs["prompt"]
+    assert "Your previous script" in second_prompt
+    assert "eval('pwned')" in second_prompt
+
+
+def test_truncated_response_is_retried(tmp_path):
+    client = MagicMock()
+    cut = "```javascript\n" + _GOOD_SCRIPT.split("await deck.save")[0]
+    client.generate_text.side_effect = [cut, _fenced(_GOOD_SCRIPT)]
+    generate_script(_OUTLINE, str(tmp_path / "d.mjs"), client)
+    second_prompt = client.generate_text.call_args_list[1].kwargs["prompt"]
+    assert "cut off" in second_prompt
+    assert client.generate_text.call_count == 2
+
+
+def _render_results(*successes):
+    from aippt.preview import RenderResult
+    return [
+        RenderResult(success=True, pptx_path="out.pptx") if ok else
+        RenderResult(success=False, stderr_tail="SyntaxError: Unexpected identifier 's'")
+        for ok in successes
+    ]
+
+
+def test_render_failure_is_repaired_with_stderr(tmp_path):
+    from aippt.pptxgenjs_gen import generate_and_render
+    client = MagicMock()
+    fixed = _GOOD_SCRIPT.replace("An overview", "A fixed overview")
+    client.generate_text.side_effect = [_fenced(_GOOD_SCRIPT), _fenced(fixed)]
+    renderer = MagicMock()
+    renderer.render.side_effect = _render_results(False, True)
+    out = tmp_path / "d.mjs"
+
+    result = generate_and_render(_OUTLINE, str(out), client, renderer, str(tmp_path))
+
+    assert result.success
+    repair_prompt = client.generate_text.call_args_list[1].kwargs["prompt"]
+    assert "SyntaxError: Unexpected identifier" in repair_prompt
+    assert "Your previous script" in repair_prompt
+    assert "A fixed overview" in out.read_text()
+
+
+def test_repairs_are_bounded(tmp_path):
+    from aippt.pptxgenjs_gen import generate_and_render
+    client = MagicMock()
+    client.generate_text.return_value = _fenced(_GOOD_SCRIPT)
+    renderer = MagicMock()
+    renderer.render.side_effect = _render_results(False, False, False)
+
+    result = generate_and_render(_OUTLINE, str(tmp_path / "d.mjs"), client, renderer,
+                                 str(tmp_path), max_repairs=2)
+
+    assert not result.success
+    assert renderer.render.call_count == 3
+    assert client.generate_text.call_count == 3
+
+
+def test_successful_first_render_makes_one_llm_call(tmp_path):
+    from aippt.pptxgenjs_gen import generate_and_render
+    client = _make_client(_GOOD_SCRIPT)
+    renderer = MagicMock()
+    renderer.render.side_effect = _render_results(True)
+    result = generate_and_render(_OUTLINE, str(tmp_path / "d.mjs"), client, renderer, str(tmp_path))
+    assert result.success and client.generate_text.call_count == 1
+
+
+# ---------------------------------------------------------------------------
+# Worked example embedded in the prompt
+# ---------------------------------------------------------------------------
+
+def test_prompt_example_is_valid_and_embedded():
+    from aippt.pptxgenjs_gen import _EXAMPLE_SCRIPT, _SYSTEM_PROMPT
+    from aippt.pptxgenjs_validate import validate_script
+    assert validate_script(_EXAMPLE_SCRIPT) == (True, [])
+    assert _EXAMPLE_SCRIPT in _SYSTEM_PROMPT
+    assert "{example}" not in _SYSTEM_PROMPT
+
+
+def test_prompt_example_renders(tmp_path):
+    import shutil
+    from aippt.preview import Renderer
+    from aippt.web.routes import _stage_render_workspace
+    from aippt.pptxgenjs_gen import _EXAMPLE_SCRIPT
+
+    root = Path(__file__).resolve().parents[1]
+    if not shutil.which("node") or Renderer(project_root=str(root))._find_node_modules() is None:
+        pytest.skip("node / node_modules not available")
+    job_id = f"pytest-example-{tmp_path.name}"
+    try:
+        script, out_dir = _stage_render_workspace(str(root / "uploads"), job_id, "example", str(root))
+        Path(script).write_text(_EXAMPLE_SCRIPT, encoding="utf-8")
+        result = Renderer(project_root=str(root)).render(script, out_dir)
+        assert result.success, result.stderr_tail
+        from pptx import Presentation
+        assert len(Presentation(result.pptx_path).slides) == 9
+    finally:
+        shutil.rmtree(root / "uploads" / job_id, ignore_errors=True)

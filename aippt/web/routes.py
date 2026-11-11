@@ -1917,7 +1917,7 @@ async def create_deck_stream(
             # use_llm=False is the free "no-LLM" engine: same script format,
             # workspace, render and catalog path, but rule-based generation.
             if use_llm:
-                from aippt.pptxgenjs_gen import generate_script, ScriptGenerationError
+                from aippt.pptxgenjs_gen import generate_and_render, ScriptGenerationError
             else:
                 from aippt.pptxgenjs_direct import generate_script, ScriptGenerationError
             from aippt.preview import Renderer
@@ -1939,23 +1939,34 @@ async def create_deck_stream(
                     event_q.put(("error", {"message": str(exc)}))
                     return None
 
+            renderer = Renderer(project_root=project_root)
             try:
-                generate_script(
-                    outline_text=md_text,
-                    output_script_path=script_path,
-                    theme="amd",
-                    progress_callback=create_progress,
-                    **gen_kwargs,
-                )
+                if use_llm:
+                    # Render inside the generator so Node errors get repaired
+                    render_result = generate_and_render(
+                        outline_text=md_text,
+                        output_script_path=script_path,
+                        renderer=renderer,
+                        out_dir=render_out_dir,
+                        theme="amd",
+                        progress_callback=create_progress,
+                        **gen_kwargs,
+                    )
+                else:
+                    generate_script(
+                        outline_text=md_text,
+                        output_script_path=script_path,
+                        theme="amd",
+                        progress_callback=create_progress,
+                    )
             except ScriptGenerationError as exc:
                 event_q.put(("error", {"message": str(exc)}))
                 return None
 
             persist_file(request.app.state, script_path)
-            create_progress("render", "Executing script…")
-
-            renderer = Renderer(project_root=project_root)
-            render_result = renderer.render(script_path, render_out_dir)
+            if not use_llm:
+                create_progress("render", "Executing script…")
+                render_result = renderer.render(script_path, render_out_dir)
             if not render_result.success:
                 msg = render_result.stderr_tail or "Script render failed (no .pptx produced)"
                 event_q.put(("error", {"message": msg}))

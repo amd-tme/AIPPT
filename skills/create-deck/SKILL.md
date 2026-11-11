@@ -134,7 +134,7 @@ Matches the actual `corp.pptx` template output — extremely minimalist. Content
 - **Content fills the slide** — do NOT cap bullet height at 70% of content area. Let content determine height; pptxgenjs clips naturally.
 - **Footer** — plain slide number bottom-left, AMD wordmark bottom-right. No separator line. **Suppress the footer logo on the closing slide** — it already shows the large centered wordmark.
 - **Title slide** — AMD arrow logo (left half), title text (right), logo+tagline (bottom-right). **Logo asset must be transparent PNG or exact background color match** — JPGs with dark navy/blue backgrounds create a visible rectangle against pure black slides.
-- **Closing slide** — large centered AMD wordmark. Call `addFooter` with both logo and slide number suppressed: `addFooter(slide, slideNum, { suppressLogo: true, suppressNumber: true })`. No chrome on the closing card.
+- **Closing slide** — large centered AMD wordmark. Call `addFooter` with both logo and slide number suppressed: `addFooter(slide, slideNum, deck.theme, { suppressLogo: true, suppressNumber: true })`. No chrome on the closing card.
 - **Column headers** — white, bold, centered. NOT colored (no teal/gold headers).
 
 #### Rich Visual Mode (opt-in)

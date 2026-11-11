@@ -28,6 +28,60 @@ class ScriptGenerationError(Exception):
 # System prompt — embeds Critical Rules + Layout Decision Strategy
 # ---------------------------------------------------------------------------
 
+_EXAMPLE_SCRIPT = """\
+import { createDeck, cardShadow, addTitleSlide, addAgendaSlide, addCardGrid,
+  addStatCallout, addTableSlide, addProcessFlow, addQuoteSlide, addRoadmapSlide,
+  addClosingSlide } from '../lib/pptxgenjs-helpers.mjs';
+
+const deck = await createDeck('themes/amd.yaml');
+
+// ═══ Slide 1: Faster Inference on MI300X ═══
+addTitleSlide(deck, `Faster Inference on MI300X`, `What changed and what's next`, 1);
+
+// ═══ Slide 2: Agenda ═══
+addAgendaSlide(deck, `Agenda`, [`Why it matters`, `Results`, `How it works`, `Roadmap`], 2,
+  `Four parts, about ten minutes.`);
+
+// ═══ Slide 3: Why It Matters ═══
+addCardGrid(deck, `Why It Matters`, [
+  { title: `Memory`, body: `192 GB HBM3 fits 70B models on one GPU.`, shadow: cardShadow(deck.theme) },
+  { title: `Cost`, body: `Fewer GPUs per replica lowers serving cost.`, shadow: cardShadow(deck.theme) },
+  { title: `Open`, body: `ROCm runs today's PyTorch and vLLM stacks.`, shadow: cardShadow(deck.theme) },
+], 3, `Lead with memory capacity — it's the headline difference.`);
+
+// ═══ Slide 4: Results ═══
+addStatCallout(deck, `Results`, [
+  { value: `2.1x`, label: `Throughput`, desc: `vs. last release` },
+  { value: `-38%`, label: `Latency`, desc: `p95, batch 32` },
+], 4, `Numbers from the internal benchmark run.`);
+
+// ═══ Slide 5: Configurations Tested ═══
+addTableSlide(deck, `Configurations Tested`, [`Model`, `GPUs`, `Tokens/s`],
+  [[`Llama 3 70B`, `1`, `2,450`], [`Mixtral 8x7B`, `1`, `3,900`]], 5,
+  `Same driver and container for every row.`,
+  { takeaway: `One GPU now serves a 70B model.`, source: `Source: internal benchmarks` });
+
+// ═══ Slide 6: How It Works ═══
+addProcessFlow(deck, `How It Works`, [`Quantize\nFP8 weights`, `Shard\nTensor parallel`, `Serve\nvLLM on ROCm`], 6,
+  `Walk left to right.`);
+
+// ═══ Slide 7: Customer Quote ═══
+addQuoteSlide(deck, `We cut our serving fleet in half without touching the model code.`,
+  `Jane Doe, VP Engineering`, 7, `Use with permission only.`);
+
+// ═══ Slide 8: Roadmap ═══
+addRoadmapSlide(deck, `Roadmap`, [
+  { heading: `Q1`, items: [`FP8 by default`] },
+  { heading: `Q2`, items: [`Multi-node serving`, `Speculative decoding`] },
+], 8, `Dates are targets, not commitments.`);
+
+// ═══ Slide 9: Thank You ═══
+addClosingSlide(deck, 9, `Questions?`);
+
+const outDir = process.env.AIPPT_PREVIEW_OUT || 'output';
+await deck.save(`${outDir}/faster-inference-on-mi300x.pptx`);
+"""
+
 _SYSTEM_PROMPT = """\
 You are an expert slides-as-code generator for AIPPT. Your job is to read a
 markdown presentation outline and produce a complete, runnable pptxgenjs .mjs
@@ -38,13 +92,13 @@ script that uses the AIPPT helper library.
 createDeck(themePath, opts?)           — initialise deck, returns deck object
 addTitleSlide(deck, title, subtitle, slideNum)
 addTitleAlt(deck, title, subtitle, slideNum)           — alternate title layout
-addBulletSlide(deck, title, bullets, slideNum, notes)
-addTwoColumn(deck, title, leftHeader, rightHeader, leftItems, rightItems, slideNum, notes, opts?)
+addBulletSlide(deck, title, bullets, slideNum, notes)   — bullets=string[] or {text, subs: string[]}
+addTwoColumn(deck, title, leftHeader, rightHeader, leftItems, rightItems, slideNum, notes, opts?)   — items=string[]
 addTwoColNumbered(deck, sectionTitle, items, slideNum, notes)   — items=string[]; the helper numbers them (don't add "1.")
-addCardGrid(deck, title, cards, slideNum, notes)
-addStatCallout(deck, title, stats, slideNum, notes)
+addCardGrid(deck, title, cards, slideNum, notes)   — cards=[{title, body, accent?, iconImg?}] × 2-6
+addStatCallout(deck, title, stats, slideNum, notes)   — stats=[{value, label, desc?, color?}] × 1-4
 addProcessFlow(deck, title, steps, slideNum, notes)
-addIconRowsSlide(deck, title, items, iconImages, slideNum, notes)
+addIconRowsSlide(deck, title, items, iconImages, slideNum, notes)   — items=[{label, desc}]
 addLogoGridSlide(deck, title, items, iconImages, brandColors, slideNum, notes?)
   — partner/ecosystem logo grid; items=[{name, description}], iconImages=preRendered[], brandColors=hex[]
 addImageSlide(deck, title, imagePath, slideNum, notes, opts?)
@@ -109,6 +163,8 @@ const outDir = process.env.AIPPT_PREVIEW_OUT || 'output';
 await deck.save(`${outDir}/<sanitized-title>.pptx`);
 ```
 
+{example}
+
 ## Critical Rules — violating these corrupts the PPTX file
 
 - NEVER use `#` prefix on hex colors → use '00C2DE' not '#00C2DE'
@@ -116,8 +172,10 @@ await deck.save(`${outDir}/<sanitized-title>.pptx`);
 - NEVER reuse option objects (especially shadows) → always call cardShadow(deck.theme)
 - ALWAYS use `bullet: true` instead of unicode bullet characters
 - ALWAYS use `breakLine: true` between text array items
-- ALWAYS use `pptx.layout = "LAYOUT_WIDE"` — NEVER use LAYOUT_16x9
-- ALWAYS define safe-area constants: SW=13.33, SH=7.5 — validate all positions
+- createDeck() already sets LAYOUT_WIDE (13.33" × 7.5") — never set pptx.layout yourself, and never use LAYOUT_16x9
+- Build every slide with the helpers above — no raw deck.pptx.addSlide() / addText() calls
+- Write slide text in backtick template literals (`...`) so apostrophes like `today's` can't break the string
+- Call each helper with exactly the arguments in its signature, in that order
 - ALWAYS add a slide marker comment before each slide: // ═══ Slide N: Title ═══
 - ALWAYS save to `process.env.AIPPT_PREVIEW_OUT || 'output'` — NEVER hardcode 'output/' alone
 - NEVER use eval(), Function(), child_process, fs, net, http, setTimeout, setInterval
@@ -187,7 +245,8 @@ Add this block to the notes string of every slide:
 
 Respond with ONLY the .mjs script inside a ```javascript code fence and nothing else.
 Do not include any explanation, preamble, or text outside the code fence.
-"""
+""".replace("{example}", "## Complete example (correct calls, backtick text)\n\n```javascript\n"
+            + _EXAMPLE_SCRIPT + "```")
 
 
 # ---------------------------------------------------------------------------
@@ -204,6 +263,86 @@ def _extract_code_block(text: str) -> str:
     """Strip surrounding ```javascript fences from LLM output."""
     m = _CODE_FENCE_RE.search(text)
     return m.group(1).strip() if m else text.strip()
+
+
+def _truncation_reasons(raw: str, script: str) -> list[str]:
+    """Catch responses cut off by max_tokens — they can still look valid."""
+    reasons = []
+    if "```" in raw and not _CODE_FENCE_RE.search(raw):
+        reasons.append("the response was cut off (no closing code fence) — "
+                       "write a shorter script with fewer, tighter notes")
+    if ".save(" not in script:
+        reasons.append("the script never calls deck.save(...) — it must end by saving the deck")
+    return reasons
+
+
+def _with_previous(base_prompt: str, script: str, intro: str, problems: list[str]) -> str:
+    """Build a fix-up prompt that shows the model its own previous script."""
+    return (
+        base_prompt
+        + "\n\nYour previous script:\n```javascript\n" + script + "\n```\n\n"
+        + intro + "\n"
+        + "\n".join(f"- {p}" for p in problems)
+        + "\n\nReturn the complete corrected script, changing only what is needed."
+    )
+
+
+def _base_prompt(outline_text: str, theme: str) -> str:
+    return (
+        f"Generate a pptxgenjs .mjs script for the following presentation outline.\n"
+        f"Theme: {theme}\n\n"
+        f"---\n{outline_text.strip()}\n---\n\n"
+        "Output ONLY the script inside a ```javascript code fence."
+    )
+
+
+def _generate_valid(
+    base_user_prompt: str,
+    first_prompt: str,
+    llm_client,
+    max_retries: int,
+    progress_callback: Optional[Callable[[str, str], None]],
+    label: str,
+) -> str:
+    """Call the LLM until a script passes validation; raise after max_retries."""
+    user_prompt = first_prompt
+    last_reasons: list[str] = []
+    for attempt in range(max_retries):
+        if progress_callback:
+            if attempt == 0:
+                progress_callback("generate", label)
+            else:
+                progress_callback(
+                    "generate",
+                    f"Retry {attempt}/{max_retries - 1}: {last_reasons[0] if last_reasons else 'validation failed'}",
+                )
+
+        raw = llm_client.generate_text(
+            prompt=user_prompt,
+            system_prompt=_SYSTEM_PROMPT,
+            max_tokens=12000,
+        )
+
+        script = _extract_code_block(raw)
+        ok, last_reasons = validate_script(script)
+        last_reasons = _truncation_reasons(raw, script) + last_reasons
+        if not last_reasons:
+            if progress_callback:
+                progress_callback("generate", f"Script validated ({len(script)} chars)")
+            return script
+
+        # Feed the failures and the script itself back so the model can make
+        # targeted fixes rather than regenerating from scratch.
+        user_prompt = _with_previous(
+            base_user_prompt, script,
+            "It failed these checks — fix each one exactly, keeping everything else the same:",
+            last_reasons,
+        )
+
+    reasons_str = "; ".join(last_reasons[:3])
+    raise ScriptGenerationError(
+        f"Script failed validation after {max_retries} attempt(s): {reasons_str}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -246,51 +385,53 @@ def generate_script(
     ScriptGenerationError
         When the script fails validation after all retries.
     """
-    base_user_prompt = (
-        f"Generate a pptxgenjs .mjs script for the following presentation outline.\n"
-        f"Theme: {theme}\n\n"
-        f"---\n{outline_text.strip()}\n---\n\n"
-        "Output ONLY the script inside a ```javascript code fence."
-    )
+    base = _base_prompt(outline_text, theme)
+    script = _generate_valid(base, base, llm_client, max_retries,
+                             progress_callback, "Generating pptxgenjs script…")
+    Path(output_script_path).write_text(script, encoding="utf-8")
+    return script
 
-    user_prompt = base_user_prompt
-    last_reasons: list[str] = []
-    for attempt in range(max_retries):
+
+def generate_and_render(
+    outline_text: str,
+    output_script_path: str,
+    llm_client,
+    renderer,
+    out_dir: str,
+    theme: str = "amd",
+    max_retries: int = 3,
+    max_repairs: int = 2,
+    progress_callback: Optional[Callable[[str, str], None]] = None,
+):
+    """Generate a script, render it, and repair it if Node rejects it.
+
+    Validation can't catch every runtime error (bad JS syntax, a helper
+    throwing on malformed data), so on a failed render the script and the
+    tail of Node's stderr go back to the LLM for up to *max_repairs* rounds.
+
+    Returns the last ``RenderResult`` — check ``.success``. Raises
+    ``ScriptGenerationError`` if a (re)generated script fails validation.
+    """
+    base = _base_prompt(outline_text, theme)
+    script = generate_script(outline_text, output_script_path, llm_client,
+                             theme, max_retries, progress_callback)
+    for repair in range(max_repairs + 1):
         if progress_callback:
-            if attempt == 0:
-                progress_callback("generate", "Generating pptxgenjs script…")
-            else:
-                progress_callback(
-                    "generate",
-                    f"Retry {attempt}/{max_retries - 1}: {last_reasons[0] if last_reasons else 'validation failed'}",
-                )
-
-        raw = llm_client.generate_text(
-            prompt=user_prompt,
-            system_prompt=_SYSTEM_PROMPT,
-            max_tokens=12000,
+            progress_callback("render", "Executing script…")
+        result = renderer.render(output_script_path, out_dir)
+        if result.success or repair == max_repairs:
+            return result
+        error = (result.stderr_tail or "no .pptx was produced").strip()
+        first_line = error.splitlines()[-1] if error else ""
+        if progress_callback:
+            progress_callback("generate", f"Repair {repair + 1}/{max_repairs}: {first_line[:160]}")
+        prompt = _with_previous(
+            base, script,
+            "It passed validation but crashed when run with Node. Error output:\n"
+            f"```\n{error[-3000:]}\n```\nFix the cause:",
+            ["fix the error above (check quoting, brackets and helper arguments)"],
         )
-
-        script = _extract_code_block(raw)
-        ok, last_reasons = validate_script(script)
-
-        if ok:
-            Path(output_script_path).write_text(script, encoding="utf-8")
-            if progress_callback:
-                progress_callback("generate", f"Script validated ({len(script)} chars)")
-            return script
-
-        # Feed the specific validation failures back into the next attempt so
-        # the model can correct them, rather than blindly regenerating.
-        user_prompt = (
-            base_user_prompt
-            + "\n\nYour previous attempt failed these checks — fix each one exactly, "
-            "keeping everything else the same:\n"
-            + "\n".join(f"- {r}" for r in last_reasons)
-        )
-
-    # All retries exhausted
-    reasons_str = "; ".join(last_reasons[:3])
-    raise ScriptGenerationError(
-        f"Script failed validation after {max_retries} attempt(s): {reasons_str}"
-    )
+        script = _generate_valid(base, prompt, llm_client, max_retries,
+                                 progress_callback, "Repairing script…")
+        Path(output_script_path).write_text(script, encoding="utf-8")
+    return result
