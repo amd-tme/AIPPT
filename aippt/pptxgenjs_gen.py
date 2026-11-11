@@ -40,7 +40,7 @@ addTitleSlide(deck, title, subtitle, slideNum)
 addTitleAlt(deck, title, subtitle, slideNum)           — alternate title layout
 addBulletSlide(deck, title, bullets, slideNum, notes)
 addTwoColumn(deck, title, leftHeader, rightHeader, leftItems, rightItems, slideNum, notes, opts?)
-addTwoColNumbered(deck, title, leftHeader, rightHeader, leftItems, rightItems, slideNum, notes)
+addTwoColNumbered(deck, sectionTitle, items, slideNum, notes)   — items=string[]; the helper numbers them (don't add "1.")
 addCardGrid(deck, title, cards, slideNum, notes)
 addStatCallout(deck, title, stats, slideNum, notes)
 addProcessFlow(deck, title, steps, slideNum, notes)
@@ -49,20 +49,35 @@ addLogoGridSlide(deck, title, items, iconImages, brandColors, slideNum, notes?)
   — partner/ecosystem logo grid; items=[{name, description}], iconImages=preRendered[], brandColors=hex[]
 addImageSlide(deck, title, imagePath, slideNum, notes, opts?)
 addImageBulletsSlide(deck, title, imagePath, bullets, slideNum, notes)
-addTitleWithImage(deck, title, imagePath, slideNum, notes)
-addSplitImageContent(deck, title, imagePath, bullets, slideNum, notes)
+addTitleWithImage(deck, title, subtitle, imagePath, slideNum)   — no notes argument; chain .addNotes(notes)
+addSplitImageContent(deck, title, bullets, imagePath, slideNum, notes)   — bullets BEFORE imagePath
 addCodeSlide(deck, title, code, slideNum, notes)
 addSectionDivider(deck, sectionNumber, title, slideNum)
-addSectionContent(deck, title, bullets, slideNum, notes)  — bullets MUST be an array of strings, never a plain string
-addCinematicSlide(deck, title, subtitle, imagePath, slideNum, notes)
-addThreeColContent(deck, title, col1Header, col2Header, col3Header, col1Items, col2Items, col3Items, slideNum, notes)
-addThreeColImageText(deck, title, items, slideNum, notes)   — items=[{image, header, body}]
-addTwoImageGallery(deck, title, img1, img2, cap1, cap2, slideNum, notes)
-addThreeImageGallery(deck, title, img1, img2, img3, cap1, cap2, cap3, slideNum, notes)
-addFourImageGallery(deck, title, images, captions, slideNum, notes)
+addSectionContent(deck, sectionTitle, bullets, slideNum, notes)  — bullets MUST be an array of strings, never a plain string
+addCinematicSlide(deck, title, imagePath, slideNum, notes)
+addThreeColContent(deck, title, columns, slideNum, notes)   — columns=[{heading, body}] × exactly 3; body is a string
+addThreeColImageText(deck, title, columns, slideNum, notes)   — columns=[{heading, imagePath?, body}] × 3
+addTwoImageGallery(deck, title, items, slideNum, notes)     — items=[{imagePath?, caption}] × exactly 2
+addThreeImageGallery(deck, title, items, slideNum, notes)   — items=[{imagePath?, caption}] × 3
+addFourImageGallery(deck, title, items, slideNum, notes)    — items=[{imagePath?, caption}] × exactly 4
 addPictureCaption(deck, title, imagePath, caption, slideNum, notes)
 addClosingSlide(deck, slideNum, notes)
 cardShadow(theme)                      — shadow factory (never reuse objects)
+
+Shared slide patterns (a one-line takeaway is the slide's key message, drawn
+in accent colour under the title):
+addTakeawaySlide(deck, title, takeaway, points, slideNum, notes)
+  — points = string[] or {text, subs: string[]}; "**Lead** — rest" bolds the lead
+addTableSlide(deck, title, header, rows, slideNum, notes, opts?)
+  — header=string[] (or null), rows=string[][]; opts={takeaway?, source?}
+    (source = footnote, e.g. 'Source: AMD spec sheets'); best with ≤10 rows, ≤6 columns
+addAgendaSlide(deck, title, items, slideNum, notes, opts?)
+  — items=string[] (≤10); opts={current?: 1-based index to highlight}
+addQuoteSlide(deck, quote, attribution, slideNum, notes)
+  — attribution without a leading dash, e.g. 'Jane Doe, CTO'
+addRoadmapSlide(deck, title, columns, slideNum, notes, opts?)
+  — columns=[{heading, items: string[]}] × 2-6 (heading = Q1 / 2026 / Phase 1); opts={takeaway?}
+addDisclaimerSlide(deck, title, text, slideNum, notes)   — small-print legal text (string)
 
 Optional: import { masterNameFor } from '../lib/pptxgenjs-masters.mjs'
 
@@ -131,6 +146,12 @@ Map each slide's content to the best layout:
 | 2-4 named items / features / use cases | addCardGrid |
 | Prominent number or statistic | addStatCallout |
 | Code blocks or CLI commands | addCodeSlide |
+| Markdown table / spec or feature comparison grid | addTableSlide (keep every cell; never invent values) |
+| Slide with a `> ` blockquote line + supporting points | addTakeawaySlide (the blockquote is the takeaway) |
+| Agenda / contents / outline of the deck | addAgendaSlide |
+| Customer or analyst quote (`> quote` + attribution) | addQuoteSlide |
+| Roadmap / timeline / milestones by quarter, year or phase | addRoadmapSlide |
+| Legal disclaimer / notices / attributions | addDisclaimerSlide |
 | Two contrasting topics / compare | addTwoColumn |
 | Numbered two-column list | addTwoColNumbered |
 | Sequential steps or process (3-6 items) | addProcessFlow |
@@ -150,6 +171,7 @@ Variety Rule: NEVER use the same layout on two consecutive slides.
 Substitution: if you would use addBulletSlide twice in a row, use addCardGrid, addTwoColumn, addThreeColContent, or addProcessFlow instead.
 Preference: addBulletSlide is the LAST RESORT — always prefer richer layouts when the content fits.
 Gallery preference: for 2 images use addTwoImageGallery; for 3 use addThreeImageGallery; for 4+ use addFourImageGallery.
+Takeaways: when the outline gives a `> ` line on a table or roadmap slide, pass it as opts.takeaway. On any other layout that can't show it, put it first in the speaker notes — never drop it.
 
 ## Speaker Notes Metadata
 

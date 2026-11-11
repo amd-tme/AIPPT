@@ -87,7 +87,7 @@ Read the [pptxgenjs guide](references/pptxgenjs-guide.md) for complete API refer
 3. **Decide layouts** — For each slide, analyze content and choose a layout using the Layout Decision Strategy (see below). Apply the **variety rule**: never repeat the same layout on consecutive slides.
 
 4. **Generate script** — Write a Node.js ES module (`.mjs`) that imports from the helper library:
-   - `import { createDeck, addTitleSlide, addBulletSlide, addImageSlide, addImageBulletsSlide, addProcessFlow, addTwoColumn, addCardGrid, addStatCallout, addCodeSlide, addIconRowsSlide, addSectionDivider, addClosingSlide, addFooter, renderIconSvg, iconToBase64, preRenderIcons, cardShadow, SW, SH, addTitleAlt, addSectionContent, addTwoColNumbered, addPictureCaption, addFourImageGallery, addThreeColContent, addThreeColImageText, addThreeImageGallery, addTwoImageGallery, addCinematicSlide, addSplitImageContent, addTitleWithImage } from '../lib/pptxgenjs-helpers.mjs';`
+   - `import { createDeck, addTitleSlide, addBulletSlide, addImageSlide, addImageBulletsSlide, addProcessFlow, addTwoColumn, addCardGrid, addStatCallout, addCodeSlide, addIconRowsSlide, addSectionDivider, addClosingSlide, addFooter, renderIconSvg, iconToBase64, preRenderIcons, cardShadow, SW, SH, addTitleAlt, addSectionContent, addTwoColNumbered, addPictureCaption, addFourImageGallery, addThreeColContent, addThreeColImageText, addThreeImageGallery, addTwoImageGallery, addCinematicSlide, addSplitImageContent, addTitleWithImage, addTakeawaySlide, addTableSlide, addAgendaSlide, addQuoteSlide, addRoadmapSlide, addDisclaimerSlide } from '../lib/pptxgenjs-helpers.mjs';`
    - Call `createDeck('themes/<theme>.yaml')` — returns a `deck` object with `pptx`, `theme`, and `layout` already configured. When `--slide-master` is specified, use `createDeck('themes/<theme>.yaml', { useSlideMaster: true })` to enable slide masters (chrome inherited from master, not baked per-slide).
    - Use slide builder functions: `addBulletSlide(deck, title, bullets, slideNum, notes)`, `addProcessFlow(deck, title, steps, slideNum)`, etc.
    - Pre-render icons with `preRenderIcons({ name: { component, color } })` or individual `iconToBase64(renderIconSvg(Icon, 256, color))`
@@ -228,6 +228,12 @@ Analyze each slide's content for signals that map to layout types:
 | Dramatic section opener, quote, or transition | `addCinematicSlide()` — full-bleed image + centered title | N/A |
 | Hardware/product visual + bullet feature list | `addSplitImageContent()` — image left, bullets right | N/A |
 | Product name + image at equal visual weight | `addTitleWithImage()` — large title left, image right | N/A |
+| `> ` blockquote line + supporting points | `addTakeawaySlide()` — accent takeaway under the title, points below | N/A |
+| Markdown table / spec or feature comparison | `addTableSlide()` — native table; `opts.takeaway`, `opts.source` footnote | N/A |
+| Agenda / contents slide | `addAgendaSlide()` — numbered rows; `opts.current` highlights one section | N/A |
+| Customer or analyst quote (`> quote` + `— Name, Role`) | `addQuoteSlide()` — large quote + attribution | N/A |
+| Roadmap / timeline by quarter, year or phase | `addRoadmapSlide()` — milestones on a timeline; `opts.takeaway` | N/A |
+| Legal disclaimer / notices | `addDisclaimerSlide()` — small-print text | N/A |
 
 ### Layout Variety Rule
 
@@ -269,6 +275,12 @@ If the outline contains explicit directives, they override the auto-detection:
 - `LAYOUT: cinematic` → full-bleed image + centered title (`addCinematicSlide`)
 - `LAYOUT: split_image_content` → image left + bullets right (`addSplitImageContent`)
 - `LAYOUT: title_with_image` → large title left + image right (`addTitleWithImage`)
+- `LAYOUT: takeaway` → takeaway line + points (`addTakeawaySlide`)
+- `LAYOUT: table` → native table (`addTableSlide`)
+- `LAYOUT: agenda` → numbered agenda (`addAgendaSlide`)
+- `LAYOUT: quote` → large quote + attribution (`addQuoteSlide`)
+- `LAYOUT: roadmap` → timeline of milestones (`addRoadmapSlide`)
+- `LAYOUT: disclaimer` → small-print legal text (`addDisclaimerSlide`)
 
 **Two-column header extraction (pptxgenjs):** When `LAYOUT: two_column | Left Header | Right Header` appears, parse the pipe-separated headers and pass them to `addTwoColumn()`:
 

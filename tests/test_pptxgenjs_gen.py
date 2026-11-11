@@ -186,3 +186,29 @@ def test_theme_included_in_prompt(tmp_path):
     kwargs = client.generate_text.call_args.kwargs
     prompt_arg = kwargs.get("prompt", "")
     assert "instinct" in prompt_arg
+
+
+def test_prompt_helper_signatures_match_library():
+    """Every helper the LLM prompt documents exists with the same parameters, in order.
+
+    Guards against the prompt drifting from lib/pptxgenjs-helpers.mjs (wrong
+    argument lists make the LLM write calls that render broken slides).
+    """
+    import re
+    from pathlib import Path
+    from aippt.pptxgenjs_gen import _SYSTEM_PROMPT
+
+    lib = (Path(__file__).resolve().parents[1] / "lib" / "pptxgenjs-helpers.mjs").read_text()
+
+    def names(params):
+        return [p.split("=")[0].strip() for p in params.split(",") if p.strip()]
+
+    actual = {m.group(1): names(m.group(2)) for m in re.finditer(
+        r"^export (?:async )?function (\w+)\(([^)]*)\)", lib, re.M)}
+    documented = {m.group(1): [p.rstrip("?") for p in names(m.group(2))]
+                  for m in re.finditer(r"^(\w+)\(([\w\s,?]*)\)", _SYSTEM_PROMPT, re.M)}
+    assert len(documented) >= 30
+    for name, params in documented.items():
+        assert name in actual, f"prompt documents unknown helper {name}"
+        assert params == actual[name], (
+            f"{name}: prompt says ({', '.join(params)}), library has ({', '.join(actual[name])})")

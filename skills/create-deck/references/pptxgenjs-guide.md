@@ -450,6 +450,42 @@ function addSectionDividerConservative(pptx, title, theme, slideNum) {
 }
 ```
 
+### Shared slide patterns
+
+Additive helpers used by both the LLM engine and the no-LLM engine. A
+*takeaway* is the slide's one-line key message, drawn in the accent colour
+under the title (the 30-3-30 "so what").
+
+### addTakeawaySlide(deck, title, takeaway, points, slideNum, notes?)
+
+- `takeaway` — One sentence (outline: a `> ` line)
+- `points` — Array of strings or `{ text, subs: string[] }`; `**Lead** — rest` bolds the lead-in
+
+### addTableSlide(deck, title, header, rows, slideNum, notes?, opts?)
+
+- `header` — `string[]` or `null`; `rows` — `string[][]`
+- `opts.takeaway` — Line above the table; `opts.source` — footnote (e.g. `'Source: AMD spec sheets'`)
+- First column bold; numeric columns right-aligned; font shrinks with row count (best ≤10 rows, ≤6 columns)
+
+### addAgendaSlide(deck, title, items, slideNum, notes?, opts?)
+
+- `items` — Up to 10 strings, numbered `01`, `02`, …
+- `opts.current` — 1-based index to highlight (others dimmed) when reusing the agenda between sections
+
+### addQuoteSlide(deck, quote, attribution, slideNum, notes?)
+
+- `attribution` — Without a leading dash (`'Jane Doe, CTO'`); the helper adds `— `
+- Quote font shrinks for long quotes
+
+### addRoadmapSlide(deck, title, columns, slideNum, notes?, opts?)
+
+- `columns` — 2-6 `{ heading, items: string[] }` (heading = `Q1`, `2026`, `Phase 1`)
+- `opts.takeaway` — Optional line under the title
+
+### addDisclaimerSlide(deck, title, text, slideNum, notes?)
+
+- `text` — Legal / notice text (use `\n` between paragraphs); small type
+
 ### addClosingSlide(deck, slideNum, notes?)
 
 Centered wordmark, no footer.
