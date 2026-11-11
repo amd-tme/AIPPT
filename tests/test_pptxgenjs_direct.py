@@ -346,3 +346,154 @@ def test_three_col_content_directive():
     script = _build_script(_deck("# Pillars\nLAYOUT: three_col_content\n**A**\n- a\n**B**\n- b\n**C**\n- c"))
     assert _calls(script)[1] == "addThreeColContent"
     assert "heading: 'B', body: 'b'" in script
+
+
+# ---------------------------------------------------------------------------
+# Shared slide patterns (Phase 2)
+# ---------------------------------------------------------------------------
+
+def test_takeaway_line_with_points_uses_takeaway_slide():
+    script = _build_script(_deck(
+        "# Why Now\n> Memory is the bottleneck.\n- **Size** — models are huge\n- **Cost** — TCO matters"))
+    assert _calls(script)[1] == "addTakeawaySlide"
+    call = _slide_call(script, 2)
+    assert "'Memory is the bottleneck.'" in call
+    assert "'**Size** — models are huge'" in call
+    assert validate_script(script)[0]
+
+
+def test_takeaway_goes_to_notes_when_layout_cannot_show_it():
+    script = _build_script(_deck("# Steps\nLAYOUT: numbered\n> Ship weekly.\n1. Plan\n2. Build\n3. Ship"))
+    call = _slide_call(script, 2)
+    assert call.startswith("// ═══ Slide 2") and "addProcessFlow(" in call
+    assert "Ship weekly." in call.split("`", 3)[-1]  # in the notes argument
+
+
+def test_markdown_table_becomes_table_slide_with_takeaway_and_source():
+    script = _build_script(_deck(
+        "# Compare\n> B wins.\n| Spec | A | B |\n|---|:-:|---:|\n| Mem | 1 GB | 2 GB |\n"
+        "| BW | 3 | 4 |\nSource: spec sheets"))
+    assert _calls(script)[1] == "addTableSlide"
+    call = _slide_call(script, 2)
+    assert "['Spec', 'A', 'B']" in call
+    assert "['Mem', '1 GB', '2 GB']" in call and "['BW', '3', '4']" in call
+    assert "takeaway: 'B wins.'" in call and "source: 'Source: spec sheets'" in call
+    assert "|---" not in script
+    assert validate_script(script)[0]
+
+
+def test_table_without_separator_has_no_header():
+    script = _build_script(_deck("# Grid\n| a | b |\n| c | d |"))
+    assert "addTableSlide(deck, `Grid`, null," in script
+
+
+def test_table_with_bullets_is_split_in_author_order():
+    script = _build_script(_deck("# Data\n- first point\n- second point\n| h1 | h2 |\n|---|---|\n| x | y |"))
+    calls = _calls(script)
+    assert len(calls) == 3 and calls[2] == "addTableSlide"
+    assert "first point" in _slide_call(script, 2) and "first point" not in _slide_call(script, 3)
+
+
+def test_quote_slide_with_attribution_line():
+    script = _build_script(_deck("# Voice\n> It just worked.\n— Jane, CTO"))
+    assert _calls(script)[1] == "addQuoteSlide"
+    assert "addQuoteSlide(deck, 'It just worked.', 'Jane, CTO'," in script
+
+
+def test_quote_slide_attribution_inside_blockquote():
+    script = _build_script(_deck("# Voice\n> It just worked.\n> — Jane, CTO"))
+    assert "addQuoteSlide(deck, 'It just worked.', 'Jane, CTO'," in script
+
+
+def test_agenda_title_uses_agenda_slide():
+    script = _build_script(_deck("# Agenda\n- Intro\n- Results\n- Next steps"))
+    assert _calls(script)[1] == "addAgendaSlide"
+    assert "'Results'" in _slide_call(script, 2)
+
+
+def test_roadmap_from_period_headings():
+    script = _build_script(_deck("# What's Coming\n**Q1**\n- Alpha\n**Q2**\n- Beta\n- Gamma\n**Q3**\n- GA"))
+    assert _calls(script)[1] == "addRoadmapSlide"
+    assert "{ heading: 'Q2', items: ['Beta', 'Gamma'] }" in script
+
+
+def test_roadmap_title_with_many_groups_is_not_split():
+    groups = "\n".join(f"**Phase {i}**\n- a{i}\n- b{i}\n- c{i}" for i in range(1, 6))
+    script = _build_script(_deck(f"# Product Roadmap\n{groups}"))
+    assert _calls(script)[1:] == ["addRoadmapSlide"]
+
+
+def test_disclaimer_title_uses_disclaimer_slide():
+    script = _build_script(_deck("# Disclaimer\nThis is subject to change.\nAll rights reserved."))
+    assert _calls(script)[1] == "addDisclaimerSlide"
+    assert "This is subject to change.\nAll rights reserved." in script
+
+
+@pytest.mark.parametrize("name,helper", [
+    ("agenda", "addAgendaSlide"), ("quote", "addQuoteSlide"), ("roadmap", "addRoadmapSlide"),
+    ("table", "addTableSlide"), ("takeaway", "addTakeawaySlide"), ("disclaimer", "addDisclaimerSlide"),
+])
+def test_pattern_layout_directives(name, helper):
+    assert _LAYOUT_DIRECTIVES[name] == helper
+    script = _build_script(_deck(f"# Slide\nLAYOUT: {name}\n- **Q1** — one\n- **Q2** — two"))
+    assert _calls(script)[1] == helper
+    assert validate_script(script)[0]
+
+
+PATTERNS_OUTLINE = """\
+# Patterns Deck
+Subtitle
+
+# Agenda
+- One
+- Two
+- Three
+
+# Why
+> The point.
+- **A** — first
+- **B** — second
+
+# Numbers
+> B is bigger.
+| Spec | A | B |
+|---|---|---|
+| Mem | 1 | 2 |
+
+# Voice
+> Great product.
+— Someone
+
+# Roadmap
+**2026**
+- Alpha
+**2027**
+- Beta
+
+# Legal Notice
+Subject to change.
+"""
+
+
+@pytest.mark.skipif(not _node_available(), reason="node / node_modules not available")
+def test_render_shared_patterns(tmp_path):
+    from pptx import Presentation
+    from aippt.preview import Renderer
+    from aippt.web.routes import _stage_render_workspace
+
+    job_id = f"pytest-direct-patterns-{tmp_path.name}"
+    uploads = PROJECT_ROOT / "uploads"
+    try:
+        script_path, out_dir = _stage_render_workspace(
+            str(uploads), job_id, "patterns", str(PROJECT_ROOT))
+        Path(script_path).write_text(_build_script(PATTERNS_OUTLINE), encoding="utf-8")
+        result = Renderer(project_root=str(PROJECT_ROOT)).render(script_path, out_dir)
+        assert result.success, result.stderr_tail
+        prs = Presentation(result.pptx_path)
+        assert len(prs.slides) == 7
+        texts = [" ".join(sh.text_frame.text for sh in s.shapes if sh.has_text_frame) for s in prs.slides]
+        assert "The point." in texts[2]
+        assert any(sh.has_table for sh in prs.slides[3].shapes)
+        assert "Great product." in texts[4]
+    finally:
+        shutil.rmtree(uploads / job_id, ignore_errors=True)

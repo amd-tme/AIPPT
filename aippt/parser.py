@@ -52,6 +52,7 @@ _VALID_LAYOUT_TYPES = {
     'bullet', 'two_column', 'numbered', 'basic', 'diagram',
     'title_alt', 'section_content', 'two_col_numbered',
     'picture_caption', 'four_image_gallery', 'three_col_content',
+    'agenda', 'quote', 'roadmap', 'table', 'takeaway', 'disclaimer',
     'three_col_image_text', 'three_image_gallery', 'two_image_gallery',
     'cinematic', 'split_image_content', 'title_with_image',
 }

@@ -85,12 +85,12 @@ _NAMED_IMPORT_RE = re.compile(
 # All AIPPT helper function names exported by lib/pptxgenjs-helpers.mjs. Kept in
 # sync with that file — if a helper is added/renamed there, update this set.
 _HELPER_FUNCTIONS: frozenset[str] = frozenset({
-    "addBulletSlide", "addCardGrid", "addCinematicSlide", "addClosingSlide",
-    "addCodeSlide", "addEyebrowText", "addFooter", "addFourImageGallery",
+    "addAgendaSlide", "addBulletSlide", "addCardGrid", "addCinematicSlide",
+    "addClosingSlide", "addCodeSlide", "addDisclaimerSlide", "addEyebrowText", "addFooter", "addFourImageGallery",
     "addIconRowsSlide", "addImageBulletsSlide", "addImageSlide",
-    "addLogoGridSlide", "addPictureCaption", "addProcessFlow",
-    "addSectionContent", "addSectionDivider", "addSplitImageContent",
-    "addStatCallout", "addThreeColContent", "addThreeColImageText",
+    "addLogoGridSlide", "addPictureCaption", "addProcessFlow", "addQuoteSlide",
+    "addRoadmapSlide", "addSectionContent", "addSectionDivider", "addSplitImageContent",
+    "addStatCallout", "addTableSlide", "addTakeawaySlide", "addThreeColContent", "addThreeColImageText",
     "addThreeImageGallery", "addTitleAlt", "addTitleSlide", "addTitleWithImage",
     "addTwoColNumbered", "addTwoColumn", "addTwoImageGallery", "cardShadow",
     "computeLayout", "createDeck", "iconToBase64", "loadTheme",

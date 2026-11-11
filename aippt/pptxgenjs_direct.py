@@ -34,6 +34,14 @@ _BULLET_RE        = re.compile(r'^([ \t]*)(?:[-*•+]|(\d+)[.)])\s+(.*\S)')
 _GROUP_HEAD_RE    = re.compile(r'^\*\*([^*]+?)\*\*\s*:?\s*$')
 _CODE_FENCE       = re.compile(r'^\s*```')
 _RULE_LINE        = re.compile(r'^(?:-{3,}|\*{3,}|_{3,})$')
+_TABLE_ROW        = re.compile(r'^\|.*\|$')
+_TABLE_RULE       = re.compile(r'^\|?\s*:?-{2,}:?\s*(?:\|\s*:?-{2,}:?\s*)*\|?$')
+_QUOTE_LINE       = re.compile(r'^>\s?(.*)$')
+_ATTRIBUTION      = re.compile(r'^(?:—|–|--?)\s*(.+)$')
+_AGENDA_TITLE     = re.compile(r'^(agenda|contents|table of contents|outline|topics)$', re.I)
+_ROADMAP_TITLE    = re.compile(r'\b(roadmap|timeline|milestones)\b', re.I)
+_PERIOD_HEADING   = re.compile(r'^(?:[QH][1-4]\b|FY\s?\d|20\d\d\b|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b|now|next|later)', re.I)
+_DISCLAIMER_TITLE = re.compile(r'\b(disclaimer|legal|notices?|attributions?)\b', re.I)
 # "Lead — rest", "Lead: rest" — needs a spaced dash or colon-space so
 # hyphenated words ("python-pptx") and "AMD:XYZ" are never split
 _LEAD_SPLIT       = re.compile(r'^(.{1,60}?)(?:\s+[—–-]\s+|\s*[—–]\s*|:\s+)(.+)$')
@@ -67,11 +75,14 @@ def _body(slide: dict) -> dict:
             notes — never dropped)
     code    fenced blocks ``{'label', 'code'}``; label is a heading that
             introduced the block, e.g. ``**Search:**``
+    quote   ``> `` blockquote lines (a takeaway, or the quote on a quote slide)
+    table   markdown pipe table ``{'header', 'rows'}`` or None
     first   'code' or 'text', whichever comes first (for split ordering)
     """
     if '_body' in slide:
         return slide['_body']
-    items, loose, groups, prose, code = [], [], [], [], []
+    items, loose, groups, prose, code, quote = [], [], [], [], [], []
+    header, rows = None, []
     col_break = None
     first = None
     fence = None
@@ -96,6 +107,19 @@ def _body(slide: dict) -> dict:
         if s == '|||':
             col_break = len(items)
             continue
+        if _TABLE_ROW.match(s):
+            if _TABLE_RULE.match(s):
+                if rows and header is None:
+                    header = rows.pop()
+                continue
+            rows.append([_md_plain(c) for c in s.strip('|').split('|')])
+            first = first or 'table'
+            continue
+        q = _QUOTE_LINE.match(s)
+        if q:
+            if q.group(1).strip():
+                quote.append(_md_plain(q.group(1)))
+            continue
         m = _BULLET_RE.match(line)
         if m:
             first = first or 'text'
@@ -118,8 +142,10 @@ def _body(slide: dict) -> dict:
     for g in [g for g in groups if not g['items']]:
         prose.append(_md_plain(g['heading']))
         groups.remove(g)
+    table = {'header': header, 'rows': rows} if rows or header else None
     body = {'items': items, 'loose': loose, 'groups': groups, 'prose': prose,
-            'code': code, 'col_break': col_break, 'first': first or 'text'}
+            'code': code, 'quote': quote, 'table': table,
+            'col_break': col_break, 'first': first or 'text'}
     slide['_body'] = body
     return body
 
@@ -192,7 +218,17 @@ _LAYOUT_DIRECTIVES = {
     'section_content':   'addSectionDivider',
     'two_col_numbered':  'addTwoColNumbered',
     'three_col_content': 'addThreeColContent',
+    # Shared slide patterns
+    'agenda':            'addAgendaSlide',
+    'quote':             'addQuoteSlide',
+    'roadmap':           'addRoadmapSlide',
+    'table':             'addTableSlide',
+    'takeaway':          'addTakeawaySlide',
+    'disclaimer':        'addDisclaimerSlide',
 }
+
+_MAX_AGENDA = 10
+_MAX_MILESTONES = 6
 
 
 def _pick_layout(slide: dict, prev_layout: str, slide_index: int, total_slides: int) -> str:
@@ -203,8 +239,13 @@ def _pick_layout(slide: dict, prev_layout: str, slide_index: int, total_slides: 
     2. IMAGE: directive → addImageSlide / addImageBulletsSlide
     3. First slide → addTitleSlide
     4. Last slide (closing keywords) → addClosingSlide
-    5. Code fences in content → addCodeSlide (slides that also carry real
-       bullets are split beforehand, see _split_code_slides)
+    5. Code fences in content → addCodeSlide; markdown table → addTableSlide
+       (slides that also carry real bullets are split beforehand, see
+       _split_mixed_slides)
+    5a. Disclaimer / legal title → addDisclaimerSlide; ``> quote`` with at
+        most an attribution line → addQuoteSlide; Agenda title →
+        addAgendaSlide; dated or Roadmap-titled groups → addRoadmapSlide;
+        ``> takeaway`` with points → addTakeawaySlide
     6. Bold group headings → two groups: addTwoColumn; 3-6 small groups:
        addCardGrid (addThreeColContent for 3 after a card grid); otherwise
        addBulletSlide with sub-bullets
@@ -215,6 +256,8 @@ def _pick_layout(slide: dict, prev_layout: str, slide_index: int, total_slides: 
     10. 2-6 short items → addCardGrid
     11. No items and at most one line → addSectionDivider
     12. Fallback → addBulletSlide
+    A takeaway on a slide picked by directive goes to the notes when that
+    layout can't draw it.
     Variety rule: avoid repeating prev_layout where an alternative fits.
     Nothing is truncated — layouts are only chosen when all items fit.
     """
@@ -249,9 +292,24 @@ def _pick_layout(slide: dict, prev_layout: str, slide_index: int, total_slides: 
     if slide_index == total_slides - 1 and _CLOSING_WORDS.search(_all_text(slide)):
         return 'addClosingSlide'
 
-    # 5. Code
+    # 5. Code / table
     if body['code']:
         return 'addCodeSlide'
+    if body['table']:
+        return 'addTableSlide'
+
+    # 5a. Shared slide patterns
+    if _DISCLAIMER_TITLE.search(slide['title']) and (items or body['prose']):
+        return 'addDisclaimerSlide'
+    if body['quote'] and not items and len(body['prose']) <= 1:
+        return 'addQuoteSlide'
+    if (_AGENDA_TITLE.match(_md_plain(slide['title']).strip())
+            and 2 <= n <= _MAX_AGENDA and not has_subs):
+        return 'addAgendaSlide'
+    if _looks_like_roadmap(slide):
+        return 'addRoadmapSlide'
+    if body['quote'] and (items or body['prose']):
+        return 'addTakeawaySlide'
 
     # 6. Grouped content ("**Heading**" followed by its own bullets)
     groups = body['groups']
@@ -296,6 +354,17 @@ def _pick_layout(slide: dict, prev_layout: str, slide_index: int, total_slides: 
     return 'addBulletSlide'
 
 
+def _looks_like_roadmap(slide: dict) -> bool:
+    """2-6 short headed groups, titled Roadmap/Timeline or headed by periods (Q1, 2026, H2…)."""
+    body = _body(slide)
+    groups = body['groups']
+    if (body['loose'] or not 2 <= len(groups) <= _MAX_MILESTONES
+            or any(len(g['items']) > 4 for g in groups)):
+        return False
+    return bool(_ROADMAP_TITLE.search(slide['title'])
+                or all(_PERIOD_HEADING.match(g['heading']) for g in groups))
+
+
 def _all_text(slide: dict) -> str:
     """Title + visible text, excluding code (so code words don't pick layouts)."""
     body = _body(slide)
@@ -306,26 +375,31 @@ def _all_text(slide: dict) -> str:
     return ' '.join(parts)
 
 
-def _split_code_slides(slides: List[dict]) -> List[dict]:
-    """Split slides that mix real bullets with code into two slides.
+_EMPTY_BODY = {'items': [], 'loose': [], 'groups': [], 'prose': [], 'code': [],
+               'quote': [], 'table': None, 'col_break': None, 'first': 'text'}
 
-    The code helper only shows code, so a slide with an explanation *and*
-    a code block becomes a bullet slide plus a code slide (same title, in
-    the order the author wrote them) instead of losing the bullets.
+
+def _split_mixed_slides(slides: List[dict]) -> List[dict]:
+    """Split slides that mix real bullets with code or a table.
+
+    The code and table helpers only show their block, so a slide with an
+    explanation *and* a block becomes a bullet slide plus a block slide
+    (same title, in the order the author wrote them) instead of losing the
+    bullets. A takeaway (``> ``) stays with the bullets.
     """
     out: List[dict] = []
     for i, slide in enumerate(slides):
         body = _body(slide)
-        if i == 0 or not body['code'] or len(body['items']) < 2:
+        block = 'code' if body['code'] else 'table' if body['table'] else None
+        if i == 0 or block is None or len(body['items']) < 2:
             out.append(slide)
             continue
-        text_slide = dict(slide, _body=dict(body, code=[]))
-        code_slide = {
+        text_slide = dict(slide, _body=dict(body, code=[], table=None))
+        block_slide = {
             'title': slide['title'], 'content': [], 'section': slide.get('section'),
-            '_body': {'items': [], 'loose': [], 'groups': [], 'prose': [],
-                      'code': body['code'], 'col_break': None, 'first': 'code'},
+            '_body': dict(_EMPTY_BODY, code=body['code'], table=body['table']),
         }
-        out.extend([code_slide, text_slide] if body['first'] == 'code' else [text_slide, code_slide])
+        out.extend([block_slide, text_slide] if body['first'] == block else [text_slide, block_slide])
     return out
 
 
@@ -341,8 +415,9 @@ def _split_dense_slides(slides: List[dict]) -> List[dict]:
         groups = body['groups']
         sizes = [1 + sum(1 + len(it['subs']) for it in g['items']) for g in groups]
         fits_cards = 3 <= len(groups) <= _MAX_CARDS and all(len(g['items']) <= 4 for g in groups)
-        if (len(groups) < 3 or body['loose'] or body['code'] or fits_cards
-                or sum(sizes) <= _MAX_LINES or slide.get('layout')):
+        if (len(groups) < 3 or body['loose'] or body['code'] or body['table'] or fits_cards
+                or sum(sizes) <= _MAX_LINES or slide.get('layout')
+                or _looks_like_roadmap(slide)):
             out.append(slide)
             continue
         chunks, current, used = [], [], 0
@@ -357,7 +432,8 @@ def _split_dense_slides(slides: List[dict]) -> List[dict]:
             title = slide['title'] if k == 0 else f"{slide['title']} (cont.)"
             items = [it for g in chunk for it in g['items']]
             out.append(dict(slide, title=title, _body=dict(
-                body, items=items, groups=chunk, prose=body['prose'] if k == 0 else [])))
+                body, items=items, groups=chunk, prose=body['prose'] if k == 0 else [],
+                quote=body['quote'] if k == 0 else [])))
     return out
 
 
@@ -422,6 +498,29 @@ def _all_lines(body: dict) -> List[str]:
     if body['code']:
         lines.append(_code_text(body))
     return lines
+
+
+def _table_lines(table: dict) -> List[str]:
+    rows = ([table['header']] if table['header'] else []) + table['rows']
+    return [' | '.join(r) for r in rows]
+
+
+# Layouts that draw the ``> takeaway`` / table themselves
+_SHOWS_QUOTE = {'addTakeawaySlide', 'addTableSlide', 'addRoadmapSlide', 'addQuoteSlide'}
+_SHOWS_TABLE = {'addTableSlide'}
+
+
+def _fold_unshown(slide: dict, layout: str) -> None:
+    """Move a takeaway / table the chosen layout can't draw into prose (→ notes)."""
+    body = _body(slide)
+    extra = []
+    if body['quote'] and layout not in _SHOWS_QUOTE:
+        extra += body['quote']
+    if body['table'] and layout not in _SHOWS_TABLE:
+        extra += _table_lines(body['table'])
+    if extra:
+        slide['_body'] = dict(body, prose=extra + body['prose'], quote=[],
+                              table=None if layout not in _SHOWS_TABLE else body['table'])
 
 
 def _code_text(body: dict) -> str:
@@ -663,6 +762,144 @@ def _emit_image(slide: dict, n: int) -> str:
     return _header(slide, n) + f"addImageSlide(deck, `{_title(slide)}`, {img_js}, {n}, `{notes}`);\n"
 
 
+def _takeaway(body: dict) -> str:
+    return ' '.join(body['quote'])
+
+
+def _opts(**kw) -> str:
+    """JS options object for the non-empty keyword values, or ''."""
+    parts = [f"{k}: {_js_quoted(v)}" for k, v in kw.items() if v]
+    return ', { ' + ', '.join(parts) + ' }' if parts else ''
+
+
+def _emit_takeaway(slide: dict, n: int) -> str:
+    # addTakeawaySlide(deck, title, takeaway, points, slideNum, notes)
+    body = _body(slide)
+    points: list = []
+    for it in body['loose']:
+        text = _md_bullet(it['text'])
+        points.append({'text': text, 'subs': [_md_plain(s) for s in it['subs']]} if it['subs'] else text)
+    for g in body['groups']:
+        subs = []
+        for it in g['items']:
+            subs.append(_md_plain(it['text']))
+            subs.extend(_md_plain(s) for s in it['subs'])
+        points.append({'text': f"**{_md_plain(g['heading'])}**", 'subs': subs})
+    extra = list(body['prose'])
+    if not points:
+        points, extra = list(body['prose']), []
+    notes = _notes('addTakeawaySlide', extra)
+    return (
+        _header(slide, n) +
+        f"addTakeawaySlide(deck, `{_title(slide)}`, {_js_quoted(_takeaway(body))},\n"
+        f"  {_bullets_to_js_array(points)},\n"
+        f"  {n}, `{notes}`);\n"
+    )
+
+
+def _emit_table(slide: dict, n: int) -> str:
+    # addTableSlide(deck, title, header, rows, slideNum, notes, {takeaway, source})
+    body = _body(slide)
+    table = body['table'] or {'header': None, 'rows': []}
+    if not table['rows'] and not table['header']:
+        # LAYOUT: table without a markdown table — one row per item
+        table = {'header': None, 'rows': [list(_split_lead(_flat_text(it))) for it in body['items']]}
+        extra = list(body['prose'])
+    else:
+        extra = body['prose'] + _item_lines(body['loose']) + _group_lines(body['groups'])
+    # A trailing "Source: …" line becomes the table footnote
+    source = ''
+    if extra and re.match(r'^(sources?|data|footnote)\s*:', extra[-1], re.I):
+        source, extra = extra[-1], extra[:-1]
+    header = '[' + ', '.join(_js_quoted(c) for c in table['header']) + ']' if table['header'] else 'null'
+    rows = '[\n' + '\n'.join(
+        '    [' + ', '.join(_js_quoted(c) for c in r) + '],' for r in table['rows']
+    ) + '\n  ]'
+    notes = _notes('addTableSlide', extra)
+    return (
+        _header(slide, n) +
+        f"addTableSlide(deck, `{_title(slide)}`, {header},\n"
+        f"  {rows},\n"
+        f"  {n}, `{notes}`{_opts(takeaway=_takeaway(body), source=source)});\n"
+    )
+
+
+def _emit_agenda(slide: dict, n: int) -> str:
+    # addAgendaSlide(deck, title, items, slideNum, notes)
+    body = _body(slide)
+    items = [_flat_text(it) for it in body['items']] or list(body['prose'])
+    extra = body['prose'] if body['items'] else []
+    notes = _notes('addAgendaSlide', extra)
+    return (
+        _header(slide, n) +
+        f"addAgendaSlide(deck, `{_title(slide)}`, {_bullets_to_js_array(items)},\n"
+        f"  {n}, `{notes}`);\n"
+    )
+
+
+def _emit_quote(slide: dict, n: int) -> str:
+    # addQuoteSlide(deck, quote, attribution, slideNum, notes)
+    body = _body(slide)
+    lines = body['quote'] or body['prose'] or [_md_plain(slide['title'])]
+    # "> — Name, Role" inside the quote, or a line after it, is the attribution
+    attribution, quote_lines = '', list(lines)
+    rest = list(body['prose']) if body['quote'] else []
+    m = _ATTRIBUTION.match(quote_lines[-1]) if len(quote_lines) > 1 else None
+    if m:
+        attribution, quote_lines = m.group(1), quote_lines[:-1]
+    elif rest:
+        m = _ATTRIBUTION.match(rest[0])
+        attribution, rest = (m.group(1) if m else rest[0]), rest[1:]
+    extra = [_md_plain(slide['title'])] + rest + _item_lines(body['items'])
+    notes = _notes('addQuoteSlide', extra)
+    return (
+        _header(slide, n) +
+        f"addQuoteSlide(deck, {_js_quoted(' '.join(quote_lines))}, {_js_quoted(attribution)},\n"
+        f"  {n}, `{notes}`);\n"
+    )
+
+
+def _emit_roadmap(slide: dict, n: int) -> str:
+    # addRoadmapSlide(deck, title, [{heading, items}], slideNum, notes, {takeaway})
+    body = _body(slide)
+    if body['groups']:
+        cols = [(_md_plain(g['heading']), [_flat_text(it) for it in g['items']])
+                for g in body['groups']]
+        extra = body['prose'] + _item_lines(body['loose'])
+    else:
+        # LAYOUT: roadmap on a flat list — each "**Q1** — text" item is a milestone
+        cols = []
+        for it in body['items']:
+            head, rest = _split_lead(it['text'])
+            cols.append((head, [r for r in [rest] if r] + [_md_plain(s) for s in it['subs']]))
+        extra = list(body['prose'])
+    cols_js = '[\n' + '\n'.join(
+        f"    {{ heading: {_js_quoted(h)}, items: [{', '.join(_js_quoted(i) for i in items)}] }},"
+        for h, items in cols
+    ) + '\n  ]'
+    notes = _notes('addRoadmapSlide', extra)
+    return (
+        _header(slide, n) +
+        f"addRoadmapSlide(deck, `{_title(slide)}`, {cols_js},\n"
+        f"  {n}, `{notes}`{_opts(takeaway=_takeaway(body))});\n"
+    )
+
+
+def _emit_disclaimer(slide: dict, n: int) -> str:
+    # addDisclaimerSlide(deck, title, text, slideNum, notes)
+    body = _body(slide)
+    lines = body['prose'] + [_flat_text(it) for it in body['items']]
+    for g in body['groups']:
+        lines.append(_md_plain(g['heading']))
+        lines.extend(_flat_text(it) for it in g['items'])
+    notes = _notes('addDisclaimerSlide')
+    return (
+        _header(slide, n) +
+        f"addDisclaimerSlide(deck, `{_title(slide)}`, `{_js_str(chr(10).join(lines))}`,\n"
+        f"  {n}, `{notes}`);\n"
+    )
+
+
 _EMITTERS = {
     'addTitleSlide':        _emit_title,
     'addClosingSlide':      _emit_closing,
@@ -677,6 +914,12 @@ _EMITTERS = {
     'addThreeColContent':   _emit_three_col,
     'addImageSlide':        _emit_image,
     'addImageBulletsSlide': _emit_image,
+    'addTakeawaySlide':     _emit_takeaway,
+    'addTableSlide':        _emit_table,
+    'addAgendaSlide':       _emit_agenda,
+    'addQuoteSlide':        _emit_quote,
+    'addRoadmapSlide':      _emit_roadmap,
+    'addDisclaimerSlide':   _emit_disclaimer,
 }
 
 
@@ -703,7 +946,7 @@ def _build_script(outline_text: str, theme: str = 'amd') -> str:
         }
         slides = [deck_title_slide] + slides
 
-    slides = _split_dense_slides(_split_code_slides(slides))
+    slides = _split_dense_slides(_split_mixed_slides(slides))
 
     # Determine layouts for all slides first (needed for variety rule)
     layouts: List[str] = []
@@ -722,6 +965,7 @@ def _build_script(outline_text: str, theme: str = 'amd') -> str:
 
     slide_blocks: List[str] = []
     for i, (slide, layout) in enumerate(zip(slides, layouts), start=1):
+        _fold_unshown(slide, layout)
         slide_blocks.append(_EMITTERS[layout](slide, i))
 
     # Import exactly the helpers the emitted code calls (an emitter may pick
