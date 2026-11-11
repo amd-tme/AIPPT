@@ -55,6 +55,8 @@ _VALID_LAYOUT_TYPES = {
     'agenda', 'quote', 'roadmap', 'table', 'takeaway', 'disclaimer',
     'three_col_image_text', 'three_image_gallery', 'two_image_gallery',
     'cinematic', 'split_image_content', 'title_with_image',
+    'hero_title', 'product_title', 'section_intro', 'statement',
+    'proof_point', 'feature_list',
 }
 
 

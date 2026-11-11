@@ -497,3 +497,128 @@ def test_render_shared_patterns(tmp_path):
         assert "Great product." in texts[4]
     finally:
         shutil.rmtree(uploads / job_id, ignore_errors=True)
+
+
+# ---------------------------------------------------------------------------
+# Brand slides (hero / product title, section intro, statement, proof point,
+# feature list) — opt-in by LAYOUT: directive; the default title stays put
+# ---------------------------------------------------------------------------
+
+BRAND_OUTLINE = """\
+# ROCm 7: Open Software for AI
+LAYOUT: product_title
+The open AI stack for AMD Instinct GPUs
+Presenter: Jane Doe
+November 2026
+
+# Agenda
+- Why open
+- Proof
+- What's new
+
+# Why Open Matters
+LAYOUT: section_intro
+Customers want choice.
+
+# Open Wins
+LAYOUT: statement
+> Open moves faster
+Developers pick what runs first.
+- 2M+ models run on ROCm
+  - Source: Example Research
+- Day-0 model support
+
+# Throughput
+LAYOUT: proof_point
+> ROCm 7 is faster
+Example workload.
+- **ROCm 6** — 1,000 tok/s
+- **ROCm 7** — 3,500 tok/s
+
+# What's New
+LAYOUT: feature_list
+> Built for scale
+- **Inference** — disaggregated serving
+  - vLLM and SGLang
+- **Datatypes** — FP4 and FP6
+"""
+
+
+def test_default_title_unchanged_without_directive():
+    script = _build_script(_deck("# Agenda\n- a\n- b\n- c"))
+    assert _calls(script)[:2] == ["addTitleSlide", "addAgendaSlide"]
+    assert "image:" not in _slide_call(script, 2)
+
+
+def test_brand_outline_validates_and_uses_brand_helpers():
+    script = _build_script(BRAND_OUTLINE)
+    ok, reasons = validate_script(script)
+    assert ok, reasons
+    assert _calls(script) == [
+        "addProductTitleSlide", "addAgendaSlide", "addSectionIntroSlide",
+        "addStatementSlide", "addProofPointSlide", "addFeatureListSlide",
+    ]
+
+
+def test_product_title_infers_product_and_presenter():
+    title = _slide_call(_build_script(BRAND_OUTLINE), 1)
+    assert "product: 'ROCm'" in title
+    assert "presenter: 'Jane Doe'" in title
+    assert "November 2026" in title  # no date slot → kept in notes
+
+
+def test_hero_title_gets_date_option():
+    script = _build_script("# Our Strategy\nLAYOUT: hero_title\nWinning together\nJune 2026\n\n# Next\n- a\n")
+    title = _slide_call(script, 1)
+    assert "addHeroTitleSlide" in title and "date: 'June 2026'" in title
+    assert "'Winning together'" in title
+
+
+def test_brand_deck_agenda_uses_photo_variant():
+    agenda = _slide_call(_build_script(BRAND_OUTLINE), 2)
+    assert "image: ''" in agenda and "label: 'ROCm 7: Open Software for AI'" in agenda
+
+
+def test_statement_evidence_keeps_sources():
+    call = _slide_call(_build_script(BRAND_OUTLINE), 4)
+    assert "'Open moves faster', 'Developers pick what runs first.'" in call
+    assert "source: 'Source: Example Research'" in call
+    assert "{ text: 'Day-0 model support' }" in call
+
+
+def test_proof_point_computes_multiple():
+    call = _slide_call(_build_script(BRAND_OUTLINE), 5)
+    assert "before: { value: '1,000 tok/s', label: 'ROCm 6' }" in call
+    assert "multiple: '3.5X'" in call
+    assert "label: 'Throughput'" in call
+
+
+def test_feature_list_uses_deck_product():
+    call = _slide_call(_build_script(BRAND_OUTLINE), 6)
+    assert "heading: 'Inference', lines: ['disaggregated serving', 'vLLM and SGLang']" in call
+    assert "product: 'ROCm'" in call
+
+
+@pytest.mark.skipif(not _node_available(), reason="node / node_modules not available")
+def test_render_brand_slides(tmp_path):
+    from pptx import Presentation
+    from aippt.preview import Renderer
+    from aippt.web.routes import _stage_render_workspace
+
+    job_id = f"pytest-direct-brand-{tmp_path.name}"
+    uploads = PROJECT_ROOT / "uploads"
+    try:
+        script_path, out_dir = _stage_render_workspace(
+            str(uploads), job_id, "brand", str(PROJECT_ROOT))
+        Path(script_path).write_text(_build_script(BRAND_OUTLINE), encoding="utf-8")
+        result = Renderer(project_root=str(PROJECT_ROOT)).render(script_path, out_dir)
+        assert result.success, result.stderr_tail
+        prs = Presentation(result.pptx_path)
+        assert len(prs.slides) == 6
+        texts = [" ".join(sh.text_frame.text for sh in s.shapes if sh.has_text_frame) for s in prs.slides]
+        assert "3.5X" in texts[4]
+        assert "Source: Example Research" in texts[3]
+        # Photo agenda + product render on the title
+        assert any(sh.shape_type == 13 for sh in prs.slides[1].shapes)
+    finally:
+        shutil.rmtree(uploads / job_id, ignore_errors=True)

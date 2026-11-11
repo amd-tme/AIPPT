@@ -90,10 +90,13 @@ _NAMED_IMPORT_RE = re.compile(
 # sync with that file — if a helper is added/renamed there, update this set.
 _HELPER_FUNCTIONS: frozenset[str] = frozenset({
     "addAgendaSlide", "addBulletSlide", "addCardGrid", "addCinematicSlide",
-    "addClosingSlide", "addCodeSlide", "addDisclaimerSlide", "addEyebrowText", "addFooter", "addFourImageGallery",
+    "addClosingSlide", "addCodeSlide", "addDisclaimerSlide", "addEyebrowText", "addFeatureListSlide",
+    "addFooter", "addFourImageGallery", "addHeroTitleSlide",
     "addIconRowsSlide", "addImageBulletsSlide", "addImageSlide",
-    "addLogoGridSlide", "addPictureCaption", "addProcessFlow", "addQuoteSlide",
-    "addRoadmapSlide", "addSectionContent", "addSectionDivider", "addSplitImageContent",
+    "addLogoGridSlide", "addPictureCaption", "addProcessFlow", "addProductTitleSlide",
+    "addProofPointSlide", "addQuoteSlide",
+    "addRoadmapSlide", "addSectionContent", "addSectionDivider", "addSectionIntroSlide",
+    "addSplitImageContent", "addStatementSlide",
     "addStatCallout", "addTableSlide", "addTakeawaySlide", "addThreeColContent", "addThreeColImageText",
     "addThreeImageGallery", "addTitleAlt", "addTitleSlide", "addTitleWithImage",
     "addTwoColNumbered", "addTwoColumn", "addTwoImageGallery", "cardShadow",
@@ -145,12 +148,15 @@ _OPTIONAL_PARAMS = frozenset({"notes", "opts", "options"})
 # Expected literal kind by parameter name (other names are not checked)
 _PARAM_KINDS: Dict[str, str] = {
     **dict.fromkeys(("bullets", "items", "cards", "stats", "steps", "columns", "rows",
-                     "points", "leftItems", "rightItems", "iconImages", "brandColors"), "array"),
+                     "points", "leftItems", "rightItems", "iconImages", "brandColors",
+                     "evidence", "features"), "array"),
     **dict.fromkeys(("title", "subtitle", "sectionTitle", "imagePath", "code", "caption",
                      "takeaway", "quote", "attribution", "text", "leftHeader",
-                     "rightHeader", "themePath"), "string"),
+                     "rightHeader", "themePath", "headline", "subline", "tagline",
+                     "body"), "string"),
     **dict.fromkeys(("slideNum", "sectionNumber"), "number"),
     "opts": "object",
+    "proof": "object",
 }
 
 

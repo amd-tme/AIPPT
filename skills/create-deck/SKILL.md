@@ -87,7 +87,7 @@ Read the [pptxgenjs guide](references/pptxgenjs-guide.md) for complete API refer
 3. **Decide layouts** — For each slide, analyze content and choose a layout using the Layout Decision Strategy (see below). Apply the **variety rule**: never repeat the same layout on consecutive slides.
 
 4. **Generate script** — Write a Node.js ES module (`.mjs`) that imports from the helper library:
-   - `import { createDeck, addTitleSlide, addBulletSlide, addImageSlide, addImageBulletsSlide, addProcessFlow, addTwoColumn, addCardGrid, addStatCallout, addCodeSlide, addIconRowsSlide, addSectionDivider, addClosingSlide, addFooter, renderIconSvg, iconToBase64, preRenderIcons, cardShadow, SW, SH, addTitleAlt, addSectionContent, addTwoColNumbered, addPictureCaption, addFourImageGallery, addThreeColContent, addThreeColImageText, addThreeImageGallery, addTwoImageGallery, addCinematicSlide, addSplitImageContent, addTitleWithImage, addTakeawaySlide, addTableSlide, addAgendaSlide, addQuoteSlide, addRoadmapSlide, addDisclaimerSlide } from '../lib/pptxgenjs-helpers.mjs';`
+   - `import { createDeck, addTitleSlide, addBulletSlide, addImageSlide, addImageBulletsSlide, addProcessFlow, addTwoColumn, addCardGrid, addStatCallout, addCodeSlide, addIconRowsSlide, addSectionDivider, addClosingSlide, addFooter, renderIconSvg, iconToBase64, preRenderIcons, cardShadow, SW, SH, addTitleAlt, addSectionContent, addTwoColNumbered, addPictureCaption, addFourImageGallery, addThreeColContent, addThreeColImageText, addThreeImageGallery, addTwoImageGallery, addCinematicSlide, addSplitImageContent, addTitleWithImage, addTakeawaySlide, addTableSlide, addAgendaSlide, addQuoteSlide, addRoadmapSlide, addDisclaimerSlide, addHeroTitleSlide, addProductTitleSlide, addSectionIntroSlide, addStatementSlide, addProofPointSlide, addFeatureListSlide } from '../lib/pptxgenjs-helpers.mjs';`
    - Call `createDeck('themes/<theme>.yaml')` — returns a `deck` object with `pptx`, `theme`, and `layout` already configured. When `--slide-master` is specified, use `createDeck('themes/<theme>.yaml', { useSlideMaster: true })` to enable slide masters (chrome inherited from master, not baked per-slide).
    - Use slide builder functions: `addBulletSlide(deck, title, bullets, slideNum, notes)`, `addProcessFlow(deck, title, steps, slideNum)`, etc.
    - Pre-render icons with `preRenderIcons({ name: { component, color } })` or individual `iconToBase64(renderIconSvg(Icon, 256, color))`
@@ -234,6 +234,20 @@ Analyze each slide's content for signals that map to layout types:
 | Customer or analyst quote (`> quote` + `— Name, Role`) | `addQuoteSlide()` — large quote + attribution | N/A |
 | Roadmap / timeline by quarter, year or phase | `addRoadmapSlide()` — milestones on a timeline; `opts.takeaway` | N/A |
 | Legal disclaimer / notices | `addDisclaimerSlide()` — small-print text | N/A |
+| Brand deck: section opener with a short intro paragraph | `addSectionIntroSlide()` — photo right, title + body left | N/A |
+| Brand deck: one bold claim backed by cited evidence | `addStatementSlide()` — accent headline + subline left, 1-4 evidence items (with sources) right | N/A |
+| Brand deck: one before → after metric | `addProofPointSlide()` — "Key Takeaway" headline + two bars + `multiple` (e.g. `3.5X`) | N/A |
+| Brand deck: 2-4 product capabilities | `addFeatureListSlide()` — product lockup + title + tagline, underlined feature headings | N/A |
+
+### Choosing the Title Slide
+
+The default `addTitleSlide()` stays the default. Only switch when the outline clearly calls for it — never just for variety:
+
+- **`addProductTitleSlide()`** — the deck is about one AMD product (ROCm, Instinct/MI3xx, EPYC, Radeon). Set `opts.product` and `opts.presenter`.
+- **`addHeroTitleSlide()`** — exec, strategy, vision, keynote or customer pitch. Set `opts.date`.
+- **`addTitleSlide()`** — everything else (training, technical deep dives, workshops, internal updates) or when unsure.
+
+A brand title sets the deck's style: follow it with the photo agenda (`addAgendaSlide(..., { image: '', label: deckTitle })`), section intros, and the brand content slides where the content fits.
 
 ### Layout Variety Rule
 
@@ -281,6 +295,12 @@ If the outline contains explicit directives, they override the auto-detection:
 - `LAYOUT: quote` → large quote + attribution (`addQuoteSlide`)
 - `LAYOUT: roadmap` → timeline of milestones (`addRoadmapSlide`)
 - `LAYOUT: disclaimer` → small-print legal text (`addDisclaimerSlide`)
+- `LAYOUT: hero_title` → photo hero title for exec / strategy decks (`addHeroTitleSlide`); a month-year line becomes the date
+- `LAYOUT: product_title` → product render + lockup title (`addProductTitleSlide`); product inferred from the title, `Presenter:` line → presenter
+- `LAYOUT: section_intro` → photo section opener with intro text (`addSectionIntroSlide`)
+- `LAYOUT: statement` → `> ` headline, first line = subline, items = evidence, a sub-bullet = its source (`addStatementSlide`)
+- `LAYOUT: proof_point` → `> ` headline, first/last `**Label** — value` items = before/after bars (`addProofPointSlide`)
+- `LAYOUT: feature_list` → `**Heading** — text` items (or groups) = features, `> ` = tagline (`addFeatureListSlide`)
 
 **Two-column header extraction (pptxgenjs):** When `LAYOUT: two_column | Left Header | Right Header` appears, parse the pipe-separated headers and pass them to `addTwoColumn()`:
 

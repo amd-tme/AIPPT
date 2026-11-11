@@ -493,6 +493,8 @@ under the title (the 30-3-30 "so what").
 
 - `items` — Up to 10 strings, numbered `01`, `02`, …
 - `opts.current` — 1-based index to highlight (others dimmed) when reusing the agenda between sections
+- `opts.image` — Photo variant: image on the left fading into the list (`''` = the bundled photo); use in brand decks
+- `opts.label` — Deck label drawn on the photo (usually the deck title)
 
 ### addQuoteSlide(deck, quote, attribution, slideNum, notes?)
 
@@ -507,6 +509,40 @@ under the title (the 30-3-30 "so what").
 ### addDisclaimerSlide(deck, title, text, slideNum, notes?)
 
 - `text` — Legal / notice text (use `\n` between paragraphs); small type
+
+### Brand slides (AMD exec / product deck styles)
+
+Opt-in layouts modelled on AMD's exec-pitch and product-performance decks. All images fall back to bundled assets in `themes/assets/`. See **Choosing the Title Slide** in `SKILL.md` for when to use the brand titles.
+
+#### addHeroTitleSlide(deck, title, subtitle, slideNum, opts?)
+
+- Full-height photo on the left fading to black, title + subtitle right, "together we advance" lockup
+- `opts.image` — Photo path (default: blue particle wave); `opts.date` — e.g. `'June 2026'`
+
+#### addProductTitleSlide(deck, title, subtitle, slideNum, opts?)
+
+- Streak background, product render top left, product lockup, title right
+- `opts.product` — `'ROCm'` uses the ROCm lockup; other names draw the AMD wordmark + product text
+- `opts.presenter`, `opts.image` (product render), `opts.background`
+
+#### addSectionIntroSlide(deck, title, body, slideNum, notes?, opts?)
+
+- Title + 1-3 lines of body left, photo right fading from the left; `opts.image`
+
+#### addStatementSlide(deck, headline, subline, evidence, slideNum, notes?)
+
+- Accent `headline` + white `subline` (right-aligned, left half), divider, evidence on the right
+- `evidence` — 1-4 `{ text, source? }`
+
+#### addProofPointSlide(deck, headline, subline, proof, slideNum, notes?, opts?)
+
+- `proof` — `{ before: { value, label }, after: { value, label }, multiple?, caption? }`; bar heights from the numbers in `value`
+- `opts.label` — Small label at the top (default `'Key Takeaway'`)
+
+#### addFeatureListSlide(deck, title, tagline, features, slideNum, notes?, opts?)
+
+- Product lockup + vertical rule + title + accent tagline, then 2-4 `{ heading, lines: string[] }` with underlined headings
+- `opts.product`, `opts.image`
 
 ### addClosingSlide(deck, slideNum, notes?)
 

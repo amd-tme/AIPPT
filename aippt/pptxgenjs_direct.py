@@ -55,6 +55,13 @@ _STAT_LEAD        = re.compile(
 _TWO_COLUMN_WORDS = re.compile(r'\b(vs\.?|versus|compare|comparison|before|after|left|right|pros?|cons?)\b', re.I)
 _PROCESS_WORDS    = re.compile(r'\b(step\s*\d|phase\s*\d|first|second|third|then|next|finally|workflow|pipeline|process|flow)\b', re.I)
 _IMAGE_DIRECTIVE  = re.compile(r'^IMAGE:\s*\S+', re.M)
+_DATE_LINE        = re.compile(r'^(?:(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(?:\d{1,2},?\s+)?20\d\d|Q[1-4]\s+20\d\d|20\d\d-\d\d(?:-\d\d)?)$', re.I)
+_PRESENTER_LINE   = re.compile(r'^(?:presenter|presented by|speaker|by)\s*:?\s+(.+)$', re.I)
+# Product line named in a deck title → lockup text for brand slides
+_PRODUCTS         = [(re.compile(r'\brocm\b', re.I), 'ROCm'),
+                     (re.compile(r'\b(instinct|mi\d{3}\w*)\b', re.I), 'Instinct'),
+                     (re.compile(r'\bepyc\b', re.I), 'EPYC'),
+                     (re.compile(r'\bradeon\b', re.I), 'Radeon')]
 _CLOSING_WORDS    = re.compile(r'\b(thank|thanks|closing|questions?|q\s*&\s*a|contact|goodbye|end)\b', re.I)
 
 # Most cards / process steps / stats each helper lays out cleanly
@@ -225,7 +232,15 @@ _LAYOUT_DIRECTIVES = {
     'table':             'addTableSlide',
     'takeaway':          'addTakeawaySlide',
     'disclaimer':        'addDisclaimerSlide',
+    # Brand slides (AMD exec / product deck styles)
+    'hero_title':        'addHeroTitleSlide',
+    'product_title':     'addProductTitleSlide',
+    'section_intro':     'addSectionIntroSlide',
+    'statement':         'addStatementSlide',
+    'proof_point':       'addProofPointSlide',
+    'feature_list':      'addFeatureListSlide',
 }
+_BRAND_TITLES = {'addHeroTitleSlide', 'addProductTitleSlide'}
 
 _MAX_AGENDA = 10
 _MAX_MILESTONES = 6
@@ -506,7 +521,8 @@ def _table_lines(table: dict) -> List[str]:
 
 
 # Layouts that draw the ``> takeaway`` / table themselves
-_SHOWS_QUOTE = {'addTakeawaySlide', 'addTableSlide', 'addRoadmapSlide', 'addQuoteSlide'}
+_SHOWS_QUOTE = {'addTakeawaySlide', 'addTableSlide', 'addRoadmapSlide', 'addQuoteSlide',
+                'addStatementSlide', 'addProofPointSlide', 'addFeatureListSlide'}
 _SHOWS_TABLE = {'addTableSlide'}
 
 
@@ -830,10 +846,13 @@ def _emit_agenda(slide: dict, n: int) -> str:
     items = [_flat_text(it) for it in body['items']] or list(body['prose'])
     extra = body['prose'] if body['items'] else []
     notes = _notes('addAgendaSlide', extra)
+    brand = slide.get('_brand')
+    # Brand decks get the photo agenda, labelled with the deck title
+    opts = f", {{ image: '', label: {_js_quoted(brand['title'])} }}" if brand else ''
     return (
         _header(slide, n) +
         f"addAgendaSlide(deck, `{_title(slide)}`, {_bullets_to_js_array(items)},\n"
-        f"  {n}, `{notes}`);\n"
+        f"  {n}, `{notes}`{opts});\n"
     )
 
 
@@ -900,6 +919,133 @@ def _emit_disclaimer(slide: dict, n: int) -> str:
     )
 
 
+def _product(text: str) -> str:
+    for pattern, name in _PRODUCTS:
+        if pattern.search(text):
+            return name
+    return ''
+
+
+def _emit_brand_title(slide: dict, n: int) -> str:
+    # addHeroTitleSlide / addProductTitleSlide(deck, title, subtitle, slideNum, opts)
+    body = _body(slide)
+    lines = body['prose'] + [_md_plain(it['text']) for it in body['items']]
+    date = next((l for l in lines if _DATE_LINE.match(l)), '')
+    presenter = next((m.group(1) for m in map(_PRESENTER_LINE.match, lines) if m), '')
+    rest = [l for l in lines if l != date and not _PRESENTER_LINE.match(l)]
+    subtitle, rest = (rest[0], rest[1:]) if rest else ('', [])
+    if slide['_layout'] == 'addHeroTitleSlide':
+        call = f"addHeroTitleSlide(deck, `{_title(slide)}`, {_js_quoted(subtitle)}, {n}{_opts(date=date)})"
+    else:
+        # The product title has no date slot — keep it in the notes
+        rest = [date] + rest if date else rest
+        product = _product(slide['title'] + ' ' + subtitle)
+        call = (f"addProductTitleSlide(deck, `{_title(slide)}`, {_js_quoted(subtitle)}, {n}"
+                f"{_opts(product=product, presenter=presenter)})")
+    if rest:
+        call += f".addNotes(`{_js_str(chr(10).join(rest))}`)"
+    return _header(slide, n) + call + ";\n"
+
+
+def _emit_section_intro(slide: dict, n: int) -> str:
+    # addSectionIntroSlide(deck, title, body, slideNum, notes)
+    body = _body(slide)
+    text = body['prose'] + _item_lines(body['items'])
+    return (
+        _header(slide, n) +
+        f"addSectionIntroSlide(deck, `{_title(slide)}`, `{_js_str(chr(10).join(text[:3]))}`,\n"
+        f"  {n}, `{_notes('addSectionIntroSlide', text[3:])}`);\n"
+    )
+
+
+def _emit_statement(slide: dict, n: int) -> str:
+    # addStatementSlide(deck, headline, subline, [{text, source}], slideNum, notes)
+    # headline = the "> " line (else the title); subline = first prose line;
+    # each item is a piece of evidence, its first sub-bullet the source
+    body = _body(slide)
+    headline = _takeaway(body) or _md_plain(slide['title'])
+    prose = list(body['prose'])
+    subline = prose.pop(0) if prose else ''
+    evidence = []
+    for it in body['items']:
+        source = _md_plain(it['subs'][0]) if it['subs'] else ''
+        evidence.append(f"{{ text: {_js_quoted(_md_plain(it['text']))}"
+                        + (f", source: {_js_quoted(source)}" if source else '') + ' }')
+    extra = ([_md_plain(slide['title'])] if body['quote'] else []) + prose
+    return (
+        _header(slide, n) +
+        f"addStatementSlide(deck, {_js_quoted(headline)}, {_js_quoted(subline)}, [\n"
+        + ''.join(f"  {e},\n" for e in evidence) +
+        f"], {n}, `{_notes('addStatementSlide', extra)}`);\n"
+    )
+
+
+def _emit_proof_point(slide: dict, n: int) -> str:
+    # addProofPointSlide(deck, headline, subline, {before, after, multiple, caption}, slideNum, notes, {label})
+    # Items are "**Label** — value": the first is before, the last is after
+    body = _body(slide)
+    headline = _takeaway(body) or _md_plain(slide['title'])
+    prose = list(body['prose'])
+    subline = prose.pop(0) if prose else ''
+    caption = prose.pop(0) if prose else ''
+    pairs = [_split_lead(it['text']) for it in body['items']]
+    pairs = [(label, value) for label, value in pairs if value]
+    proof = []
+    if len(pairs) >= 2:
+        (bl, bv), (al, av) = pairs[0], pairs[-1]
+        proof += [f"before: {{ value: {_js_quoted(bv)}, label: {_js_quoted(bl)} }}",
+                  f"after: {{ value: {_js_quoted(av)}, label: {_js_quoted(al)} }}"]
+        nums = [re.sub(r'[^\d.]', '', v.replace(',', '')) for v in (bv, av)]
+        try:
+            ratio = float(nums[1]) / float(nums[0])
+            if ratio >= 1.5:
+                multiple = f'{ratio:.0f}' if ratio >= 10 else f'{ratio:.1f}'.removesuffix('.0')
+                proof.append(f"multiple: '{multiple}X'")
+        except (ValueError, ZeroDivisionError):
+            pass
+        extra = [f"{l}: {v}" for l, v in pairs[1:-1]]
+    else:
+        extra = _item_lines(body['items'])
+    if caption:
+        proof.append(f"caption: {_js_quoted(caption)}")
+    label = _md_plain(slide['title']) if body['quote'] else ''
+    return (
+        _header(slide, n) +
+        f"addProofPointSlide(deck, {_js_quoted(headline)}, {_js_quoted(subline)},\n"
+        f"  {{ {', '.join(proof)} }},\n"
+        f"  {n}, `{_notes('addProofPointSlide', extra + prose)}`{_opts(label=label)});\n"
+    )
+
+
+def _emit_feature_list(slide: dict, n: int) -> str:
+    # addFeatureListSlide(deck, title, tagline, [{heading, lines}], slideNum, notes, {product})
+    body = _body(slide)
+    prose = list(body['prose'])
+    tagline = _takeaway(body) or (prose.pop(0) if prose else '')
+    if body['groups']:
+        feats = [(_md_plain(g['heading']), [_flat_text(it) for it in g['items']]) for g in body['groups']]
+        extra = prose + _item_lines(body['loose'])
+    else:
+        feats = []
+        for it in body['items']:
+            head, rest = _split_lead(it['text'])
+            feats.append((head, [r for r in [rest] if r] + [_md_plain(s) for s in it['subs']]))
+        extra = prose
+    feats_js = ''.join(
+        f"  {{ heading: {_js_quoted(h)}, lines: [{', '.join(_js_quoted(l) for l in lines[:3])}] }},\n"
+        for h, lines in feats[:4]
+    )
+    extra += [f"{h}: {'; '.join(lines[3:])}" for h, lines in feats if lines[3:]]
+    extra += [f"{h}: {'; '.join(lines)}" for h, lines in feats[4:]]
+    brand = slide.get('_brand') or {}
+    product = brand.get('product') or _product(slide['title'])
+    return (
+        _header(slide, n) +
+        f"addFeatureListSlide(deck, `{_title(slide)}`, {_js_quoted(tagline)}, [\n{feats_js}"
+        f"], {n}, `{_notes('addFeatureListSlide', extra)}`{_opts(product=product)});\n"
+    )
+
+
 _EMITTERS = {
     'addTitleSlide':        _emit_title,
     'addClosingSlide':      _emit_closing,
@@ -920,6 +1066,12 @@ _EMITTERS = {
     'addQuoteSlide':        _emit_quote,
     'addRoadmapSlide':      _emit_roadmap,
     'addDisclaimerSlide':   _emit_disclaimer,
+    'addHeroTitleSlide':    _emit_brand_title,
+    'addProductTitleSlide': _emit_brand_title,
+    'addSectionIntroSlide': _emit_section_intro,
+    'addStatementSlide':    _emit_statement,
+    'addProofPointSlide':   _emit_proof_point,
+    'addFeatureListSlide':  _emit_feature_list,
 }
 
 
@@ -963,8 +1115,17 @@ def _build_script(outline_text: str, theme: str = 'amd') -> str:
         layouts.append(layout)
         prev = layout
 
+    # A brand title (LAYOUT: hero_title / product_title) styles the whole deck
+    brand = None
+    if layouts and layouts[0] in _BRAND_TITLES:
+        brand = {'title': _md_plain(slides[0]['title']),
+                 'product': _product(slides[0]['title'] + ' ' + ' '.join(_body(slides[0])['prose']))}
+
     slide_blocks: List[str] = []
     for i, (slide, layout) in enumerate(zip(slides, layouts), start=1):
+        slide['_layout'] = layout
+        if brand:
+            slide['_brand'] = brand
         _fold_unshown(slide, layout)
         slide_blocks.append(_EMITTERS[layout](slide, i))
 

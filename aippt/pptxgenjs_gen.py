@@ -132,6 +132,25 @@ addQuoteSlide(deck, quote, attribution, slideNum, notes)
 addRoadmapSlide(deck, title, columns, slideNum, notes, opts?)
   — columns=[{heading, items: string[]}] × 2-6 (heading = Q1 / 2026 / Phase 1); opts={takeaway?}
 addDisclaimerSlide(deck, title, text, slideNum, notes)   — small-print legal text (string)
+  addAgendaSlide opts also take {image: '', label: 'Deck name'} for the photo agenda
+  (image '' = bundled photo); use it when the deck uses addHeroTitleSlide/addProductTitleSlide.
+
+Brand slides (AMD exec / product deck styles; bundled photos are used when no image is given):
+addHeroTitleSlide(deck, title, subtitle, slideNum, opts?)
+  — full-bleed photo title; opts={date?, image?}. Use "\n" in title to break it into 2 lines.
+addProductTitleSlide(deck, title, subtitle, slideNum, opts?)
+  — product render + product lockup title; opts={product?: 'ROCm'|'Instinct'|'EPYC'|…, presenter?, image?}
+addSectionIntroSlide(deck, title, body, slideNum, notes, opts?)
+  — section opener: title + 1-3 sentence description (string) beside a photo; opts={image?}
+addStatementSlide(deck, headline, subline, evidence, slideNum, notes)
+  — big two-tone claim (accent headline + white subline) beside cited evidence;
+    evidence=[{text, source?}] × 1-4
+addProofPointSlide(deck, headline, subline, proof, slideNum, notes, opts?)
+  — one before/after metric as the slide's message;
+    proof={before: {value, label}, after: {value, label}, multiple?: '4X', caption?}; opts={label?}
+addFeatureListSlide(deck, title, tagline, features, slideNum, notes, opts?)
+  — product-branded header (lockup | title + accent tagline) with features=[{heading, lines: string[]}] × 2-4;
+    opts={product?, image?}
 
 Optional: import { masterNameFor } from '../lib/pptxgenjs-masters.mjs'
 
@@ -199,14 +218,18 @@ Map each slide's content to the best layout:
 
 | Content Signal | Layout |
 |---|---|
-| First heading in outline | addTitleSlide |
+| First heading in outline | a title slide — see "Choosing the title slide" |
 | Section heading (no children, corp-match) | SKIP — do not render |
 | 2-4 named items / features / use cases | addCardGrid |
 | Prominent number or statistic | addStatCallout |
 | Code blocks or CLI commands | addCodeSlide |
 | Markdown table / spec or feature comparison grid | addTableSlide (keep every cell; never invent values) |
 | Slide with a `> ` blockquote line + supporting points | addTakeawaySlide (the blockquote is the takeaway) |
-| Agenda / contents / outline of the deck | addAgendaSlide |
+| Agenda / contents / outline of the deck | addAgendaSlide (photo variant with a brand title) |
+| Section opener that has a 1-3 sentence description | addSectionIntroSlide |
+| Market context / "why now" claim backed by quotes or cited stats | addStatementSlide |
+| ONE before→after number that is the whole point of the slide | addProofPointSlide |
+| Product pillars / value props, each a heading + 1-3 short lines | addFeatureListSlide (opts.product = the product) |
 | Customer or analyst quote (`> quote` + attribution) | addQuoteSlide |
 | Roadmap / timeline / milestones by quarter, year or phase | addRoadmapSlide |
 | Legal disclaimer / notices / attributions | addDisclaimerSlide |
@@ -224,6 +247,21 @@ Map each slide's content to the best layout:
 | IMAGE: with no bullets | addImageSlide |
 | IMAGE: with bullets | addImageBulletsSlide |
 | Last slide / thank you | addClosingSlide |
+
+### Choosing the title slide (decide from the outline's audience and subject)
+
+- addProductTitleSlide — the deck is about one AMD product or platform (Instinct / MI3xx,
+  ROCm, EPYC, Radeon …): product briefings, performance decks, launches. Set opts.product
+  to the product line ('ROCm' for software, 'Instinct' for GPUs) and opts.presenter if a
+  speaker is named.
+- addHeroTitleSlide — executive, strategy, vision, keynote or customer-pitch decks that
+  are about a message rather than one product. Pass opts.date when the outline gives one.
+- addTitleSlide — the default: internal updates, training, workshops, technical deep
+  dives, or whenever the signal is unclear. Never pick a brand title just to vary things.
+
+When you use a brand title, keep the deck in that style: photo agenda, addSectionIntroSlide
+for described sections, and addFeatureListSlide / addStatementSlide / addProofPointSlide
+where the content fits. With addTitleSlide, prefer the standard layouts.
 
 Variety Rule: NEVER use the same layout on two consecutive slides.
 Substitution: if you would use addBulletSlide twice in a row, use addCardGrid, addTwoColumn, addThreeColContent, or addProcessFlow instead.
