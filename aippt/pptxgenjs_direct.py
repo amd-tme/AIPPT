@@ -43,6 +43,19 @@ _TITLE_SLIDE_PATTERNS = re.compile(
 )
 
 
+# LAYOUT: directive values (python-pptx names) → pptxgenjs helpers
+_LAYOUT_DIRECTIVES = {
+    'two_column':       'addTwoColumn',
+    'numbered':         'addProcessFlow',
+    'bullet':           'addBulletSlide',
+    'basic':            'addBulletSlide',
+    'diagram':          'addImageSlide',
+    'title_alt':        'addTitleSlide',
+    'section_content':  'addSectionDivider',
+    'two_col_numbered': 'addTwoColNumbered',
+}
+
+
 def _bullet_lines(content: List[str]) -> List[str]:
     """Return non-empty content lines that look like bullet items."""
     return [l.lstrip('-* \t') for l in content if re.match(r'^\s*[-*•]\s+\S', l)]
@@ -74,22 +87,19 @@ def _pick_layout(slide: dict, prev_layout: str, slide_index: int, total_slides: 
     bullets = _bullet_lines(slide['content'])
     explicit_layout = slide.get('layout', '')
 
-    # 1. Explicit LAYOUT: directive — map python-pptx names to pptxgenjs helpers
-    _LAYOUT_MAP = {
-        'two_column':     'addTwoColumn',
-        'numbered':       'addProcessFlow',
-        'bullet':         'addBulletSlide',
-        'basic':          'addBulletSlide',
-        'diagram':        'addImageSlide',
-        'title_alt':      'addTitleSlide',
-        'section_content':'addSectionDivider',
-        'two_col_numbered':'addTwoColNumbered',
-    }
-    if explicit_layout and explicit_layout in _LAYOUT_MAP:
-        return _LAYOUT_MAP[explicit_layout]
+    has_image = bool(slide.get('image') or _IMAGE_DIRECTIVE.search('\n'.join(slide['content'])))
+
+    # 1. Explicit LAYOUT: directive (diagram without an image has nothing to show)
+    if explicit_layout and explicit_layout in _LAYOUT_DIRECTIVES:
+        layout = _LAYOUT_DIRECTIVES[explicit_layout]
+        if layout == 'addImageSlide':
+            if not has_image:
+                return 'addBulletSlide'
+            return 'addImageBulletsSlide' if bullets else 'addImageSlide'
+        return layout
 
     # 2. IMAGE: directive
-    if slide.get('image') or _IMAGE_DIRECTIVE.search('\n'.join(slide['content'])):
+    if has_image:
         return 'addImageBulletsSlide' if bullets else 'addImageSlide'
 
     # 3. First slide
@@ -321,6 +331,22 @@ def _emit_process_flow(slide: dict, n: int) -> str:
     )
 
 
+def _emit_two_col_numbered(slide: dict, n: int) -> str:
+    # addTwoColNumbered(deck, sectionTitle, items, slideNum, notes) — the
+    # helper numbers items itself, so strip any author-supplied "1." prefixes
+    items = _bullet_lines(slide['content'])
+    if not items:
+        items = [re.sub(r'^\d+[.)]\s+', '', l.strip())
+                 for l in slide['content'] if l.strip()]
+    title = _js_str(slide['title'])
+    notes = _js_str(_meta_note('addTwoColNumbered'))
+    return (
+        f"// ═══ Slide {n}: {slide['title']} ═══\n"
+        f"addTwoColNumbered(deck, `{title}`, {_bullets_to_js_array(items)},\n"
+        f"  {n}, `{notes}`);\n"
+    )
+
+
 def _emit_code(slide: dict, n: int) -> str:
     title = _js_str(slide['title'])
     notes = _js_str(_meta_note('addCodeSlide'))
@@ -365,6 +391,7 @@ _EMITTERS = {
     'addTwoColumn':      _emit_two_column,
     'addProcessFlow':    _emit_process_flow,
     'addCodeSlide':      _emit_code,
+    'addTwoColNumbered': _emit_two_col_numbered,
     'addImageSlide':     _emit_image,
     'addImageBulletsSlide': _emit_image,
 }
@@ -398,12 +425,21 @@ def _build_script(outline_text: str, theme: str = 'amd') -> str:
     prev = ''
     for i, slide in enumerate(slides):
         layout = _pick_layout(slide, prev, i, len(slides))
+        if layout not in _EMITTERS:
+            # Never import a helper we can't emit a call for
+            layout = 'addBulletSlide'
         layouts.append(layout)
         prev = layout
 
-    # Collect all helpers actually used
-    used_helpers = set(layouts) | {'createDeck', 'cardShadow'}
-    if 'addCardGrid' in used_helpers:
+    slide_blocks: List[str] = []
+    for i, (slide, layout) in enumerate(zip(slides, layouts), start=1):
+        slide_blocks.append(_EMITTERS[layout](slide, i))
+
+    # Import exactly the helpers the emitted code calls (an emitter may pick
+    # a variant, e.g. addImageBulletsSlide, of the layout it was given)
+    body = '\n'.join(slide_blocks)
+    used_helpers = set(re.findall(r'^(add[A-Z]\w+)\(deck', body, re.M)) | {'createDeck'}
+    if 'cardShadow(' in body:
         used_helpers.add('cardShadow')
 
     imports_line = (
@@ -411,11 +447,6 @@ def _build_script(outline_text: str, theme: str = 'amd') -> str:
         ', '.join(sorted(used_helpers)) +
         " } from '../lib/pptxgenjs-helpers.mjs';"
     )
-
-    slide_blocks: List[str] = []
-    for i, (slide, layout) in enumerate(zip(slides, layouts), start=1):
-        emitter = _EMITTERS.get(layout, _emit_bullet)
-        slide_blocks.append(emitter(slide, i))
 
     deck_name = re.sub(r'[^a-z0-9]+', '-', slides[0]['title'].lower()).strip('-')[:40] or 'deck'
 
