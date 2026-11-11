@@ -226,10 +226,10 @@ Map each slide's content to the best layout:
 | Markdown table / spec or feature comparison grid | addTableSlide (keep every cell; never invent values) |
 | Slide with a `> ` blockquote line + supporting points | addTakeawaySlide (the blockquote is the takeaway) |
 | Agenda / contents / outline of the deck | addAgendaSlide (photo variant with a brand title) |
-| Section opener that has a 1-3 sentence description | addSectionIntroSlide |
-| Market context / "why now" claim backed by quotes or cited stats | addStatementSlide |
-| ONE before→after number that is the whole point of the slide | addProofPointSlide |
-| Product pillars / value props, each a heading + 1-3 short lines | addFeatureListSlide (opts.product = the product) |
+| Section opener that has a 1-3 sentence description | addSectionIntroSlide (brand decks only) |
+| A claim backed by 1-4 facts, quotes or cited stats (often with `Source:` lines) | addStatementSlide (brand decks only; each fact = evidence; a `Source:` sub-bullet = its source) |
+| Two values of one metric to compare (old vs new, them vs us, gen vs gen) | addProofPointSlide (brand decks only; first = before, second = after) |
+| Product pillars / value props, each a heading + 1-3 short lines | addFeatureListSlide (brand decks only; opts.product = the product) |
 | Customer or analyst quote (`> quote` + attribution) | addQuoteSlide |
 | Roadmap / timeline / milestones by quarter, year or phase | addRoadmapSlide |
 | Legal disclaimer / notices / attributions | addDisclaimerSlide |
@@ -259,9 +259,21 @@ Map each slide's content to the best layout:
 - addTitleSlide — the default: internal updates, training, workshops, technical deep
   dives, or whenever the signal is unclear. Never pick a brand title just to vary things.
 
-When you use a brand title, keep the deck in that style: photo agenda, addSectionIntroSlide
-for described sections, and addFeatureListSlide / addStatementSlide / addProofPointSlide
-where the content fits. With addTitleSlide, prefer the standard layouts.
+When you use a brand title, keep the WHOLE deck in that style:
+- The agenda MUST be the photo variant:
+  addAgendaSlide(deck, `Agenda`, items, n, notes, { image: '', label: `<deck title>` })
+- In a brand deck the brand rows above win over addTakeawaySlide: a slide whose bullets
+  compare two values of one metric is addProofPointSlide, and a claim with supporting or
+  sourced facts is addStatementSlide — even when the slide has a `> ` blockquote (use it as
+  the headline).
+- Described section openers are addSectionIntroSlide; product pillars are addFeatureListSlide.
+With addTitleSlide, use ONLY the standard layouts — never addSectionIntroSlide,
+addStatementSlide, addProofPointSlide, addFeatureListSlide or the photo agenda.
+
+Brand title details: do not repeat the date inside the subtitle when you pass opts.date.
+addProofPointSlide multiple: write the gain the way the audience reads it — '2.1X' when
+higher is better, '40% lower' when lower is better (cost, latency, power). Never a value
+below 1X.
 
 Variety Rule: NEVER use the same layout on two consecutive slides.
 Substitution: if you would use addBulletSlide twice in a row, use addCardGrid, addTwoColumn, addThreeColContent, or addProcessFlow instead.
