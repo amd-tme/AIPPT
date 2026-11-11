@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Blocks commits that introduce new test failures.
+# Enable once per clone: git config core.hooksPath .githooks
+set -euo pipefail
+
+if ! git diff --cached --name-only --diff-filter=ACMRD | grep -qE '\.(py|mjs|js|html|ya?ml)$|^tests/known_failures\.txt$'; then
+  exit 0
+fi
+
+# Worktrees share the venv of the main checkout.
+COMMON_ROOT="$(cd "$(git rev-parse --git-common-dir)/.." && pwd)"
+PY="${VENV_PYTHON:-}"
+for cand in "$PY" "./venv/bin/python" "$COMMON_ROOT/venv/bin/python"; do
+  if [ -n "$cand" ] && [ -x "$cand" ]; then PY="$cand"; break; fi
+done
+if [ -z "$PY" ] || [ ! -x "$PY" ]; then
+  echo "pre-commit: no venv python found (set VENV_PYTHON)" >&2
+  exit 1
+fi
+
+echo "pre-commit: running test suite..."
+if ! "$PY" -m pytest tests/ -q -x --tb=short -p no:cacheprovider; then
+  echo "" >&2
+  echo "pre-commit: tests failed — commit blocked." >&2
+  echo "Fix the failure, or if it already fails on main, add it to tests/known_failures.txt." >&2
+  exit 1
+fi

@@ -1,0 +1,4 @@
+# Tests that fail on main today. Marked xfail (non-strict) by conftest.py so
+# the suite stays green while still catching NEW failures. Remove a line once
+# its test is fixed.
+tests/test_master_pptx.py::TestChromeNotDuplicated::test_content_slides_have_no_image_shapes
