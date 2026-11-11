@@ -168,3 +168,181 @@ def test_render_produces_pptx(tmp_path):
         assert len(Presentation(result.pptx_path).slides) == 4
     finally:
         shutil.rmtree(uploads / job_id, ignore_errors=True)
+
+
+# ---------------------------------------------------------------------------
+# Phase 1 — no content is dropped
+# ---------------------------------------------------------------------------
+
+def _deck(*slides: str) -> str:
+    """Build an outline with a title slide followed by the given slide bodies."""
+    return "# Deck Title\nSubtitle line\n\n" + "\n\n".join(slides) + "\n"
+
+
+def _slide_call(script: str, n: int) -> str:
+    """Source for slide *n* (1-based) — from its marker to the next one."""
+    m = re.search(rf"// ═══ Slide {n}:.*?(?=// ═══ Slide|const outDir)", script, re.S)
+    return m.group(0)
+
+
+def test_title_subtitle_uses_plain_text_line():
+    assert "`Subtitle line`" in _slide_call(_build_script(_deck("# A\n- x\n- y")), 1)
+
+
+def test_code_with_bullets_splits_into_two_slides():
+    script = _build_script(_deck(
+        "# Install\n- Needs Python 3.11\n- Needs Node 20\n```bash\npip install aippt\n```"
+    ))
+    calls = _calls(script)
+    assert calls[1] != "addCodeSlide" and calls[2] == "addCodeSlide"
+    assert "Needs Node 20" in _slide_call(script, 2)
+    assert "pip install aippt" in _slide_call(script, 3)
+
+
+def test_code_first_keeps_author_order():
+    script = _build_script(_deck(
+        "# Install\n```bash\npip install aippt\n```\n- Needs Python 3.11\n- Needs Node 20"
+    ))
+    assert _calls(script)[1] == "addCodeSlide"
+
+
+def test_mostly_code_slide_stays_single_and_keeps_text_in_notes():
+    script = _build_script(_deck("# Run It\nStart the server:\n```bash\naippt serve\n```"))
+    assert _calls(script)[1:] == ["addCodeSlide"]
+    assert "Start the server:" in _slide_call(script, 2)
+
+
+def test_card_grid_keeps_all_six_items():
+    items = "\n".join(f"- Feature {i}: does thing {i}" for i in range(1, 7))
+    script = _build_script(_deck(f"# Features\n{items}"))
+    assert _calls(script)[1] == "addCardGrid"
+    for i in range(1, 7):
+        assert f"does thing {i}" in script
+
+
+def test_seven_plain_items_fall_back_to_bullets_not_truncated_cards():
+    items = "\n".join(f"- Point number {i}" for i in range(1, 8))
+    script = _build_script(_deck(f"# Points\n{items}"))
+    assert _calls(script)[1] == "addBulletSlide"
+    assert "Point number 7" in script
+
+
+def test_sub_bullets_are_preserved():
+    script = _build_script(_deck(
+        "# Details\n- Parent one\n  - Child A\n  - Child B\n- Parent two\n- Parent three"
+    ))
+    assert _calls(script)[1] == "addBulletSlide"
+    assert "{ text: 'Parent one', subs: ['Child A', 'Child B'] }" in script
+
+
+def test_hyphenated_words_are_not_split_as_lead_ins():
+    script = _build_script(_deck(
+        "# Engines\n- python-pptx based output\n- pptxgenjs scripts"
+    ))
+    assert "title: 'python-pptx based output'" in script
+
+
+def test_markdown_is_stripped_for_cards_but_lead_in_kept_for_bullets():
+    cards = _build_script(_deck("# Cards\n- **Fast** — uses `cache`\n- **Safe** — sandboxed"))
+    assert "title: 'Fast', body: 'uses cache'" in cards
+    bullets = _build_script(_deck(
+        "# B\nLAYOUT: bullet\n- **Fast** — uses `cache`\n- **Safe** — sandboxed"
+    ))
+    assert "'**Fast** — uses cache'" in bullets
+
+
+def test_product_names_do_not_trigger_stat_callout():
+    script = _build_script(_deck("# GPUs\n- MI300X has 192 GB\n- H100 has 80 GB\n- Both ship today"))
+    assert "addStatCallout" not in _calls(script)
+
+
+def test_stat_led_items_use_stat_callout_with_all_values():
+    script = _build_script(_deck(
+        "# Results\n- 3x faster training\n- 50% lower cost\n- 192 GB HBM3 memory\n- 2.4x throughput"
+    ))
+    assert _calls(script)[1] == "addStatCallout"
+    for value in ("'3x'", "'50%'", "'192 GB'", "'2.4x'"):
+        assert f"value: {value}" in script
+
+
+def test_numbered_list_becomes_process_flow():
+    script = _build_script(_deck("# Setup\n1. Clone\n2. Install\n3. Run"))
+    assert _calls(script)[1] == "addProcessFlow"
+
+
+def test_long_numbered_list_uses_two_col_numbered():
+    items = "\n".join(f"{i}. Step {i}" for i in range(1, 9))
+    script = _build_script(_deck(f"# Checklist\n{items}"))
+    assert _calls(script)[1] == "addTwoColNumbered"
+    assert "Step 8" in script and "1. Step" not in script
+
+
+def test_two_column_honours_headers_and_column_break():
+    script = _build_script(_deck(
+        "# Options\nLAYOUT: two_column | Cloud | On-prem\n- Elastic\n- Managed\n- Pay as you go\n|||\n- Full control"
+    ))
+    call = _slide_call(script, 2)
+    assert "'Cloud', 'On-prem'" in call
+    left, right = re.findall(r"\[\n(.*?)\n  \]", call, re.S)
+    assert "'Pay as you go'" in left and "'Full control'" not in left
+    assert right.strip() == "'Full control',"
+
+
+def test_grouped_content_keeps_headings():
+    script = _build_script(_deck(
+        "# Engines\n**Alpha**\n- a1\n- a2\n\n**Beta**\n- b1\n\n**Gamma**\n- g1"
+    ))
+    assert _calls(script)[1] == "addCardGrid"
+    for word in ("'Alpha'", "'Beta'", "'Gamma'", "a2", "g1"):
+        assert word in script
+
+
+def test_dense_groups_split_into_continuation_slide():
+    groups = "\n\n".join(
+        f"**Group {g}**\n" + "\n".join(f"- item {g}.{i}" for i in range(5)) for g in range(3)
+    )
+    script = _build_script(_deck(f"# Dense\n{groups}"))
+    assert "Dense (cont.)" in script
+    assert "item 2.4" in script
+
+
+def test_prose_goes_to_speaker_notes():
+    script = _build_script(_deck("# Why\nThis intro sentence matters.\n- One thing\n- Another thing"))
+    assert "This intro sentence matters." in _slide_call(script, 2)
+
+
+def test_closing_content_kept_in_notes():
+    script = _build_script(_deck("# Questions\n- Email platform@example.com"))
+    assert _calls(script)[-1] == "addClosingSlide"
+    assert "platform@example.com" in script
+
+
+def test_section_dividers_are_numbered_in_order():
+    script = _build_script(_deck("# Part One", "# Middle\n- a\n- b\n- c\n- d\n- e\n- f\n- g", "# Part Two", "# End\n- x\n- y\n- z\n- w\n- v\n- u\n- t"))
+    assert re.findall(r"addSectionDivider\(deck, (\d+),", script) == ["1", "2"]
+
+
+def test_horizontal_rules_are_ignored():
+    script = _build_script(_deck("# A\n- one\n- two\n\n---"))
+    assert "\n---\n\n---" not in script
+    assert "'---'" not in script
+
+
+def test_metadata_block_uses_real_newlines():
+    from aippt.metadata import _META_PATTERN
+    script = _build_script(SIMPLE_OUTLINE)
+    notes = re.search(r"\[AIPPT-META\].*?\[/AIPPT-META\]", script, re.S).group(0)
+    assert _META_PATTERN.search(notes)
+
+
+def test_js_quoting_escapes_backslashes_and_newlines():
+    script = _build_script(_deck("# Paths\nLAYOUT: bullet\n- C:\\temp\\out\n- it's fine"))
+    assert "'C:\\\\temp\\\\out'" in script
+    assert "'it\\'s fine'" in script
+    assert validate_script(script)[0]
+
+
+def test_three_col_content_directive():
+    script = _build_script(_deck("# Pillars\nLAYOUT: three_col_content\n**A**\n- a\n**B**\n- b\n**C**\n- c"))
+    assert _calls(script)[1] == "addThreeColContent"
+    assert "heading: 'B', body: 'b'" in script

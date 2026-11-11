@@ -27,42 +27,172 @@ class ScriptGenerationError(Exception):
 
 
 # ---------------------------------------------------------------------------
-# Layout classifier
+# Slide body model
 # ---------------------------------------------------------------------------
 
-# Keywords that suggest each layout — checked against title + content combined
-_STAT_KEYWORDS    = re.compile(r'\b(\d+[×xX%]|\d+\.\d+[×xX]|\d+\s*TB|\d+\s*GB|\d+x\b)', re.I)
-_CODE_FENCE       = re.compile(r'```')
+_BULLET_RE        = re.compile(r'^([ \t]*)(?:[-*•+]|(\d+)[.)])\s+(.*\S)')
+_GROUP_HEAD_RE    = re.compile(r'^\*\*([^*]+?)\*\*\s*:?\s*$')
+_CODE_FENCE       = re.compile(r'^\s*```')
+_RULE_LINE        = re.compile(r'^(?:-{3,}|\*{3,}|_{3,})$')
+# "Lead — rest", "Lead: rest" — needs a spaced dash or colon-space so
+# hyphenated words ("python-pptx") and "AMD:XYZ" are never split
+_LEAD_SPLIT       = re.compile(r'^(.{1,60}?)(?:\s+[—–-]\s+|\s*[—–]\s*|:\s+)(.+)$')
+# A stat-led item starts with a value that carries a unit ("3x faster",
+# "50% lower cost", "192 GB HBM3", "$2M saved"); bare numbers and product
+# names like MI300X / H100 don't count
+_STAT_LEAD        = re.compile(
+    r'^([~≈<>+]?\$?\d[\d,.]*\s?(?:[×xX%+]|[KMB]\b|[KMGTP]B\b|ms\b|µs\b)\+?)'
+    r'(?:\s*[—–:-]\s*|\s+)(.+)$'
+)
 _TWO_COLUMN_WORDS = re.compile(r'\b(vs\.?|versus|compare|comparison|before|after|left|right|pros?|cons?)\b', re.I)
 _PROCESS_WORDS    = re.compile(r'\b(step\s*\d|phase\s*\d|first|second|third|then|next|finally|workflow|pipeline|process|flow)\b', re.I)
 _IMAGE_DIRECTIVE  = re.compile(r'^IMAGE:\s*\S+', re.M)
+_CLOSING_WORDS    = re.compile(r'\b(thank|thanks|closing|questions?|q\s*&\s*a|contact|goodbye|end)\b', re.I)
 
-# Phrases that typically anchor a title slide
-_TITLE_SLIDE_PATTERNS = re.compile(
-    r'\b(agenda|overview|introduction|welcome|about|presented by|confidential)\b', re.I
-)
+# Most cards / process steps / stats each helper lays out cleanly
+_MAX_CARDS = 6
+_MAX_STEPS = 6
+_MAX_STATS = 4
+_MAX_CARD_TEXT = 140
+_MAX_LINES = 10      # bullet-slide lines (headings + items) before splitting
 
+
+def _body(slide: dict) -> dict:
+    """Structured view of a slide's content, cached on the slide.
+
+    items   top-level list items ``{'text', 'subs', 'numbered'}``
+    loose   items that appear before any group heading
+    groups  ``**Heading**`` lines with the items listed under them
+    prose   remaining text lines, markdown stripped (subtitle / speaker
+            notes — never dropped)
+    code    fenced blocks ``{'label', 'code'}``; label is a heading that
+            introduced the block, e.g. ``**Search:**``
+    first   'code' or 'text', whichever comes first (for split ordering)
+    """
+    if '_body' in slide:
+        return slide['_body']
+    items, loose, groups, prose, code = [], [], [], [], []
+    col_break = None
+    first = None
+    fence = None
+    label = None
+    for line in slide['content']:
+        if fence is not None:
+            if _CODE_FENCE.match(line):
+                code.append({'label': label, 'code': '\n'.join(fence).rstrip()})
+                fence = None
+            else:
+                fence.append(line)
+            continue
+        if _CODE_FENCE.match(line):
+            fence = []
+            first = first or 'code'
+            # A heading with nothing under it labels the code that follows
+            label = groups.pop()['heading'] if groups and not groups[-1]['items'] else None
+            continue
+        s = line.strip()
+        if not s or _RULE_LINE.match(s):
+            continue
+        if s == '|||':
+            col_break = len(items)
+            continue
+        m = _BULLET_RE.match(line)
+        if m:
+            first = first or 'text'
+            indent, num, text = m.groups()
+            if len(indent.expandtabs(4)) >= 2 and items:
+                items[-1]['subs'].append(text)
+                continue
+            item = {'text': text, 'subs': [], 'numbered': bool(num)}
+            items.append(item)
+            (groups[-1]['items'] if groups else loose).append(item)
+            continue
+        h = _GROUP_HEAD_RE.match(s)
+        if h:
+            groups.append({'heading': h.group(1).strip().rstrip(':').strip(), 'items': []})
+            continue
+        prose.append(_md_plain(s))
+    if fence:  # unterminated fence — keep what we have
+        code.append({'label': label, 'code': '\n'.join(fence).rstrip()})
+    # Headings that ended up with no items are just text
+    for g in [g for g in groups if not g['items']]:
+        prose.append(_md_plain(g['heading']))
+        groups.remove(g)
+    body = {'items': items, 'loose': loose, 'groups': groups, 'prose': prose,
+            'code': code, 'col_break': col_break, 'first': first or 'text'}
+    slide['_body'] = body
+    return body
+
+
+def _directive(slide: dict):
+    """Split ``LAYOUT: two_column | Left | Right`` into (name, [headers])."""
+    parts = [p.strip() for p in (slide.get('layout') or '').split('|')]
+    return parts[0].lower(), parts[1:]
+
+
+def _md_plain(text: str) -> str:
+    """Strip inline markdown for helpers that render text verbatim."""
+    text = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'\1 (\2)', text)
+    text = re.sub(r'(\*\*|__)(.+?)\1', r'\2', text)
+    text = re.sub(r'(?<![\w*])\*(?!\s)(.+?)(?<!\s)\*(?![\w*])', r'\1', text)
+    return text.replace('`', '').strip()
+
+
+def _md_bullet(text: str) -> str:
+    """Like _md_plain, but keep a leading ``**Lead**`` — addBulletSlide renders it."""
+    m = re.match(r'^\*\*(.+?)\*\*\s*(:?)\s*(.*)$', text)
+    if not m:
+        return _md_plain(text)
+    lead = _md_plain(m.group(1)) + m.group(2)
+    rest = _md_plain(m.group(3))
+    return f'**{lead}** {rest}'.rstrip()
+
+
+def _split_lead(text: str):
+    """'Lead — rest' → ('Lead', 'rest'); no lead-in → (text, '')."""
+    plain = _md_plain(text)
+    m = _LEAD_SPLIT.match(plain)
+    if m:
+        return m.group(1).strip(), m.group(2).strip()
+    return plain, ''
+
+
+def _flat_text(item: dict) -> str:
+    """One-line text for an item, folding any sub-bullets in."""
+    text = _md_plain(item['text'])
+    if item['subs']:
+        text += ': ' + '; '.join(_md_plain(s) for s in item['subs'])
+    return text
+
+
+def _cardable(items: List[dict]) -> bool:
+    return (2 <= len(items) <= _MAX_CARDS
+            and not any(it['subs'] for it in items)
+            and all(len(_md_plain(it['text'])) <= _MAX_CARD_TEXT for it in items))
+
+
+def _is_stat_slide(items: List[dict]) -> bool:
+    return (2 <= len(items) <= _MAX_STATS
+            and not any(it['subs'] for it in items)
+            and all(_STAT_LEAD.match(_md_plain(it['text'])) for it in items))
+
+
+# ---------------------------------------------------------------------------
+# Layout classifier
+# ---------------------------------------------------------------------------
 
 # LAYOUT: directive values (python-pptx names) → pptxgenjs helpers
 _LAYOUT_DIRECTIVES = {
-    'two_column':       'addTwoColumn',
-    'numbered':         'addProcessFlow',
-    'bullet':           'addBulletSlide',
-    'basic':            'addBulletSlide',
-    'diagram':          'addImageSlide',
-    'title_alt':        'addTitleSlide',
-    'section_content':  'addSectionDivider',
-    'two_col_numbered': 'addTwoColNumbered',
+    'two_column':        'addTwoColumn',
+    'numbered':          'addProcessFlow',
+    'bullet':            'addBulletSlide',
+    'basic':             'addBulletSlide',
+    'diagram':           'addImageSlide',
+    'title_alt':         'addTitleSlide',
+    'section_content':   'addSectionDivider',
+    'two_col_numbered':  'addTwoColNumbered',
+    'three_col_content': 'addThreeColContent',
 }
-
-
-def _bullet_lines(content: List[str]) -> List[str]:
-    """Return non-empty content lines that look like bullet items."""
-    return [l.lstrip('-* \t') for l in content if re.match(r'^\s*[-*•]\s+\S', l)]
-
-
-def _all_text(slide: dict) -> str:
-    return slide['title'] + ' ' + ' '.join(slide['content'])
 
 
 def _pick_layout(slide: dict, prev_layout: str, slide_index: int, total_slides: int) -> str:
@@ -73,81 +203,162 @@ def _pick_layout(slide: dict, prev_layout: str, slide_index: int, total_slides: 
     2. IMAGE: directive → addImageSlide / addImageBulletsSlide
     3. First slide → addTitleSlide
     4. Last slide (closing keywords) → addClosingSlide
-    5. Code fences in content → addCodeSlide
-    6. Stats/numbers prominent → addStatCallout
-    7. vs/compare signal + 2 clear halves → addTwoColumn
-    8. Process/steps signal + 3-6 items → addProcessFlow
-    9. 2-4 bullet items, natural groups → addCardGrid
-    10. Section heading with children (kept) → addSectionDivider
-    11. Fallback → addBulletSlide
-    Variety rule: never repeat same layout as prev_layout (substitution applied).
+    5. Code fences in content → addCodeSlide (slides that also carry real
+       bullets are split beforehand, see _split_code_slides)
+    6. Bold group headings → two groups: addTwoColumn; 3-6 small groups:
+       addCardGrid (addThreeColContent for 3 after a card grid); otherwise
+       addBulletSlide with sub-bullets
+    7. Every item leads with a stat value → addStatCallout
+    8. ``|||`` column break, or vs/compare signal → addTwoColumn
+    9. Numbered list or process signal → addProcessFlow (3-6 steps),
+       addTwoColNumbered (7+ numbered items)
+    10. 2-6 short items → addCardGrid
+    11. No items and at most one line → addSectionDivider
+    12. Fallback → addBulletSlide
+    Variety rule: avoid repeating prev_layout where an alternative fits.
+    Nothing is truncated — layouts are only chosen when all items fit.
     """
-    title = slide['title'].lower()
-    all_text = _all_text(slide).lower()
-    bullets = _bullet_lines(slide['content'])
-    explicit_layout = slide.get('layout', '')
+    body = _body(slide)
+    items = body['items']
+    n = len(items)
+    has_subs = any(it['subs'] for it in items)
+    explicit, _ = _directive(slide)
 
     has_image = bool(slide.get('image') or _IMAGE_DIRECTIVE.search('\n'.join(slide['content'])))
 
     # 1. Explicit LAYOUT: directive (diagram without an image has nothing to show)
-    if explicit_layout and explicit_layout in _LAYOUT_DIRECTIVES:
-        layout = _LAYOUT_DIRECTIVES[explicit_layout]
+    if explicit in _LAYOUT_DIRECTIVES:
+        layout = _LAYOUT_DIRECTIVES[explicit]
         if layout == 'addImageSlide':
             if not has_image:
                 return 'addBulletSlide'
-            return 'addImageBulletsSlide' if bullets else 'addImageSlide'
+            return 'addImageBulletsSlide' if items else 'addImageSlide'
+        if layout == 'addProcessFlow' and n > _MAX_STEPS:
+            return 'addTwoColNumbered'
         return layout
 
     # 2. IMAGE: directive
     if has_image:
-        return 'addImageBulletsSlide' if bullets else 'addImageSlide'
+        return 'addImageBulletsSlide' if items else 'addImageSlide'
 
     # 3. First slide
     if slide_index == 0:
         return 'addTitleSlide'
 
     # 4. Last slide
-    closing_words = re.compile(r'\b(thank|thanks|closing|questions?|q\s*&\s*a|contact|goodbye|end)\b', re.I)
-    if slide_index == total_slides - 1 and closing_words.search(all_text):
+    if slide_index == total_slides - 1 and _CLOSING_WORDS.search(_all_text(slide)):
         return 'addClosingSlide'
 
     # 5. Code
-    if _CODE_FENCE.search('\n'.join(slide['content'])):
+    if body['code']:
         return 'addCodeSlide'
 
-    # 6. Stats — at least one stat token in title, first bullet, or any content line
-    first_line = slide['title'] + ' ' + (bullets[0] if bullets else '') + ' ' + ' '.join(slide['content'][:3])
-    if _STAT_KEYWORDS.search(first_line) and len(bullets) <= 5:
-        layout = 'addStatCallout'
-        if layout != prev_layout:
-            return layout
+    # 6. Grouped content ("**Heading**" followed by its own bullets)
+    groups = body['groups']
+    if groups and not body['loose']:
+        if len(groups) == 2 and prev_layout != 'addTwoColumn':
+            return 'addTwoColumn'
+        if (3 <= len(groups) <= _MAX_CARDS and prev_layout != 'addCardGrid'
+                and all(len(g['items']) <= 4 for g in groups)):
+            return 'addCardGrid'
+        if len(groups) == 3 and all(len(g['items']) <= 4 for g in groups):
+            return 'addThreeColContent'
+        return 'addBulletSlide'
 
-    # 7. Two-column — comparison signal AND even-ish bullet count
-    if _TWO_COLUMN_WORDS.search(all_text) and 2 <= len(bullets) <= 8:
-        layout = 'addTwoColumn'
-        if layout != prev_layout:
-            return layout
+    # 7. Stats — every item leads with a value
+    if _is_stat_slide(items) and prev_layout != 'addStatCallout':
+        return 'addStatCallout'
 
-    # 8. Process flow — sequential signal AND 3-6 items
-    if _PROCESS_WORDS.search(all_text) and 3 <= len(bullets) <= 6:
-        layout = 'addProcessFlow'
-        if layout != prev_layout:
-            return layout
+    # 8. Two-column — author column break, or comparison signal
+    if body['col_break'] is not None:
+        return 'addTwoColumn'
+    if _TWO_COLUMN_WORDS.search(_all_text(slide)) and 2 <= n <= 8 and prev_layout != 'addTwoColumn':
+        return 'addTwoColumn'
 
-    # 9. Card grid — 2-4 bullets that each read like a named feature
-    if 2 <= len(bullets) <= 4:
-        layout = 'addCardGrid'
-        if layout != prev_layout:
-            return layout
+    # 9. Ordered steps
+    if n >= 3 and not has_subs:
+        numbered = all(it['numbered'] for it in items)
+        if numbered and n > _MAX_STEPS:
+            return 'addTwoColNumbered'
+        if ((numbered or _PROCESS_WORDS.search(_all_text(slide)))
+                and n <= _MAX_STEPS and prev_layout != 'addProcessFlow'):
+            return 'addProcessFlow'
 
-    # 10. Section divider marker (no real content)
-    if not bullets and len(slide['content']) <= 2:
+    # 10. Card grid — a handful of short, flat items
+    if _cardable(items) and prev_layout != 'addCardGrid':
+        return 'addCardGrid'
+
+    # 11. Section divider marker (no real content)
+    if not items and len(body['prose']) <= 1:
         return 'addSectionDivider'
 
-    # 11. Fallback with variety: never repeat prev
-    if 'addBulletSlide' != prev_layout:
-        return 'addBulletSlide'
-    return 'addCardGrid'
+    # 12. Fallback
+    return 'addBulletSlide'
+
+
+def _all_text(slide: dict) -> str:
+    """Title + visible text, excluding code (so code words don't pick layouts)."""
+    body = _body(slide)
+    parts = [slide['title']] + body['prose'] + [g['heading'] for g in body['groups']]
+    for it in body['items']:
+        parts.append(it['text'])
+        parts.extend(it['subs'])
+    return ' '.join(parts)
+
+
+def _split_code_slides(slides: List[dict]) -> List[dict]:
+    """Split slides that mix real bullets with code into two slides.
+
+    The code helper only shows code, so a slide with an explanation *and*
+    a code block becomes a bullet slide plus a code slide (same title, in
+    the order the author wrote them) instead of losing the bullets.
+    """
+    out: List[dict] = []
+    for i, slide in enumerate(slides):
+        body = _body(slide)
+        if i == 0 or not body['code'] or len(body['items']) < 2:
+            out.append(slide)
+            continue
+        text_slide = dict(slide, _body=dict(body, code=[]))
+        code_slide = {
+            'title': slide['title'], 'content': [], 'section': slide.get('section'),
+            '_body': {'items': [], 'loose': [], 'groups': [], 'prose': [],
+                      'code': body['code'], 'col_break': None, 'first': 'code'},
+        }
+        out.extend([code_slide, text_slide] if body['first'] == 'code' else [text_slide, code_slide])
+    return out
+
+
+def _split_dense_slides(slides: List[dict]) -> List[dict]:
+    """Split slides with too many headed groups to fit on one bullet slide.
+
+    Groups are packed in order into chunks of at most _MAX_LINES lines
+    (heading + items each); later chunks get a "(cont.)" title.
+    """
+    out: List[dict] = []
+    for slide in slides:
+        body = _body(slide)
+        groups = body['groups']
+        sizes = [1 + sum(1 + len(it['subs']) for it in g['items']) for g in groups]
+        fits_cards = 3 <= len(groups) <= _MAX_CARDS and all(len(g['items']) <= 4 for g in groups)
+        if (len(groups) < 3 or body['loose'] or body['code'] or fits_cards
+                or sum(sizes) <= _MAX_LINES or slide.get('layout')):
+            out.append(slide)
+            continue
+        chunks, current, used = [], [], 0
+        for g, size in zip(groups, sizes):
+            if current and used + size > _MAX_LINES:
+                chunks.append(current)
+                current, used = [], 0
+            current.append(g)
+            used += size
+        chunks.append(current)
+        for k, chunk in enumerate(chunks):
+            title = slide['title'] if k == 0 else f"{slide['title']} (cont.)"
+            items = [it for g in chunk for it in g['items']]
+            out.append(dict(slide, title=title, _body=dict(
+                body, items=items, groups=chunk, prose=body['prose'] if k == 0 else [])))
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -160,239 +371,311 @@ def _js_str(s: str) -> str:
 
 
 def _js_quoted(s: str) -> str:
-    return "'" + s.replace("'", "\\'") + "'"
+    s = s.replace('\\', '\\\\').replace("'", "\\'").replace('\r', '').replace('\n', '\\n')
+    return "'" + s + "'"
 
 
-def _bullets_to_js_array(items: List[str]) -> str:
-    """Render a Python list of strings as a JS array literal."""
-    lines = [f"    {_js_quoted(item)}," for item in items]
+def _js_entry(entry) -> str:
+    if isinstance(entry, dict):
+        subs = ', '.join(_js_quoted(s) for s in entry['subs'])
+        return f"{{ text: {_js_quoted(entry['text'])}, subs: [{subs}] }}"
+    return _js_quoted(entry)
+
+
+def _bullets_to_js_array(items: list) -> str:
+    """Render a list of strings / {text, subs} dicts as a JS array literal."""
+    lines = [f"    {_js_entry(item)}," for item in items]
     return '[\n' + '\n'.join(lines) + '\n  ]'
 
 
-def _meta_note(layout: str) -> str:
-    return (
-        '[AIPPT-META]\\n'
-        f'[{{"operation":"create","source":"outline -> pptxgenjs-direct","layout":"{layout}","theme":"amd"}}]\\n'
+def _notes(layout: str, extra: List[str] = ()) -> str:
+    """Speaker notes: any content the layout can't show, then the meta block."""
+    meta = (
+        '[AIPPT-META]\n'
+        f'[{{"operation":"create","source":"outline -> pptxgenjs-direct","layout":"{layout}","theme":"amd"}}]\n'
         '[/AIPPT-META]'
     )
+    human = '\n'.join(line for line in extra if line)
+    return _js_str(f'{human}\n\n---\n{meta}' if human else meta)
+
+
+def _item_lines(items: List[dict]) -> List[str]:
+    """Items as plain '- text' lines (with indented subs) for speaker notes."""
+    lines = []
+    for it in items:
+        lines.append('- ' + _md_plain(it['text']))
+        lines.extend('  - ' + _md_plain(s) for s in it['subs'])
+    return lines
+
+
+def _group_lines(groups: List[dict]) -> List[str]:
+    lines = []
+    for g in groups:
+        lines.append(_md_plain(g['heading']))
+        lines.extend(_item_lines(g['items']))
+    return lines
+
+
+def _all_lines(body: dict) -> List[str]:
+    """Every piece of text content on the slide, for notes on sparse layouts."""
+    lines = body['prose'] + _item_lines(body['loose']) + _group_lines(body['groups'])
+    if body['code']:
+        lines.append(_code_text(body))
+    return lines
+
+
+def _code_text(body: dict) -> str:
+    blocks = []
+    for block in body['code']:
+        blocks.append(f"# {block['label']}\n{block['code']}" if block['label'] else block['code'])
+    return '\n\n'.join(blocks)
+
+
+def _header(slide: dict, n: int) -> str:
+    return f"// ═══ Slide {n}: {slide['title']} ═══\n"
+
+
+def _title(slide: dict) -> str:
+    return _js_str(_md_plain(slide['title']))
 
 
 def _emit_title(slide: dict, n: int) -> str:
-    title = _js_str(slide['title'])
-    bullets = _bullet_lines(slide['content'])
-    subtitle = _js_str(bullets[0]) if bullets else ''
-    return (
-        f"// ═══ Slide {n}: {slide['title']} ═══\n"
-        f"addTitleSlide(deck, `{title}`, `{subtitle}`, {n});\n"
-    )
+    body = _body(slide)
+    # Subtitle: the first line under the title, whether prose or a bullet
+    lines = body['prose'] + [_md_plain(it['text']) for it in body['items']]
+    subtitle = _js_str(lines[0]) if lines else ''
+    rest = lines[1:]
+    call = f"addTitleSlide(deck, `{_title(slide)}`, `{subtitle}`, {n})"
+    if rest:
+        call += f".addNotes(`{_js_str(chr(10).join(rest))}`)"
+    return _header(slide, n) + call + ";\n"
 
 
 def _emit_closing(slide: dict, n: int) -> str:
-    notes = _js_str(_meta_note('addClosingSlide'))
-    return (
-        f"// ═══ Slide {n}: {slide['title']} ═══\n"
-        f"addClosingSlide(deck, {n}, `{notes}`);\n"
-    )
+    # The closing helper draws a fixed logo slide — keep the author's
+    # title and content as speaker notes
+    notes = _notes('addClosingSlide', [_md_plain(slide['title'])] + _all_lines(_body(slide)))
+    return _header(slide, n) + f"addClosingSlide(deck, {n}, `{notes}`);\n"
 
 
 def _emit_section_divider(slide: dict, n: int) -> str:
     # addSectionDivider(deck, sectionNumber, title, slideNum)
-    title = _js_str(slide['title'])
-    return (
-        f"// ═══ Slide {n}: {slide['title']} ═══\n"
-        f"addSectionDivider(deck, {n}, `{title}`, {n});\n"
-    )
+    section_no = slide.get('_section_no', 1)
+    call = f"addSectionDivider(deck, {section_no}, `{_title(slide)}`, {n})"
+    extra = _all_lines(_body(slide))
+    if extra:
+        call += f".addNotes(`{_notes('addSectionDivider', extra)}`)"
+    return _header(slide, n) + call + ";\n"
 
 
 def _emit_bullet(slide: dict, n: int) -> str:
-    bullets = _bullet_lines(slide['content'])
-    if not bullets:
-        bullets = [l.strip() for l in slide['content'] if l.strip()][:6]
-    title = _js_str(slide['title'])
-    notes = _js_str(_meta_note('addBulletSlide'))
-    items_js = _bullets_to_js_array(bullets)
+    body = _body(slide)
+    entries: list = []
+    for it in body['loose']:
+        text = _md_bullet(it['text'])
+        entries.append({'text': text, 'subs': [_md_plain(s) for s in it['subs']]} if it['subs'] else text)
+    for g in body['groups']:
+        subs = []
+        for it in g['items']:
+            subs.append(_md_plain(it['text']))
+            subs.extend(_md_plain(s) for s in it['subs'])
+        entries.append({'text': f"**{_md_plain(g['heading'])}**", 'subs': subs})
+    notes_extra = list(body['prose'])
+    if not entries:
+        # Plain-text slide: the lines themselves are the bullets
+        entries, notes_extra = list(body['prose']), []
+    if body['code']:
+        notes_extra.append(_code_text(body))
+    notes = _notes('addBulletSlide', notes_extra)
     return (
-        f"// ═══ Slide {n}: {slide['title']} ═══\n"
-        f"addBulletSlide(deck, `{title}`, {items_js},\n"
+        _header(slide, n) +
+        f"addBulletSlide(deck, `{_title(slide)}`, {_bullets_to_js_array(entries)},\n"
         f"  {n}, `{notes}`);\n"
     )
 
 
 def _emit_card_grid(slide: dict, n: int) -> str:
-    bullets = _bullet_lines(slide['content'])
-    if not bullets:
-        bullets = [l.strip() for l in slide['content'] if l.strip()][:4]
-    title = _js_str(slide['title'])
-    notes = _js_str(_meta_note('addCardGrid'))
-    # Cards: [{title, body}] — split each bullet on first ' — ' or ': '
-    card_lines = []
-    for b in bullets[:4]:
-        m = re.match(r'^(.+?)\s*[—\-:]\s*(.+)$', b)
-        if m:
-            card_lines.append(
-                f"    {{ title: {_js_quoted(m.group(1).strip())}, "
-                f"body: {_js_quoted(m.group(2).strip())}, "
-                f"shadow: cardShadow(deck.theme) }},"
-            )
-        else:
-            card_lines.append(
-                f"    {{ title: {_js_quoted(b)}, body: '', "
-                f"shadow: cardShadow(deck.theme) }},"
-            )
+    body = _body(slide)
+    cards = []
+    if body['groups'] and not body['loose']:
+        for g in body['groups']:
+            cards.append((_md_plain(g['heading']), '\n'.join(_flat_text(it) for it in g['items'])))
+    elif body['items']:
+        for it in body['items']:
+            head, rest = _split_lead(it['text'])
+            if it['subs']:
+                rest = '\n'.join(filter(None, [rest] + [_md_plain(s) for s in it['subs']]))
+            cards.append((head, rest))
+    else:
+        cards = [(_md_plain(line), '') for line in body['prose']]
+    card_lines = [
+        f"    {{ title: {_js_quoted(head)}, body: {_js_quoted(rest)}, "
+        f"shadow: cardShadow(deck.theme) }},"
+        for head, rest in cards
+    ]
     cards_js = '[\n' + '\n'.join(card_lines) + '\n  ]'
+    extra = body['prose'] if body['items'] else []
+    notes = _notes('addCardGrid', extra)
     return (
-        f"// ═══ Slide {n}: {slide['title']} ═══\n"
-        f"addCardGrid(deck, `{title}`, {cards_js},\n"
+        _header(slide, n) +
+        f"addCardGrid(deck, `{_title(slide)}`, {cards_js},\n"
         f"  {n}, `{notes}`);\n"
     )
 
 
 def _emit_stat_callout(slide: dict, n: int) -> str:
-    bullets = _bullet_lines(slide['content'])
-    # Fall back to raw non-empty content lines when no bullet-formatted items
-    if not bullets:
-        bullets = [l.strip() for l in slide['content'] if l.strip()]
-    title = _js_str(slide['title'])
-    notes = _js_str(_meta_note('addStatCallout'))
-    # Stats: [{value, label}] — first bullet is the stat, rest are context
+    body = _body(slide)
     stats = []
-    for b in bullets[:3]:
-        m = re.match(r'^([\d\.×xX%\+\-]+\s*\S*)\s*[—\-:]\s*(.*)$', b)
-        if m:
-            stats.append(
-                f"    {{ value: {_js_quoted(m.group(1).strip())}, "
-                f"label: {_js_quoted(m.group(2).strip())} }},"
-            )
-        else:
-            # Use the whole bullet as label with title-derived stat
-            stat_m = _STAT_KEYWORDS.search(b)
-            val = stat_m.group(0) if stat_m else b[:10]
-            label = b
-            stats.append(
-                f"    {{ value: {_js_quoted(val)}, label: {_js_quoted(label)} }},"
-            )
+    for it in body['items']:
+        text = _flat_text(it)
+        m = _STAT_LEAD.match(text)
+        value, label = (m.group(1).strip(), m.group(2).strip()) if m else ('', text)
+        stats.append(f"    {{ value: {_js_quoted(value)}, label: {_js_quoted(label)} }},")
     if not stats:
-        stats = [f"    {{ value: '', label: {_js_quoted(bullets[0] if bullets else slide['title'])} }},"]
+        stats = [f"    {{ value: '', label: {_js_quoted(_md_plain(slide['title']))} }},"]
     stats_js = '[\n' + '\n'.join(stats) + '\n  ]'
+    notes = _notes('addStatCallout', body['prose'])
     return (
-        f"// ═══ Slide {n}: {slide['title']} ═══\n"
-        f"addStatCallout(deck, `{title}`, {stats_js},\n"
+        _header(slide, n) +
+        f"addStatCallout(deck, `{_title(slide)}`, {stats_js},\n"
         f"  {n}, `{notes}`);\n"
     )
 
 
 def _emit_two_column(slide: dict, n: int) -> str:
-    bullets = _bullet_lines(slide['content'])
-    title = _js_str(slide['title'])
-    notes = _js_str(_meta_note('addTwoColumn'))
-    # Split bullets roughly in half
-    mid = max(1, len(bullets) // 2)
-    left = bullets[:mid]
-    right = bullets[mid:]
-    if not right:
-        right = ['']
-    # Try to infer column headers from content
-    left_h, right_h = '', ''
-    vs_m = re.search(r'\b(.+?)\s+vs\.?\s+(.+)', slide['title'], re.I)
-    if vs_m:
-        left_h = vs_m.group(1).strip()
-        right_h = vs_m.group(2).strip()
+    body = _body(slide)
+    _, headers = _directive(slide)
+    left_h, right_h = (headers + ['', ''])[:2]
+    if body['groups'] and not body['loose'] and len(body['groups']) >= 2:
+        # Two groups → one per column; any extra groups join the right column
+        first, *others = body['groups']
+        left = [_flat_text(it) for it in first['items']]
+        right = []
+        for g in others:
+            if right:
+                right.append(f"**{_md_plain(g['heading'])}**")
+            right.extend(_flat_text(it) for it in g['items'])
+        left_h = left_h or _md_plain(first['heading'])
+        right_h = right_h or _md_plain(others[0]['heading'])
+    else:
+        texts = [_flat_text(it) for it in body['items']] or list(body['prose'])
+        mid = body['col_break'] if body['col_break'] is not None else (len(texts) + 1) // 2
+        left, right = texts[:mid], texts[mid:]
+    if not left_h and not right_h:
+        vs_m = re.search(r'\b(.+?)\s+vs\.?\s+(.+)', _md_plain(slide['title']), re.I)
+        if vs_m:
+            left_h, right_h = vs_m.group(1).strip(), vs_m.group(2).strip()
+    extra = body['prose'] if body['items'] else []
+    notes = _notes('addTwoColumn', extra)
     return (
-        f"// ═══ Slide {n}: {slide['title']} ═══\n"
-        f"addTwoColumn(deck, `{title}`,\n"
+        _header(slide, n) +
+        f"addTwoColumn(deck, `{_title(slide)}`,\n"
         f"  {_js_quoted(left_h)}, {_js_quoted(right_h)},\n"
-        f"  {_bullets_to_js_array(left)},\n"
-        f"  {_bullets_to_js_array(right)},\n"
+        f"  {_bullets_to_js_array(left or [''])},\n"
+        f"  {_bullets_to_js_array(right or [''])},\n"
         f"  {n}, `{notes}`);\n"
     )
 
 
 def _emit_process_flow(slide: dict, n: int) -> str:
-    bullets = _bullet_lines(slide['content'])
-    if not bullets:
-        bullets = [l.strip() for l in slide['content'] if l.strip()][:6]
-    title = _js_str(slide['title'])
-    notes = _js_str(_meta_note('addProcessFlow'))
-    # Steps are plain strings (not objects) — join label + description with \n
-    step_lines = []
-    for b in bullets[:6]:
-        m = re.match(r'^(.+?)\s*[—\-:]\s*(.+)$', b)
-        if m:
-            step_lines.append(
-                f"    {_js_quoted(m.group(1).strip() + '\\n' + m.group(2).strip())},"
-            )
-        else:
-            step_lines.append(f"    {_js_quoted(b)},")
-    steps_js = '[\n' + '\n'.join(step_lines) + '\n  ]'
+    body = _body(slide)
+    # Steps are plain strings — "Label\nDescription" gives a two-line step
+    steps = []
+    for it in body['items']:
+        head, rest = _split_lead(it['text'])
+        if it['subs']:
+            rest = '; '.join(filter(None, [rest] + [_md_plain(s) for s in it['subs']]))
+        steps.append(f"{head}\n{rest}" if rest else head)
+    extra = list(body['prose'])
+    if not steps:
+        steps, extra = list(body['prose']), []
+    steps_js = '[\n' + '\n'.join(f"    {_js_quoted(s)}," for s in steps) + '\n  ]'
+    notes = _notes('addProcessFlow', extra)
     return (
-        f"// ═══ Slide {n}: {slide['title']} ═══\n"
-        f"addProcessFlow(deck, `{title}`, {steps_js},\n"
+        _header(slide, n) +
+        f"addProcessFlow(deck, `{_title(slide)}`, {steps_js},\n"
         f"  {n}, `{notes}`);\n"
     )
 
 
 def _emit_two_col_numbered(slide: dict, n: int) -> str:
     # addTwoColNumbered(deck, sectionTitle, items, slideNum, notes) — the
-    # helper numbers items itself, so strip any author-supplied "1." prefixes
-    items = _bullet_lines(slide['content'])
+    # helper numbers items itself, so author "1." prefixes are already gone
+    body = _body(slide)
+    items = [_flat_text(it) for it in body['items']]
+    extra = list(body['prose'])
     if not items:
-        items = [re.sub(r'^\d+[.)]\s+', '', l.strip())
-                 for l in slide['content'] if l.strip()]
-    title = _js_str(slide['title'])
-    notes = _js_str(_meta_note('addTwoColNumbered'))
+        items, extra = list(body['prose']), []
+    notes = _notes('addTwoColNumbered', extra)
     return (
-        f"// ═══ Slide {n}: {slide['title']} ═══\n"
-        f"addTwoColNumbered(deck, `{title}`, {_bullets_to_js_array(items)},\n"
+        _header(slide, n) +
+        f"addTwoColNumbered(deck, `{_title(slide)}`, {_bullets_to_js_array(items)},\n"
+        f"  {n}, `{notes}`);\n"
+    )
+
+
+def _emit_three_col(slide: dict, n: int) -> str:
+    # addThreeColContent(deck, title, [{heading, body}], slideNum, notes)
+    body = _body(slide)
+    if body['groups'] and not body['loose']:
+        cols = [(_md_plain(g['heading']), '\n'.join(_flat_text(it) for it in g['items']))
+                for g in body['groups']]
+    else:
+        cols = [_split_lead(_flat_text(it)) for it in body['items']]
+    cols_js = '[\n' + '\n'.join(
+        f"    {{ heading: {_js_quoted(h)}, body: {_js_quoted(b)} }}," for h, b in cols
+    ) + '\n  ]'
+    notes = _notes('addThreeColContent', body['prose'])
+    return (
+        _header(slide, n) +
+        f"addThreeColContent(deck, `{_title(slide)}`, {cols_js},\n"
         f"  {n}, `{notes}`);\n"
     )
 
 
 def _emit_code(slide: dict, n: int) -> str:
-    title = _js_str(slide['title'])
-    notes = _js_str(_meta_note('addCodeSlide'))
-    # Extract fenced code block or use raw content
-    content_raw = '\n'.join(slide['content'])
-    fence_m = re.search(r'```\w*\n(.*?)```', content_raw, re.DOTALL)
-    code = fence_m.group(1).strip() if fence_m else content_raw.strip()
-    code_escaped = _js_str(code)
+    body = _body(slide)
+    code = _code_text(body) if body['code'] else '\n'.join(slide['content']).strip()
+    extra = body['prose'] + _item_lines(body['loose']) + _group_lines(body['groups'])
+    notes = _notes('addCodeSlide', extra)
     return (
-        f"// ═══ Slide {n}: {slide['title']} ═══\n"
-        f"addCodeSlide(deck, `{title}`, `{code_escaped}`,\n"
+        _header(slide, n) +
+        f"addCodeSlide(deck, `{_title(slide)}`, `{_js_str(code)}`,\n"
         f"  {n}, `{notes}`);\n"
     )
 
 
 def _emit_image(slide: dict, n: int) -> str:
     img_path = slide.get('image', '')
-    bullets = _bullet_lines(slide['content'])
-    title = _js_str(slide['title'])
-    notes = _js_str(_meta_note('addImageSlide'))
+    body = _body(slide)
     img_js = _js_quoted(img_path)
-    if bullets:
+    if body['items']:
+        entries = [{'text': _md_bullet(it['text']), 'subs': [_md_plain(s) for s in it['subs']]}
+                   if it['subs'] else _md_bullet(it['text']) for it in body['items']]
+        notes = _notes('addImageBulletsSlide', body['prose'])
         return (
-            f"// ═══ Slide {n}: {slide['title']} ═══\n"
-            f"addImageBulletsSlide(deck, `{title}`, {img_js},\n"
-            f"  {_bullets_to_js_array(bullets)},\n"
+            _header(slide, n) +
+            f"addImageBulletsSlide(deck, `{_title(slide)}`, {img_js},\n"
+            f"  {_bullets_to_js_array(entries)},\n"
             f"  {n}, `{notes}`);\n"
         )
-    return (
-        f"// ═══ Slide {n}: {slide['title']} ═══\n"
-        f"addImageSlide(deck, `{title}`, {img_js}, {n}, `{notes}`);\n"
-    )
+    notes = _notes('addImageSlide', body['prose'])
+    return _header(slide, n) + f"addImageSlide(deck, `{_title(slide)}`, {img_js}, {n}, `{notes}`);\n"
 
 
 _EMITTERS = {
-    'addTitleSlide':     _emit_title,
-    'addClosingSlide':   _emit_closing,
-    'addSectionDivider': _emit_section_divider,
-    'addBulletSlide':    _emit_bullet,
-    'addCardGrid':       _emit_card_grid,
-    'addStatCallout':    _emit_stat_callout,
-    'addTwoColumn':      _emit_two_column,
-    'addProcessFlow':    _emit_process_flow,
-    'addCodeSlide':      _emit_code,
-    'addTwoColNumbered': _emit_two_col_numbered,
-    'addImageSlide':     _emit_image,
+    'addTitleSlide':        _emit_title,
+    'addClosingSlide':      _emit_closing,
+    'addSectionDivider':    _emit_section_divider,
+    'addBulletSlide':       _emit_bullet,
+    'addCardGrid':          _emit_card_grid,
+    'addStatCallout':       _emit_stat_callout,
+    'addTwoColumn':         _emit_two_column,
+    'addProcessFlow':       _emit_process_flow,
+    'addCodeSlide':         _emit_code,
+    'addTwoColNumbered':    _emit_two_col_numbered,
+    'addThreeColContent':   _emit_three_col,
+    'addImageSlide':        _emit_image,
     'addImageBulletsSlide': _emit_image,
 }
 
@@ -420,14 +703,20 @@ def _build_script(outline_text: str, theme: str = 'amd') -> str:
         }
         slides = [deck_title_slide] + slides
 
+    slides = _split_dense_slides(_split_code_slides(slides))
+
     # Determine layouts for all slides first (needed for variety rule)
     layouts: List[str] = []
     prev = ''
+    section_no = 0
     for i, slide in enumerate(slides):
         layout = _pick_layout(slide, prev, i, len(slides))
         if layout not in _EMITTERS:
             # Never import a helper we can't emit a call for
             layout = 'addBulletSlide'
+        if layout == 'addSectionDivider':
+            section_no += 1
+            slide['_section_no'] = section_no
         layouts.append(layout)
         prev = layout
 
