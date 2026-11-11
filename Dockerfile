@@ -87,7 +87,8 @@ RUN PIP_CERT=/etc/ssl/certs/ca-bundle-with-amd.pem pip install --no-cache-dir -r
 COPY package.json package-lock.json ./
 RUN NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-bundle-with-amd.pem npm ci --omit=dev
 
-# Copy application code (world-readable; ownership enforced by K8s securityContext)
+# Copy application code. COPY keeps each file's mode from the build checkout, so
+# the paths copied into /app are made world-readable explicitly below.
 COPY aippt/ aippt/
 COPY aippt.py .
 COPY pyproject.toml .
@@ -108,6 +109,13 @@ COPY examples/ examples/
 # Built HTML docs from the docs stage; app.py mounts these at /docs so the
 # in-UI "Docs" link resolves.
 COPY --from=docs /build/docs/_build/html /app/docs/_build/html
+
+# The Deployment runs as UID 65534. A checkout made under a restrictive umask
+# (e.g. 077) would otherwise leave these 0600 and the app could not read its own
+# source at startup; Sphinx also keeps source modes when copying docs/_static.
+RUN chmod -R a+rX requirements.txt package.json package-lock.json \
+        aippt aippt.py pyproject.toml dirs.yaml gateway.yaml models.yaml templates.yaml \
+        lib themes examples docs/_build/html
 
 # Create data directory for SQLite, uploads, and images (writable via fsGroup)
 RUN mkdir -p /app/data/uploads /app/data/images /app/data/backups && \
