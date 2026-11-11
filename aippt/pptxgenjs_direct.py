@@ -1079,8 +1079,8 @@ _EMITTERS = {
 # Script assembler
 # ---------------------------------------------------------------------------
 
-def _build_script(outline_text: str, theme: str = 'amd') -> str:
-    """Parse outline and assemble a complete .mjs script string."""
+def plan_slides(outline_text: str) -> List[dict]:
+    """Parsed slides in the order a layout plan indexes them (deck title first)."""
     parsed = parse_outline(outline_text)
     slides = parsed['slides']
     sections = parsed.get('sections', [])
@@ -1095,8 +1095,23 @@ def _build_script(outline_text: str, theme: str = 'amd') -> str:
             'content': [],
             'section': None,
             'layout': 'title_alt',
+            '_synthetic': True,
         }
         slides = [deck_title_slide] + slides
+    return slides
+
+
+def _build_script(outline_text: str, theme: str = 'amd',
+                  layout_plan: Optional[dict] = None) -> str:
+    """Parse outline and assemble a complete .mjs script string.
+
+    *layout_plan* maps a ``plan_slides`` index to a LAYOUT directive value
+    (e.g. ``'hero_title'``). An author's own LAYOUT: line always wins.
+    """
+    slides = plan_slides(outline_text)
+    for i, layout in (layout_plan or {}).items():
+        if 0 <= i < len(slides) and (not slides[i].get('layout') or slides[i].get('_synthetic')):
+            slides[i]['layout'] = layout
 
     slides = _split_dense_slides(_split_mixed_slides(slides))
 
@@ -1167,6 +1182,7 @@ def generate_script(
     output_script_path: str,
     theme: str = 'amd',
     progress_callback: Optional[Callable[[str, str], None]] = None,
+    layout_plan: Optional[dict] = None,
 ) -> str:
     """Generate a deterministic pptxgenjs .mjs script from *outline_text*.
 
@@ -1183,6 +1199,8 @@ def generate_script(
         Theme YAML name (default ``'amd'``).
     progress_callback:
         Optional ``(step: str, detail: str) -> None`` for SSE progress.
+    layout_plan:
+        Optional ``{slide index: LAYOUT directive}`` (see ``plan_slides``).
 
     Returns
     -------
@@ -1194,11 +1212,11 @@ def generate_script(
     ScriptGenerationError
         When the outline cannot be mapped to a valid script.
     """
-    if progress_callback:
+    if progress_callback and layout_plan is None:
         progress_callback('generate', 'Building pptxgenjs script (deterministic)…')
 
     try:
-        script = _build_script(outline_text, theme=theme)
+        script = _build_script(outline_text, theme=theme, layout_plan=layout_plan)
     except Exception as exc:
         raise ScriptGenerationError(f"Script build failed: {exc}") from exc
 
@@ -1212,5 +1230,6 @@ def generate_script(
 
     Path(output_script_path).write_text(script, encoding='utf-8')
     if progress_callback:
-        progress_callback('generate', f'Script built ({len(script)} chars, no LLM)')
+        source = 'no LLM' if layout_plan is None else 'from AI layout plan'
+        progress_callback('generate', f'Script built ({len(script)} chars, {source})')
     return script

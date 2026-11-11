@@ -227,3 +227,43 @@ async def test_direct_engine_renders_without_llm(app, tmp_path, ms_token_headers
         mock_pipeline.run_pipeline.assert_not_called()
         mock_render.assert_called_once()
         assert "event: complete" in body
+
+
+# ---------------------------------------------------------------------------
+# pptxgenjs-fast path: one LLM layout plan → deterministic script → render
+# ---------------------------------------------------------------------------
+
+@pytest.mark.anyio
+async def test_fast_engine_plans_with_llm_then_renders(app, tmp_path, ms_token_headers):
+    """engine=pptxgenjs-fast builds an LLM client for the plan, not the code-writing generator."""
+    with (
+        patch("aippt.web.routes._make_llm_client") as mock_llm_factory,
+        patch("aippt.pptxgenjs_gen.generate_and_render") as mock_llm_gen,
+        patch("aippt.pptxgenjs_plan.generate_script", return_value=_GOOD_SCRIPT) as mock_plan_gen,
+        patch("aippt.preview.Renderer.render") as mock_render,
+        patch("aippt.web.routes.ingest_deck", return_value={"deck_id": 1, "slide_count": 2}),
+        patch("aippt.web.routes.persist_file"),
+        patch("aippt.web.routes.persist_tree"),
+        patch("aippt.web.routes._per_deck_images_dir", return_value=str(tmp_path / "images")),
+        patch("aippt.web.routes._sources_dir", return_value=str(tmp_path / "sources")),
+        patch("aippt.web.routes.get_db"),
+        patch("aippt.web.routes._require_images_for_render", return_value=False),
+    ):
+        from aippt.preview import RenderResult
+        mock_render.return_value = RenderResult(
+            success=True, pptx_path=str(tmp_path / "deck.pptx"), duration_ms=100
+        )
+        (tmp_path / "sources").mkdir(exist_ok=True)
+        (tmp_path / "deck.pptx").write_bytes(b"PK fake")
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await _post_create(client, _OUTLINE, "pptxgenjs-fast", ms_token_headers)
+            body = resp.text
+
+        assert resp.status_code == 200
+        mock_llm_factory.assert_called_once()
+        mock_plan_gen.assert_called_once()
+        assert mock_plan_gen.call_args.kwargs["llm_client"] is mock_llm_factory.return_value
+        mock_llm_gen.assert_not_called()
+        mock_render.assert_called_once()
+        assert "event: complete" in body

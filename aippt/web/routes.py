@@ -1909,15 +1909,21 @@ async def create_deck_stream(
                 return _worker_pptxgenjs()
             if engine == "pptxgenjs-direct":
                 return _worker_pptxgenjs(use_llm=False)
+            if engine == "pptxgenjs-fast":
+                return _worker_pptxgenjs(use_llm=False, layout_plan=True)
             if engine == "python-pptx-amd":
                 return _worker_python_pptx_amd()
             return _worker_python_pptx()
 
-        def _worker_pptxgenjs(use_llm=True):
+        def _worker_pptxgenjs(use_llm=True, layout_plan=False):
             # use_llm=False is the free "no-LLM" engine: same script format,
             # workspace, render and catalog path, but rule-based generation.
+            # layout_plan=True is the fast AI engine: one short LLM call picks
+            # the layouts, then the no-LLM engine writes the script.
             if use_llm:
                 from aippt.pptxgenjs_gen import generate_and_render, ScriptGenerationError
+            elif layout_plan:
+                from aippt.pptxgenjs_plan import generate_script, ScriptGenerationError
             else:
                 from aippt.pptxgenjs_direct import generate_script, ScriptGenerationError
             from aippt.preview import Renderer
@@ -1931,7 +1937,7 @@ async def create_deck_stream(
                 uploads_dir, _short_id, _base_name, project_root
             )
             gen_kwargs = {}
-            if use_llm:
+            if use_llm or layout_plan:
                 try:
                     gen_kwargs["llm_client"] = _make_llm_client(
                         request, operation="enhance", model_override=model, user_ntid=ntid)
@@ -1958,6 +1964,7 @@ async def create_deck_stream(
                         output_script_path=script_path,
                         theme="amd",
                         progress_callback=create_progress,
+                        **gen_kwargs,
                     )
             except ScriptGenerationError as exc:
                 event_q.put(("error", {"message": str(exc)}))
