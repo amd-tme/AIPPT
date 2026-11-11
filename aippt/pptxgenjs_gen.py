@@ -137,9 +137,9 @@ addDisclaimerSlide(deck, title, text, slideNum, notes)   — small-print legal t
 
 Brand slides (AMD exec / product deck styles; bundled photos are used when no image is given):
 addHeroTitleSlide(deck, title, subtitle, slideNum, opts?)
-  — full-bleed photo title; opts={date?, image?}. Use "\n" in title to break it into 2 lines.
+  — full-bleed photo title; opts={date?, image?, footnote?} (footnote = small legal line along the bottom, only if the outline has one). Use "\n" in title to break it into 2 lines.
 addProductTitleSlide(deck, title, subtitle, slideNum, opts?)
-  — product render + product lockup title; opts={product?: 'ROCm'|'Instinct'|'EPYC'|…, presenter?, image?}
+  — product render + product lockup title; opts={product?: 'ROCm'|'Instinct'|'EPYC'|…, presenter?, image?}. A title like 'AMD Instinct – AI Platform' or 'X: Y' draws the lead smaller and the main line large.
 addSectionIntroSlide(deck, title, body, slideNum, notes, opts?)
   — section opener: title + 1-3 sentence description (string) beside a photo; opts={image?}
 addStatementSlide(deck, headline, subline, evidence, slideNum, notes)

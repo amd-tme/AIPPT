@@ -517,11 +517,11 @@ Opt-in layouts modelled on AMD's exec-pitch and product-performance decks. All i
 #### addHeroTitleSlide(deck, title, subtitle, slideNum, opts?)
 
 - Full-height photo on the left fading to black, title + subtitle right, "together we advance" lockup
-- `opts.image` — Photo path (default: blue particle wave); `opts.date` — e.g. `'June 2026'`
+- `opts.image` — Photo path (default: blue particle wave); `opts.date` — e.g. `'June 2026'`; `opts.footnote` — 7pt legal line along the bottom edge
 
 #### addProductTitleSlide(deck, title, subtitle, slideNum, opts?)
 
-- Streak background, product render top left, product lockup, title right
+- Streak background, large product render top left, product lockup, title right; 'Lead – Main' or 'Lead: Main' titles draw a smaller lead line over a large main line
 - `opts.product` — `'ROCm'` uses the ROCm lockup; other names draw the AMD wordmark + product text
 - `opts.presenter`, `opts.image` (product render), `opts.background`
 
