@@ -185,3 +185,45 @@ async def test_validation_failure_blocks_renderer(app, tmp_path, ms_token_header
         # The SSE stream still returns 200 (errors are in the event payload)
         assert resp.status_code == 200
         mock_render.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# pptxgenjs-direct path: no-LLM generate → render
+# ---------------------------------------------------------------------------
+
+@pytest.mark.anyio
+async def test_direct_engine_renders_without_llm(app, tmp_path, ms_token_headers):
+    """engine=pptxgenjs-direct uses the rule-based generator and never builds an LLM client."""
+    with (
+        patch("aippt.web.routes._make_llm_client") as mock_llm_factory,
+        patch("aippt.pptxgenjs_gen.generate_script") as mock_llm_gen,
+        patch("aippt.pptxgenjs_direct.generate_script", return_value=_GOOD_SCRIPT) as mock_direct_gen,
+        patch("aippt.preview.Renderer.render") as mock_render,
+        patch("aippt.web.routes.ingest_deck", return_value={"deck_id": 1, "slide_count": 2}),
+        patch("aippt.web.routes.persist_file"),
+        patch("aippt.web.routes.persist_tree"),
+        patch("aippt.web.routes._per_deck_images_dir", return_value=str(tmp_path / "images")),
+        patch("aippt.web.routes._sources_dir", return_value=str(tmp_path / "sources")),
+        patch("aippt.web.routes.get_db"),
+        patch("aippt.web.routes._require_images_for_render", return_value=False),
+        patch("aippt.web.routes._pipeline_module") as mock_pipeline,
+    ):
+        from aippt.preview import RenderResult
+        mock_render.return_value = RenderResult(
+            success=True, pptx_path=str(tmp_path / "deck.pptx"), duration_ms=100
+        )
+        (tmp_path / "sources").mkdir(exist_ok=True)
+        (tmp_path / "deck.pptx").write_bytes(b"PK fake")
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await _post_create(client, _OUTLINE, "pptxgenjs-direct", ms_token_headers)
+            body = resp.text
+
+        assert resp.status_code == 200
+        mock_direct_gen.assert_called_once()
+        assert "llm_client" not in mock_direct_gen.call_args.kwargs
+        mock_llm_factory.assert_not_called()
+        mock_llm_gen.assert_not_called()
+        mock_pipeline.run_pipeline.assert_not_called()
+        mock_render.assert_called_once()
+        assert "event: complete" in body

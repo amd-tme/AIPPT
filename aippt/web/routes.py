@@ -1907,12 +1907,19 @@ async def create_deck_stream(
         def _worker():
             if engine == "pptxgenjs":
                 return _worker_pptxgenjs()
+            if engine == "pptxgenjs-direct":
+                return _worker_pptxgenjs(use_llm=False)
             if engine == "python-pptx-amd":
                 return _worker_python_pptx_amd()
             return _worker_python_pptx()
 
-        def _worker_pptxgenjs():
-            from aippt.pptxgenjs_gen import generate_script, ScriptGenerationError
+        def _worker_pptxgenjs(use_llm=True):
+            # use_llm=False is the free "no-LLM" engine: same script format,
+            # workspace, render and catalog path, but rule-based generation.
+            if use_llm:
+                from aippt.pptxgenjs_gen import generate_script, ScriptGenerationError
+            else:
+                from aippt.pptxgenjs_direct import generate_script, ScriptGenerationError
             from aippt.preview import Renderer
 
             # Stage a per-job workspace so the generated script's ``../lib``
@@ -1923,19 +1930,22 @@ async def create_deck_stream(
             script_path, render_out_dir = _stage_render_workspace(
                 uploads_dir, _short_id, _base_name, project_root
             )
-            try:
-                llm = _make_llm_client(request, operation="enhance", model_override=model, user_ntid=ntid)
-            except ValueError as exc:
-                event_q.put(("error", {"message": str(exc)}))
-                return None
+            gen_kwargs = {}
+            if use_llm:
+                try:
+                    gen_kwargs["llm_client"] = _make_llm_client(
+                        request, operation="enhance", model_override=model, user_ntid=ntid)
+                except ValueError as exc:
+                    event_q.put(("error", {"message": str(exc)}))
+                    return None
 
             try:
                 generate_script(
                     outline_text=md_text,
                     output_script_path=script_path,
-                    llm_client=llm,
                     theme="amd",
                     progress_callback=create_progress,
+                    **gen_kwargs,
                 )
             except ScriptGenerationError as exc:
                 event_q.put(("error", {"message": str(exc)}))
