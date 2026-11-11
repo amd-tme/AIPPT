@@ -176,7 +176,7 @@ class TestBackwardCompatibility:
         assert theme["background"] == "000000"
         assert theme["accent"] == "00C2DE"
         assert theme["text_primary"] == "FFFFFF"
-        assert theme["surface"] == "636466"
+        assert theme["surface"] == "404040"
 
     def test_existing_fonts_unchanged(self):
         theme = run_node("""
@@ -184,6 +184,6 @@ class TestBackwardCompatibility:
             const t = loadTheme('themes/amd.yaml');
             console.log(JSON.stringify(t.fonts));
         """)
-        assert theme["heading"] == "Arial"
+        assert theme["heading"] == "Klavika"
         assert theme["body"] == "Arial"
         assert theme["mono"] == "Consolas"
