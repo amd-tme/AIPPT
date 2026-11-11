@@ -47,6 +47,12 @@ registry:
     supports_images: true
 
   # Anthropic models
+  claude-sonnet-4-6:
+    provider: anthropic
+    max_tokens: 200000
+    max_input_tokens: 200000
+    supports_vision: true
+    supports_images: false
   claude-3.5-sonnet:
     provider: anthropic
     max_tokens: 200000
@@ -82,9 +88,9 @@ registry:
 
 # Per-operation defaults -- each value must reference a model in the registry above.
 defaults:
-  enhance: "claude-3.5-sonnet"    # Used by: outline2ppt create --enhance
-  improve: "claude-3.5-sonnet"   # Used by: outline2ppt improve
-  feedback: "gpt-4o"              # Used by: outline2ppt analyze --mode feedback
-  notes: "gpt-4o"                 # Used by: outline2ppt analyze --mode notes
-  tags: "gpt-4o"                  # Used by: outline2ppt analyze --mode tags
+  enhance: "claude-sonnet-4-6"    # Used by: outline2ppt create --enhance
+  improve: "claude-sonnet-4-6"   # Used by: outline2ppt improve
+  feedback: "claude-sonnet-4-6"              # Used by: outline2ppt analyze --mode feedback
+  notes: "claude-sonnet-4-6"                 # Used by: outline2ppt analyze --mode notes
+  tags: "claude-sonnet-4-6"                  # Used by: outline2ppt analyze --mode tags
   image: "dall-e-3"               # Used by: outline2ppt create --image-gen dalle
