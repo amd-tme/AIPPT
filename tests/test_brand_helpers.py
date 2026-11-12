@@ -248,3 +248,79 @@ def test_spec_table(tmp_path, theme, ink, tint):
     tl = _table(long)
     assert len(tl.rows) == 13 and font(tl.cell(1, 0)).size.pt == 12
     assert _cell_fill(tl.cell(0, 1)) == "00C2DE"                    # EPYC detected
+
+
+# ---------------------------------------------------------------------------
+# addCompetitiveChart
+# ---------------------------------------------------------------------------
+
+_CHART_SCRIPT = """\
+import { createDeck, addCompetitiveChart } from '../lib/pptxgenjs-helpers.mjs';
+const deck = await createDeck('themes/__THEME__.yaml');
+addCompetitiveChart(deck, 'Throughput', ['Model A', 'Model B'], [
+  { name: 'Competitor X', values: [100, 200] },
+  { name: 'AMD Instinct MI355X', values: [130, 250] },
+], 1, '', { metric: 'Tokens/s', date: 'Nov 2026', source: 'Illustrative' });
+addCompetitiveChart(deck, 'Lower is better', ['Job'], [
+  { name: 'Ours', values: [40], amd: true }, { name: 'Theirs', values: [60] },
+], 2, '', { lowerIsBetter: true });
+addCompetitiveChart(deck, 'No ratios', ['A', 'B'], [
+  { name: 'X', values: [1, 2] }, { name: 'Y', values: [2, 3] },
+], 3, '', { ratios: false });
+addCompetitiveChart(deck, 'Empty', [], [], 4);
+await deck.save(`${process.env.AIPPT_PREVIEW_OUT || 'output'}/chart.pptx`);
+"""
+
+
+def _chart(slide):
+    frames = [s for s in slide.shapes if s.has_chart]
+    assert len(frames) == 1
+    return frames[0].chart
+
+
+@pytest.mark.parametrize("theme", ["corp_black", "corp_white"])
+def test_competitive_chart(tmp_path, theme):
+    import re
+
+    prs = _render(tmp_path, "chart", _CHART_SCRIPT.replace("__THEME__", theme))
+    slides = list(prs.slides)
+    assert len(slides) == 4
+
+    chart = _chart(slides[0])
+    xml = chart._chartSpace.xml
+    # Native clustered columns from zero; no legend, title, gridlines or value axis
+    assert chart.chart_type is not None and 'barDir val="col"' in xml
+    assert not chart.has_legend
+    assert "<c:majorGridlines" not in xml
+    assert re.search(r"<c:valAx>.*?<c:delete val=\"1\"/>", xml, re.S)
+    assert re.search(r"<c:min val=\"0\"/>", xml)
+    # AMD series = accent, competitor = grey
+    fills = re.findall(r"<c:ser>.*?<a:srgbClr val=\"(\w{6})\"", xml, re.S)
+    assert fills[1] == "00C2DE" and fills[0] != "00C2DE"
+    # Ratio labels (AMD / best competitor) in the accent colour, above the AMD bars
+    assert _text_colour(slides[0], "1.3×") == "00C2DE"
+    assert _shape_with_text(slides[0], "1.3×").top < _chart_bottom(slides[0])
+    # Chip legend + metric note + Date / Data Source block with bold labels
+    _shape_with_text(slides[0], "Competitor X")
+    _shape_with_text(slides[0], "Tokens/s")
+    src = _shape_with_text(slides[0], "Date: Nov 2026    Data Source: Illustrative")
+    runs = src.text_frame.paragraphs[0].runs
+    assert runs[0].font.bold and not runs[1].font.bold
+
+    # lowerIsBetter: competitor / AMD; the explicit amd flag wins over the name
+    assert _text_colour(slides[1], "1.5×") == "00C2DE"
+    # ratios: false -> no ratio text; no AMD name -> last series is highlighted
+    assert not [s for s in slides[2].shapes if s.has_text_frame and s.text_frame.text.endswith("×")]
+    fills = re.findall(r"<c:ser>.*?<a:srgbClr val=\"(\w{6})\"", _chart(slides[2])._chartSpace.xml, re.S)
+    assert fills[1] == "00C2DE"
+    # Empty input -> title-only slide
+    assert not [s for s in slides[3].shapes if s.has_chart]
+    # Everything sits above the footer
+    for shape in slides[0].shapes:
+        if shape.top is not None and shape.has_text_frame and shape.text_frame.text not in ("1",):
+            assert (shape.top + shape.height) / 914400 <= 7.0, shape.text_frame.text
+
+
+def _chart_bottom(slide):
+    frame = next(s for s in slide.shapes if s.has_chart)
+    return frame.top + frame.height
