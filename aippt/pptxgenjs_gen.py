@@ -131,7 +131,7 @@ addQuoteSlide(deck, quote, attribution, slideNum, notes)
   — attribution without a leading dash, e.g. 'Jane Doe, CTO'
 addRoadmapSlide(deck, title, columns, slideNum, notes, opts?)
   — columns=[{heading, items: string[]}] × 2-6 (heading = Q1 / 2026 / Phase 1); opts={takeaway?}
-addDisclaimerSlide(deck, title, text, slideNum, notes)   — small-print legal text (string)
+addDisclaimerSlide(deck, title, text, slideNum, notes)   — legal text (string, \\n between paragraphs; auto-sized)
   addAgendaSlide opts also take {image: '', label: 'Deck name'} for the photo agenda
   (image '' = bundled photo); use it when the deck uses addHeroTitleSlide/addProductTitleSlide.
 

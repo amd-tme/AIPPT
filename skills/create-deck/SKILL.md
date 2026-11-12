@@ -233,7 +233,7 @@ Analyze each slide's content for signals that map to layout types:
 | Agenda / contents slide | `addAgendaSlide()` — numbered rows; `opts.current` highlights one section | N/A |
 | Customer or analyst quote (`> quote` + `— Name, Role`) | `addQuoteSlide()` — large quote + attribution | N/A |
 | Roadmap / timeline by quarter, year or phase | `addRoadmapSlide()` — milestones on a timeline; `opts.takeaway` | N/A |
-| Legal disclaimer / notices | `addDisclaimerSlide()` — small-print text | N/A |
+| Legal disclaimer / notices | `addDisclaimerSlide()` — legal text, auto-sized to fill the slide | N/A |
 | Brand deck: section opener with a short intro paragraph | `addSectionIntroSlide()` — photo right, title + body left | N/A |
 | Brand deck: one bold claim backed by cited evidence | `addStatementSlide()` — accent headline + subline left, 1-4 evidence items (with sources) right | N/A |
 | Brand deck: one before → after metric | `addProofPointSlide()` — "Key Takeaway" headline + two bars + `multiple` (e.g. `3.5X`) | N/A |
@@ -294,7 +294,7 @@ If the outline contains explicit directives, they override the auto-detection:
 - `LAYOUT: agenda` → numbered agenda (`addAgendaSlide`)
 - `LAYOUT: quote` → large quote + attribution (`addQuoteSlide`)
 - `LAYOUT: roadmap` → timeline of milestones (`addRoadmapSlide`)
-- `LAYOUT: disclaimer` → small-print legal text (`addDisclaimerSlide`)
+- `LAYOUT: disclaimer` → legal text, auto-sized (`addDisclaimerSlide`)
 - `LAYOUT: hero_title` → photo hero title for exec / strategy decks (`addHeroTitleSlide`); a month-year line becomes the date
 - `LAYOUT: product_title` → product render + lockup title (`addProductTitleSlide`); product inferred from the title, `Presenter:` line → presenter
 - `LAYOUT: section_intro` → photo section opener with intro text (`addSectionIntroSlide`)

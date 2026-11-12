@@ -508,7 +508,7 @@ under the title (the 30-3-30 "so what").
 
 ### addDisclaimerSlide(deck, title, text, slideNum, notes?)
 
-- `text` — Legal / notice text (use `\n` between paragraphs); small type
+- `text` — Legal / notice text (use `\n` between paragraphs); sized to fill the slide (18pt for short notices, shrinking for long text, two columns when that keeps it larger)
 
 ### Brand slides (AMD exec / product deck styles)
 

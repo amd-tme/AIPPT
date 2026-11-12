@@ -622,3 +622,37 @@ def test_render_brand_slides(tmp_path):
         assert any(sh.shape_type == 13 for sh in prs.slides[1].shapes)
     finally:
         shutil.rmtree(uploads / job_id, ignore_errors=True)
+
+
+@pytest.mark.skipif(not _node_available(), reason="node / node_modules not available")
+def test_render_disclaimer_scales_text(tmp_path):
+    """Short notices get large type; long legal text flows into two columns."""
+    from pptx import Presentation
+    from aippt.preview import Renderer
+    from aippt.web.routes import _stage_render_workspace
+
+    para = ("AMD reserves the right to revise this information and to make changes from time "
+            "to time to the content hereof without obligation of AMD to notify any person.")
+    outline = ("# Deck\nSubtitle\n\n# Disclaimer\nLAYOUT: disclaimer\nExample data for illustration only.\n\n"
+               "# Legal Notices\nLAYOUT: disclaimer\n" + "\n\n".join([para] * 24) + "\n")
+    job_id = f"pytest-direct-disclaimer-{tmp_path.name}"
+    uploads = PROJECT_ROOT / "uploads"
+    try:
+        script_path, out_dir = _stage_render_workspace(
+            str(uploads), job_id, "disc", str(PROJECT_ROOT))
+        Path(script_path).write_text(_build_script(outline), encoding="utf-8")
+        result = Renderer(project_root=str(PROJECT_ROOT)).render(script_path, out_dir)
+        assert result.success, result.stderr_tail
+        prs = Presentation(result.pptx_path)
+
+        def body_boxes(slide):
+            return [sh for sh in slide.shapes if sh.has_text_frame and len(sh.text_frame.text) > 30]
+
+        def size(shape):
+            return shape.text_frame.paragraphs[0].runs[0].font.size.pt
+
+        short, long_ = body_boxes(prs.slides[1]), body_boxes(prs.slides[2])
+        assert len(short) == 1 and size(short[0]) == 18
+        assert len(long_) == 2 and 9 <= size(long_[0]) < 18
+    finally:
+        shutil.rmtree(uploads / job_id, ignore_errors=True)
