@@ -113,3 +113,15 @@ def test_plan_can_restyle_synthetic_deck_title(tmp_path):
     llm = FakeLLM(_plan('hero_title'))
     script = generate_script(outline, str(tmp_path / 'deck.mjs'), llm_client=llm)
     assert _helpers(script)[0] == 'addHeroTitleSlide'
+
+
+def test_tier_outline_builds_30_3_30_deck(tmp_path):
+    outline = ("# Widgets\n\n## Widgets\nA tour\n\n# 30 Seconds\n\n## Summary\n- a\n- b\n\n"
+               "# 3 Minutes\n\n## Detail\n- c\n- d\n")
+    slides = plan_slides(outline)
+    llm = FakeLLM(_plan(*['auto'] * len(slides)))
+    script = generate_script(outline, str(tmp_path / 'deck.mjs'), llm_client=llm)
+    assert re.findall(r'^startSection\(deck, `([^`]*)`', script, re.M) == [
+        'Intro', '30 Seconds', '3 Minutes']
+    assert _helpers(script).count('addTierDivider') == 2
+    assert _helpers(script).count('addClosingSlide') == 2

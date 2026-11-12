@@ -323,3 +323,135 @@ def test_prompt_example_renders(tmp_path):
         assert len(Presentation(result.pptx_path).slides) == 9
     finally:
         shutil.rmtree(root / "uploads" / job_id, ignore_errors=True)
+
+
+# ---------------------------------------------------------------------------
+# 30-3-30 decks
+# ---------------------------------------------------------------------------
+
+_TIER_OUTLINE = """\
+# Widget Platform
+
+## Widget Platform
+A short tour
+
+# 30 Seconds
+
+## Widgets in one slide
+- Reliability — fewer outages
+- Speed — faster builds
+<!-- notes
+Open with the outage numbers.
+-->
+
+# 3 Minutes
+
+## How it works
+- Pilot with two teams
+- Expand to the org
+
+# 30 Minutes
+
+## Architecture
+- Control plane
+- Data plane
+
+## Thank you
+
+# Appendix
+
+## Resources
+- Docs: example.com
+"""
+
+_TIER_TITLES = ["Widget Platform", "Widgets in one slide", "How it works",
+                "Architecture", "Thank you", "Resources"]
+
+
+def _unique_script(titles=_TIER_TITLES) -> str:
+    """What the LLM writes for a tier outline: each slide once, numbered 1..K."""
+    lines = ["import { createDeck, addTitleSlide, addStatCallout, addClosingSlide } "
+             "from '../lib/pptxgenjs-helpers.mjs';", "",
+             "const deck = await createDeck('themes/amd.yaml');", ""]
+    for k, title in enumerate(titles, 1):
+        lines.append(f"// ═══ Slide {k}: {title} ═══")
+        if k == 1:
+            lines.append(f"addTitleSlide(deck, `{title}`, `A short tour`, 1);")
+        elif title == "Thank you":
+            lines.append(f"addClosingSlide(deck, {k}, `Questions?`);")
+        else:
+            lines.append(f"addStatCallout(deck, `{title}`, [{{ value: `{k}`, label: `Slide {k}` }}], "
+                         f"{k}, `notes for {k}`);")
+        lines.append("")
+    lines += ["const outDir = process.env.AIPPT_PREVIEW_OUT || 'output';",
+              "await deck.save(`${outDir}/widgets.pptx`);"]
+    return "\n".join(lines)
+
+
+def test_tier_outline_llm_sees_each_slide_once(tmp_path):
+    client = _make_client(_unique_script())
+    generate_script(_TIER_OUTLINE, str(tmp_path / "d.mjs"), client)
+    prompt = client.generate_text.call_args.kwargs["prompt"]
+    assert "exactly 6 slides" in prompt
+    assert "# 30 Seconds" not in prompt and "# Appendix" not in prompt
+    assert "Open with the outage numbers." in prompt  # notes survive
+
+
+def test_tier_outline_is_assembled_with_sections_dividers_and_repeats(tmp_path):
+    import re
+    script = generate_script(_TIER_OUTLINE, str(tmp_path / "d.mjs"), _make_client(_unique_script()))
+    assert re.findall(r"^startSection\(deck, `([^`]*)`", script, re.M) == [
+        "Intro", "30 Seconds", "3 Minutes", "30 Minutes", "Appendix"]
+    titles = re.findall(r"^// ═══ Slide (\d+): (.*?) ═══", script, re.M)
+    assert [int(n) for n, _ in titles] == list(range(1, len(titles) + 1))
+    assert [t for _, t in titles] == [
+        "Widget Platform",
+        "Executive Overview (30 Sec)", "Widgets in one slide", "Closing",
+        "Overview (3 Minute)", "Widgets in one slide", "How it works", "Closing",
+        "Deep Dive (30 Minute)", "Widgets in one slide", "How it works", "Architecture", "Thank you",
+        "Appendix", "Resources"]
+    # Every helper's slideNum follows the deck order; slide text is untouched
+    nums = re.findall(r"^add\w+\(deck, (?:.*, )?(\d+)(?:, `[^`]*`)?\);$", script, re.M)
+    assert [int(n) for n in nums] == list(range(1, len(titles) + 1))
+    assert script.count("value: `2`") == 3  # the repeated slide keeps its own text
+    assert "startSection" in script.splitlines()[0] and "addTierDivider" in script.splitlines()[0]
+    assert (tmp_path / "d.mjs").read_text() == script
+
+
+def test_tier_outline_wrong_slide_count_is_retried(tmp_path):
+    client = MagicMock()
+    client.generate_text.side_effect = [_fenced(_unique_script(_TIER_TITLES[:-1])),
+                                        _fenced(_unique_script())]
+    generate_script(_TIER_OUTLINE, str(tmp_path / "d.mjs"), client)
+    assert client.generate_text.call_count == 2
+    assert "write exactly 6 slides" in client.generate_text.call_args_list[1].kwargs["prompt"]
+
+
+def test_renumber_only_touches_slide_numbers():
+    from aippt.pptxgenjs_gen import _renumber
+    block = ("// ═══ Slide 3: X ═══\n"
+             "addStatCallout(deck, `3 wins`, [{ value: `3`, label: `three` }], 3, `see slide 3`);\n")
+    out = _renumber(block, 3, 11)
+    assert out == ("// ═══ Slide 11: X ═══\n"
+                   "addStatCallout(deck, `3 wins`, [{ value: `3`, label: `three` }], 11, `see slide 3`);\n")
+
+
+def test_non_tier_outline_prompt_unchanged(tmp_path):
+    client = _make_client(_GOOD_SCRIPT)
+    generate_script(_OUTLINE, str(tmp_path / "d.mjs"), client)
+    assert "exactly" not in client.generate_text.call_args.kwargs["prompt"]
+
+
+def test_tier_render_repair_reassembles(tmp_path):
+    from aippt.pptxgenjs_gen import generate_and_render
+    client = MagicMock()
+    fixed = _unique_script().replace("A short tour", "A fixed tour")
+    client.generate_text.side_effect = [_fenced(_unique_script()), _fenced(fixed)]
+    renderer = MagicMock()
+    renderer.render.side_effect = _render_results(False, True)
+    out = tmp_path / "d.mjs"
+
+    assert generate_and_render(_TIER_OUTLINE, str(out), client, renderer, str(tmp_path)).success
+    repair_prompt = client.generate_text.call_args_list[1].kwargs["prompt"]
+    assert "startSection" not in repair_prompt  # the LLM only sees its own script
+    assert "A fixed tour" in out.read_text() and "startSection" in out.read_text()

@@ -1156,42 +1156,52 @@ def plan_slides(outline_text: str) -> List[dict]:
     return _plan(outline_text)[0]
 
 
-def _tier_sequence(slides: List[dict], layouts: List[str], no_repeat: set) -> list:
+def _tier_sequence(slides: List[dict], items: list, no_repeat: set,
+                   is_closing: Callable[[object], bool] = lambda item: item == 'addClosingSlide') -> list:
     """Emission order for a 30-3-30 deck.
 
     Intro slides, then per tier: a PowerPoint section, a tier divider, the
     earlier tiers' slides again (unless ``TIER: no-repeat``), the tier's own
-    slides and a closing slide. The appendix gets a divider and no repeats.
-    Entries: ('section', name) | ('divider', title) | ('closing',) |
-    ('slide', slide, layout).
+    slides and a closing slide (unless the tier already ends with one). The
+    appendix gets a divider and no repeats. *items* pairs with *slides*
+    (a layout name here, a script block in the AI engine). Entries:
+    ('section', name) | ('divider', title) | ('closing',) | ('slide', slide, item).
     """
     seq: list = [('section', 'Intro')]
     own: dict = {}
-    for slide, layout in zip(slides, layouts):
+    for slide, item in zip(slides, items):
         tier = slide.get('_tier')
         if tier is None:
-            seq.append(('slide', slide, layout))
+            seq.append(('slide', slide, item))
         else:
-            own.setdefault(tier, []).append((slide, layout))
+            own.setdefault(tier, []).append((slide, item))
 
     earlier: list = []
     for tier, entries in own.items():
         if tier == 'appendix':
             seq += [('section', 'Appendix'), ('divider', 'Appendix')]
-            seq += [('slide', s, l) for s, l in entries]
+            seq += [('slide', s, i) for s, i in entries]
             continue
         _, divider, section = _TIERS[tier]
         seq += [('section', section), ('divider', divider)]
         if tier not in no_repeat:
-            seq += [('slide', s, l) for s, l in earlier]
-        last_slide = entries[-1][0]
-        if _CLOSING_WORDS.search(last_slide['title']):
-            entries[-1] = (last_slide, 'addClosingSlide')  # author's own closing
-        seq += [('slide', s, l) for s, l in entries]
-        if entries[-1][1] != 'addClosingSlide':
+            seq += [('slide', s, i) for s, i in earlier]
+        seq += [('slide', s, i) for s, i in entries]
+        if not is_closing(entries[-1][1]):
             seq.append(('closing',))
-        earlier += [e for e in entries if e[1] != 'addClosingSlide']
+        earlier += [e for e in entries if not is_closing(e[1])]
     return seq
+
+
+def _emit_tier_frame(entry: tuple, n: int, deck_title: str) -> str:
+    """Script for a sequence entry AIPPT adds itself (section, divider, closing)."""
+    if entry[0] == 'section':
+        return f"startSection(deck, `{_js_str(entry[1])}`);\n"
+    if entry[0] == 'divider':
+        subtitle = deck_title if entry[1] != 'Appendix' else ''
+        return (f"// ═══ Slide {n}: {entry[1]} ═══\n"
+                f"addTierDivider(deck, `{entry[1]}`, `{subtitle}`, {n});\n")
+    return f"// ═══ Slide {n}: Closing ═══\naddClosingSlide(deck, {n});\n"
 
 
 def _build_script(outline_text: str, theme: str = 'amd',
@@ -1229,13 +1239,21 @@ def _build_script(outline_text: str, theme: str = 'amd',
         brand = {'title': _md_plain(slides[0]['title']),
                  'product': _product(slides[0]['title'] + ' ' + ' '.join(_body(slides[0])['prose']))}
 
+    tiered = any(slide.get('_tier') for slide in slides)
+    if tiered:
+        # The author's own "Thank you" ends its tier as the closing slide
+        for k, slide in enumerate(slides):
+            nxt = slides[k + 1].get('_tier') if k + 1 < len(slides) else None
+            if slide.get('_tier') not in (None, 'appendix', nxt) and _CLOSING_WORDS.search(slide['title']):
+                layouts[k] = 'addClosingSlide'
+
     for slide, layout in zip(slides, layouts):
         slide['_layout'] = layout
         if brand:
             slide['_brand'] = brand
         _fold_unshown(slide, layout)
 
-    if any(slide.get('_tier') for slide in slides):
+    if tiered:
         sequence = _tier_sequence(slides, layouts, no_repeat)
     else:
         sequence = [('slide', slide, layout) for slide, layout in zip(slides, layouts)]
@@ -1244,19 +1262,12 @@ def _build_script(outline_text: str, theme: str = 'amd',
     slide_blocks: List[str] = []
     n = 0
     for entry in sequence:
-        if entry[0] == 'section':
-            slide_blocks.append(f"startSection(deck, `{_js_str(entry[1])}`);\n")
-            continue
-        n += 1
-        if entry[0] == 'divider':
-            subtitle = deck_title if entry[1] != 'Appendix' else ''
-            slide_blocks.append(f"// ═══ Slide {n}: {entry[1]} ═══\n"
-                                f"addTierDivider(deck, `{entry[1]}`, `{subtitle}`, {n});\n")
-        elif entry[0] == 'closing':
-            slide_blocks.append(f"// ═══ Slide {n}: Closing ═══\naddClosingSlide(deck, {n});\n")
-        else:
+        n += entry[0] != 'section'
+        if entry[0] == 'slide':
             # A repeated slide is emitted again from a fresh copy
             slide_blocks.append(_EMITTERS[entry[2]](copy.deepcopy(entry[1]), n))
+        else:
+            slide_blocks.append(_emit_tier_frame(entry, n, deck_title))
 
     # Import exactly the helpers the emitted code calls (an emitter may pick
     # a variant, e.g. addImageBulletsSlide, of the layout it was given)

@@ -13,7 +13,10 @@ import re
 from pathlib import Path
 from typing import Callable, Optional
 
-from aippt.pptxgenjs_validate import validate_script
+from aippt.pptxgenjs_validate import (
+    _CALL_START, _helper_signatures, _scan_until, _skip_comment, _skip_quoted,
+    _skip_template, validate_script,
+)
 
 # ---------------------------------------------------------------------------
 # Public error type
@@ -353,6 +356,7 @@ def _generate_valid(
     max_retries: int,
     progress_callback: Optional[Callable[[str, str], None]],
     label: str,
+    extra_check: Optional[Callable[[str], list[str]]] = None,
 ) -> str:
     """Call the LLM until a script passes validation; raise after max_retries."""
     user_prompt = first_prompt
@@ -376,6 +380,8 @@ def _generate_valid(
         script = _extract_code_block(raw)
         ok, last_reasons = validate_script(script)
         last_reasons = _truncation_reasons(raw, script) + last_reasons
+        if extra_check:
+            last_reasons += extra_check(script)
         if not last_reasons:
             if progress_callback:
                 progress_callback("generate", f"Script validated ({len(script)} chars)")
@@ -393,6 +399,161 @@ def _generate_valid(
     raise ScriptGenerationError(
         f"Script failed validation after {max_retries} attempt(s): {reasons_str}"
     )
+
+
+# ---------------------------------------------------------------------------
+# 30-3-30 decks — the LLM writes each slide once, AIPPT adds the tier frame
+# ---------------------------------------------------------------------------
+
+_SLIDE_HEADER_RE = re.compile(r"^// ═══ Slide (\d+):(.*?)═══[ \t]*$", re.M)
+_SCRIPT_TAIL_RE = re.compile(r"^(?:(?:const|let|var)\s+outDir\b|await\s+deck\.save\()", re.M)
+_HELPERS_IMPORT_RE = re.compile(r"import\s*\{([^}]*)\}\s*from\s*(['\"])\.\./lib/pptxgenjs-helpers\.mjs\2")
+
+
+class _TierPlan:
+    """A 30-3-30 outline: its unique slides and the flat outline the LLM sees."""
+
+    def __init__(self, slides: list, no_repeat: set, outline: str):
+        self.slides, self.no_repeat, self.outline = slides, no_repeat, outline
+
+
+def _tier_plan(outline_text: str) -> Optional[_TierPlan]:
+    """The tier plan for a 30-3-30 outline (tier H1s), else None."""
+    from aippt.pptxgenjs_direct import _plan, _strip_tier_lines
+    try:
+        slides, no_repeat = _plan(outline_text)
+    except Exception:
+        return None
+    if not any(s.get("_tier") for s in slides):
+        return None
+
+    # Each H2 runs to the next heading — the parser's slide boundaries, with
+    # notes blocks kept so the LLM can still write them into the notes
+    chunks: list[list[str]] = []
+    for line in _strip_tier_lines(outline_text)[0].split("\n"):
+        if line.startswith("## "):
+            chunks.append(["# " + line[3:].strip()])
+        elif line.startswith("# "):
+            chunks.append(None)
+        elif chunks and chunks[-1] is not None:
+            chunks[-1].append(line)
+    chunks = [c for c in chunks if c is not None]
+    if slides[0].get("_synthetic"):
+        chunks.insert(0, ["# " + slides[0]["title"], "(Title slide for the whole deck)"])
+    if len(chunks) != len(slides):
+        return None
+    return _TierPlan(slides, no_repeat, "\n\n".join("\n".join(c).strip() for c in chunks))
+
+
+def _tier_instructions(count: int) -> str:
+    return (
+        f"\n\nThis outline has exactly {count} slides — each `# ` heading is one slide. "
+        f"Write exactly {count} slides in the outline's order, one per heading, numbered 1 to "
+        f"{count}: start each with its marker `// ═══ Slide N: <title> ═══` and pass N as its "
+        "slideNum. Never split, merge, add or drop slides, and use addClosingSlide only for a "
+        "heading that is itself a thank-you / closing slide. AIPPT adds the section dividers "
+        "and repeats slides itself, so do not add any."
+    )
+
+
+def _tier_problems(script: str, count: int) -> list[str]:
+    """Reasons the script can't be split into the outline's *count* slides."""
+    headers = list(_SLIDE_HEADER_RE.finditer(script))
+    numbers = [int(m.group(1)) for m in headers]
+    problems = []
+    if numbers != list(range(1, count + 1)):
+        problems.append(
+            f"write exactly {count} slides, one per outline heading, each starting with "
+            f"`// ═══ Slide N: <title> ═══` numbered 1 to {count} in order (found "
+            f"{len(numbers)} markers)")
+    if not _SCRIPT_TAIL_RE.search(script, headers[-1].end() if headers else 0):
+        problems.append("end the script with `const outDir = process.env.AIPPT_PREVIEW_OUT || "
+                        "'output';` and `await deck.save(...)`")
+    return problems
+
+
+def _renumber(block: str, old: int, new: int) -> str:
+    """*block* with its slide marker and helper slideNum arguments moved to *new*."""
+    block = re.sub(rf"^// ═══ Slide {old}:", f"// ═══ Slide {new}:", block, count=1, flags=re.M)
+    sigs = _helper_signatures()
+    spans = []
+    i = 0
+    while i < len(block):
+        c = block[i]
+        if c in "'\"":
+            i = _skip_quoted(block, i)
+            continue
+        if c == "`":
+            i = _skip_template(block, i)
+            continue
+        end = _skip_comment(block, i)
+        if end is not None:
+            i = end
+            continue
+        m = _CALL_START.match(block, i)
+        if not m:
+            i += 1
+            continue
+        args, end = _scan_until(block, m.end(), ")")
+        params = [p for p, _ in sigs.get(m.group(1), [])]
+        if "slideNum" in params and params.index("slideNum") < len(args):
+            # Pieces are consecutive slices, so each is found after the last
+            cursor = m.end()
+            for k, arg in enumerate(args):
+                at = block.find(arg, cursor)
+                cursor = at + len(arg)
+                if k == params.index("slideNum") and arg.strip() == str(old):
+                    num_at = at + arg.index(str(old))
+                    spans.append((num_at, num_at + len(str(old))))
+        i = end
+    for a, b in reversed(spans):
+        block = block[:a] + str(new) + block[b:]
+    return block
+
+
+def _assemble_tiers(script: str, plan: _TierPlan) -> str:
+    """Expand a one-slide-per-heading script into the full 30-3-30 deck."""
+    from aippt.pptxgenjs_direct import _emit_tier_frame, _js_str, _md_plain, _tier_sequence
+    headers = list(_SLIDE_HEADER_RE.finditer(script))
+    tail_at = _SCRIPT_TAIL_RE.search(script, headers[-1].end()).start()
+    preamble, tail = script[:headers[0].start()], script[tail_at:]
+    blocks = [script[h.start():(headers[k + 1].start() if k + 1 < len(headers) else tail_at)]
+              for k, h in enumerate(headers)]
+
+    def add_imports(m):
+        names = [n.strip() for n in m.group(1).split(",") if n.strip()]
+        names += [n for n in ("startSection", "addTierDivider", "addClosingSlide") if n not in names]
+        return "import { " + ", ".join(names) + " } from '../lib/pptxgenjs-helpers.mjs'"
+    preamble = _HELPERS_IMPORT_RE.sub(add_imports, preamble, count=1)
+
+    sequence = _tier_sequence(plan.slides, list(enumerate(blocks, 1)), plan.no_repeat,
+                              is_closing=lambda item: "addClosingSlide(" in item[1])
+    deck_title = _js_str(_md_plain(plan.slides[0]["title"]))
+    out, n = [], 0
+    for entry in sequence:
+        n += entry[0] != "section"
+        if entry[0] == "slide":
+            old, block = entry[2]
+            out.append(_renumber(block, old, n).rstrip() + "\n")
+        else:
+            out.append(_emit_tier_frame(entry, n, deck_title))
+    return preamble + "\n".join(out) + "\n" + tail
+
+
+def _generate_tiered(plan: _TierPlan, theme: str, llm_client, max_retries: int,
+                     progress_callback, first_prompt: Optional[str] = None,
+                     label: str = "Generating pptxgenjs script…") -> tuple[str, str]:
+    """(one-slide-per-heading script, assembled 30-3-30 script)."""
+    base = _base_prompt(plan.outline, theme) + _tier_instructions(len(plan.slides))
+    unique = _generate_valid(base, first_prompt or base, llm_client, max_retries,
+                             progress_callback, label,
+                             extra_check=lambda s: _tier_problems(s, len(plan.slides)))
+    full = _assemble_tiers(unique, plan)
+    ok, reasons = validate_script(full)
+    if not ok:
+        raise ScriptGenerationError("Assembled 30-3-30 script failed validation: "
+                                    + "; ".join(reasons[:3]))
+    return unique, full
 
 
 # ---------------------------------------------------------------------------
@@ -435,9 +596,13 @@ def generate_script(
     ScriptGenerationError
         When the script fails validation after all retries.
     """
-    base = _base_prompt(outline_text, theme)
-    script = _generate_valid(base, base, llm_client, max_retries,
-                             progress_callback, "Generating pptxgenjs script…")
+    plan = _tier_plan(outline_text)
+    if plan:
+        script = _generate_tiered(plan, theme, llm_client, max_retries, progress_callback)[1]
+    else:
+        base = _base_prompt(outline_text, theme)
+        script = _generate_valid(base, base, llm_client, max_retries,
+                                 progress_callback, "Generating pptxgenjs script…")
     Path(output_script_path).write_text(script, encoding="utf-8")
     return script
 
@@ -462,9 +627,16 @@ def generate_and_render(
     Returns the last ``RenderResult`` — check ``.success``. Raises
     ``ScriptGenerationError`` if a (re)generated script fails validation.
     """
-    base = _base_prompt(outline_text, theme)
-    script = generate_script(outline_text, output_script_path, llm_client,
-                             theme, max_retries, progress_callback)
+    plan = _tier_plan(outline_text)
+    if plan:
+        # Repairs work on the one-slide-per-heading script, then re-assemble
+        base = _base_prompt(plan.outline, theme) + _tier_instructions(len(plan.slides))
+        script, full = _generate_tiered(plan, theme, llm_client, max_retries, progress_callback)
+        Path(output_script_path).write_text(full, encoding="utf-8")
+    else:
+        base = _base_prompt(outline_text, theme)
+        script = generate_script(outline_text, output_script_path, llm_client,
+                                 theme, max_retries, progress_callback)
     for repair in range(max_repairs + 1):
         if progress_callback:
             progress_callback("render", "Executing script…")
@@ -481,7 +653,11 @@ def generate_and_render(
             f"```\n{error[-3000:]}\n```\nFix the cause:",
             ["fix the error above (check quoting, brackets and helper arguments)"],
         )
-        script = _generate_valid(base, prompt, llm_client, max_retries,
-                                 progress_callback, "Repairing script…")
-        Path(output_script_path).write_text(script, encoding="utf-8")
+        if plan:
+            script, full = _generate_tiered(plan, theme, llm_client, max_retries,
+                                            progress_callback, prompt, "Repairing script…")
+        else:
+            script = full = _generate_valid(base, prompt, llm_client, max_retries,
+                                            progress_callback, "Repairing script…")
+        Path(output_script_path).write_text(full, encoding="utf-8")
     return result
