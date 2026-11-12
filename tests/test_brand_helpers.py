@@ -195,3 +195,56 @@ def test_metric_table(tmp_path, theme, ink):
     assert run(t7.rows[0].cells[1]).size.pt < 36
     # No "why" values -> two columns
     assert len(next(s for s in two_cols.shapes if s.has_table).table.columns) == 2
+
+
+# ---------------------------------------------------------------------------
+# addSpecTable
+# ---------------------------------------------------------------------------
+
+_SPEC_SCRIPT = """\
+import { createDeck, addSpecTable } from '../lib/pptxgenjs-helpers.mjs';
+const deck = await createDeck('themes/__THEME__.yaml');
+const rows = [['HBM', '192 GB', '288 GB', '192 GB'], ['Power', '1,000 W', '1,400 W', '750 W']];
+addSpecTable(deck, 'Auto', ['Spec', 'B200', 'AMD Instinct MI355X', 'MI300X'], rows, 1, '', { source: 'Source: test' });
+addSpecTable(deck, 'Forced', ['Spec', 'A', 'B', 'C'], rows, 2, '', { highlight: 3 });
+addSpecTable(deck, 'None', ['Spec', 'B200', 'MI355X', 'MI300X'], rows, 3, '', { highlight: false });
+addSpecTable(deck, 'Sheet', ['', ''], [['Architecture', 'CDNA 4'], ['HBM', '288 GB']], 4);
+const many = Array.from({ length: 14 }, (_, i) => [`S${i}`, '1', '2', '3']);
+addSpecTable(deck, 'Long', ['Spec', 'EPYC 9965', 'Xeon', 'Other'], many, 5);
+await deck.save(`${process.env.AIPPT_PREVIEW_OUT || 'output'}/spec.pptx`);
+"""
+
+
+def _table(slide):
+    return next(s for s in slide.shapes if s.has_table).table
+
+
+def _cell_fill(cell):
+    return str(cell.fill.fore_color.rgb) if cell.fill.type == 1 else None   # 1 = solid
+
+
+@pytest.mark.parametrize("theme,ink,tint", [("corp_black", "FFFFFF", "00313"), ("corp_white", "000000", "D9F6")])
+def test_spec_table(tmp_path, theme, ink, tint):
+    prs = _render(tmp_path, "spec", _SPEC_SCRIPT.replace("__THEME__", theme))
+    auto, forced, none, sheet, long = prs.slides
+    font = lambda cell: cell.text_frame.paragraphs[0].runs[0].font
+    t = _table(auto)
+    # The AMD column is found from its header: accent header with black text, tinted bold body
+    assert _cell_fill(t.cell(0, 2)) == "00C2DE" and str(font(t.cell(0, 2)).color.rgb) == "000000"
+    assert _cell_fill(t.cell(1, 2)).startswith(tint) and font(t.cell(1, 2)).bold
+    assert str(font(t.cell(1, 2)).color.rgb) == ink
+    # Competitors are muted, not filled
+    assert _cell_fill(t.cell(1, 1)) is None and not font(t.cell(1, 1)).bold
+    assert str(font(t.cell(1, 1)).color.rgb) != ink
+    assert "Source: test" in [s.text_frame.text for s in auto.shapes if s.has_text_frame]
+    # opts.highlight overrides / disables detection
+    assert [_cell_fill(_table(forced).cell(0, c)) for c in range(4)] == [None, None, None, "00C2DE"]
+    assert all(_cell_fill(_table(none).cell(r, c)) is None for r in range(3) for c in range(4))
+    # One product: borderless sheet, no empty header row, accent labels
+    ts = _table(sheet)
+    assert len(ts.rows) == 2 and len(ts.columns) == 2
+    assert str(font(ts.cell(0, 0)).color.rgb) == "00C2DE"
+    # Capped at 12 body rows, smaller type for dense tables
+    tl = _table(long)
+    assert len(tl.rows) == 13 and font(tl.cell(1, 0)).size.pt == 12
+    assert _cell_fill(tl.cell(0, 1)) == "00C2DE"                    # EPYC detected
