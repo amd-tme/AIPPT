@@ -92,7 +92,7 @@ _HELPER_FUNCTIONS: frozenset[str] = frozenset({
     "addAgendaSlide", "addBulletSlide", "addCardGrid", "addCinematicSlide",
     "addClosingSlide", "addCodeSlide", "addDisclaimerSlide", "addEyebrowText", "addFeatureListSlide",
     "addFooter", "addFourImageGallery", "addHeroTitleSlide",
-    "addIconRowsSlide", "addImageBulletsSlide", "addImageSlide",
+    "addIconFeatureGrid", "addIconRowsSlide", "addImageBulletsSlide", "addImageSlide",
     "addLogoGridSlide", "addPictureCaption", "addProcessFlow", "addProductTitleSlide",
     "addProofPointSlide", "addQuoteSlide",
     "addRoadmapSlide", "addSectionContent", "addSectionDivider", "addSectionIntroSlide",
