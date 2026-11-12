@@ -453,6 +453,18 @@ function addSectionDividerConservative(pptx, title, theme, slideNum) {
 }
 ```
 
+### startSection(deck, title)
+
+Starts a PowerPoint section (visible in PowerPoint's slide sorter); every slide
+added afterwards belongs to it until the next `startSection`. Used for 30-3-30
+decks: `Intro`, `30 Seconds`, `3 Minutes`, `30 Minutes`, `Appendix`.
+
+### addTierDivider(deck, title, subtitle, slideNum, notes?)
+
+Centred divider for a 30-3-30 tier: bold title, accent bar and an optional
+italic accent subtitle (the deck title). Titles: `Executive Overview (30 Sec)`,
+`Overview (3 Minute)`, `Deep Dive (30 Minute)`, `Appendix`.
+
 ### Corporate layouts (AMD template matches)
 
 Argument order matters — several of these differ from the helpers above.

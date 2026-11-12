@@ -849,6 +849,37 @@ def _get_slide_image_path(slide_id: int, db_path: str, project_root: str = None,
 VIEW_ONLY_MSG = "LLM features are disabled in view-only mode"
 
 
+@router.post("/api/outline/30-3-30")
+async def make_30_3_30_endpoint(request: Request):
+    """API: Rewrite an outline into 30-3-30 tiers (30 sec / 3 min / 30 min)."""
+    if getattr(request.app.state, "view_only", False):
+        return JSONResponse({"error": VIEW_ONLY_MSG}, status_code=403)
+    import asyncio
+    from aippt.tierify import TierifyError, make_30_3_30
+
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    outline_text = (body.get("outline_text") or "").strip()
+    if not outline_text:
+        return JSONResponse({"error": "Provide an outline first"}, status_code=400)
+
+    user_ntid = _resolve_user_ntid(request, body)
+    try:
+        client = _make_llm_client(request, "enhance", body.get("model"), user_ntid=user_ntid)
+    except ValueError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=503)
+
+    try:
+        outline = await asyncio.to_thread(make_30_3_30, outline_text, client)
+    except TierifyError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=422)
+    except Exception as exc:
+        return JSONResponse({"error": f"30-3-30 rewrite failed: {exc}"}, status_code=500)
+    return {"outline": outline, "model": client.model}
+
+
 @router.post("/api/slides/{slide_id}/analyze")
 async def analyze_slide_endpoint(slide_id: int, request: Request):
     """API: Run feedback analysis on a single slide."""

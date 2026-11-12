@@ -273,6 +273,7 @@ tone: technical
 - Pattern A: `#` = sections, `##` = slides (most common)
 - Pattern B: `#` = deck title, `##` = sections, `###` = slides (hierarchical)
 - Simple: `#` = slides directly (short flat decks, 5 or fewer slides)
+- 30-3-30: `# 30 Seconds` / `# 3 Minutes` / `# 30 Minutes` / `# Appendix` sections, `##` = slides; earlier tiers repeat in later ones automatically, so each tier lists only its new slides (`TIER: no-repeat` opts out). See the format reference.
 
 **Content elements:**
 - `- item` = bullet (level 1)

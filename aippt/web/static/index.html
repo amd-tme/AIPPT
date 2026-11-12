@@ -1780,6 +1780,8 @@
                     <div class="create-options">
                         <button class="outline" onclick="document.getElementById('create-md-file').click()" style="width:auto; padding:0.3rem 0.7rem; font-size:0.85rem;">Upload .md</button>
                         <input type="file" id="create-md-file" accept=".md,.txt" style="display:none;" onchange="loadMdFile(this)">
+                        <button class="outline" id="create-tier-btn" onclick="makeTieredOutline()" style="width:auto; padding:0.3rem 0.7rem; font-size:0.85rem;" title="AI rewrites the outline into one deck with 30-second, 3-minute and 30-minute versions. Review the result before creating.">Make it 30-3-30</button>
+                        <button class="outline secondary" id="create-tier-undo" onclick="undoTieredOutline()" style="display:none; width:auto; padding:0.3rem 0.7rem; font-size:0.85rem;">Undo 30-3-30</button>
                         <label>
                             <input type="checkbox" id="create-enhance" checked style="margin:0;">
                             Enhanced mode
@@ -4546,6 +4548,53 @@
             };
             reader.readAsText(input.files[0]);
             input.value = '';
+        }
+
+        let tierUndoText = null;
+
+        async function makeTieredOutline() {
+            const box = document.getElementById('create-outline-text');
+            const outlineText = box.value.trim();
+            if (!outlineText) {
+                toast('Please enter a markdown outline or upload a .md file');
+                return;
+            }
+            const btn = document.getElementById('create-tier-btn');
+            btn.disabled = true;
+            btn.textContent = 'Rewriting…';
+            try {
+                const reqBody = {outline_text: outlineText};
+                const model = document.getElementById('create-model-select').value;
+                if (model) reqBody.model = model;
+                const ntid = getUserNtid();
+                if (ntid) reqBody.user_ntid = ntid;
+                const resp = await fetch('api/outline/30-3-30', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(reqBody),
+                });
+                const data = await resp.json().catch(() => ({}));
+                if (!resp.ok) {
+                    toast('30-3-30 failed: ' + (data.error || resp.statusText));
+                    return;
+                }
+                tierUndoText = box.value;
+                box.value = data.outline;
+                document.getElementById('create-tier-undo').style.display = '';
+                toast('Outline rewritten as 30-3-30 — review it, then Create Presentation');
+            } catch (e) {
+                toast('30-3-30 request failed');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Make it 30-3-30';
+            }
+        }
+
+        function undoTieredOutline() {
+            if (tierUndoText === null) return;
+            document.getElementById('create-outline-text').value = tierUndoText;
+            tierUndoText = null;
+            document.getElementById('create-tier-undo').style.display = 'none';
         }
 
         function updateImageLabel(input) {

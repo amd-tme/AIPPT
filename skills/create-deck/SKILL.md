@@ -302,6 +302,16 @@ If the outline contains explicit directives, they override the auto-detection:
 - `LAYOUT: proof_point` → `> ` headline, first/last `**Label** — value` items = before/after bars (`addProofPointSlide`)
 - `LAYOUT: feature_list` → `**Heading** — text` items (or groups) = features, `> ` = tagline (`addFeatureListSlide`)
 
+### 30-3-30 Outlines
+
+When the outline's `#` sections are tiers (`30 Seconds`, `3 Minutes`, `30 Minutes`, optional `Appendix`), build one deck with three versions:
+
+1. Intro slides (title, optional agenda) under `startSection(deck, 'Intro')`.
+2. Per tier: `startSection(deck, '30 Seconds' | '3 Minutes' | '30 Minutes')`, then `addTierDivider(deck, 'Executive Overview (30 Sec)' | 'Overview (3 Minute)' | 'Deep Dive (30 Minute)', deckTitle, n)`, then the earlier tiers' slides again (skip for a tier marked `TIER: no-repeat`), then the tier's own slides, then `addClosingSlide(deck, n)` unless the tier ends with its own thank-you slide.
+3. `startSection(deck, 'Appendix')` + `addTierDivider(deck, 'Appendix', '', n)` + the appendix slides (no repeats).
+
+Slide numbers run through the whole deck. The web engines (AI, AI Fast, No-LLM) do this automatically.
+
 **Two-column header extraction (pptxgenjs):** When `LAYOUT: two_column | Left Header | Right Header` appears, parse the pipe-separated headers and pass them to `addTwoColumn()`:
 
 ```javascript
