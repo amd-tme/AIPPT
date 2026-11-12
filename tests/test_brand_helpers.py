@@ -91,3 +91,58 @@ def test_icon_feature_grid(tmp_path, theme, ink):
         for shape in slide.shapes:
             if shape.shape_type == 13 and b"svgBlip" in shape._element.xml.encode():
                 assert shape.top + shape.height < 914400 * 6.9
+
+
+# ---------------------------------------------------------------------------
+# addKpiTiles / addHeroNumber
+# ---------------------------------------------------------------------------
+
+_KPI_SCRIPT = """\
+import { createDeck, addKpiTiles, addHeroNumber } from '../lib/pptxgenjs-helpers.mjs';
+const deck = await createDeck('themes/__THEME__.yaml');
+addKpiTiles(deck, 'Tiles', [
+  { icon: 'hbm', value: '288 GB', label: 'Memory', context: 'vs. 192 GB' },
+  { icon: 'gpu', value: '1.3x', label: 'Faster', highlight: true },
+  { value: '40%', label: 'Efficiency' },
+  { value: '$2.3M', label: 'TCO' },
+  { value: 'extra', label: 'Fifth tile is dropped' },
+], 1, '', { takeaway: 'So what', source: 'Source: test endnote' });
+addKpiTiles(deck, 'Long values', [
+  { value: '1,234,567 tokens/s', label: 'A' }, { value: '9', label: 'B' },
+], 2);
+addHeroNumber(deck, '1.3x', 'faster inference', 3, '', { context: 'FP4, 8 GPUs', source: 'See endnote X-1' });
+addHeroNumber(deck, '$12.5M', 'saved', 4, '', { title: 'TCO' });
+await deck.save(`${process.env.AIPPT_PREVIEW_OUT || 'output'}/kpi.pptx`);
+"""
+
+
+def _shape_with_text(slide, text):
+    return next(s for s in slide.shapes if s.has_text_frame and s.text_frame.text == text)
+
+
+def _font_pt(slide, text):
+    return _shape_with_text(slide, text).text_frame.paragraphs[0].runs[0].font.size.pt
+
+
+@pytest.mark.parametrize("theme,ink", [("corp_black", "FFFFFF"), ("corp_white", "000000")])
+def test_kpi_tiles_and_hero_number(tmp_path, theme, ink):
+    prs = _render(tmp_path, "kpi", _KPI_SCRIPT.replace("__THEME__", theme))
+    tiles, long_values, hero, hero_titled = prs.slides
+    texts = [s.text_frame.text for s in tiles.shapes if s.has_text_frame]
+    assert "extra" not in texts                          # at most 4 tiles
+    assert _text_colour(tiles, "1.3x") == "00C2DE"       # highlight only
+    assert _text_colour(tiles, "288 GB") == ink
+    assert len(_svg_pictures(tiles)) == 2
+    # All values share one size; a long value shrinks the whole row
+    assert len({_font_pt(tiles, v) for v in ("288 GB", "1.3x", "40%", "$2.3M")}) == 1
+    assert _font_pt(long_values, "9") == _font_pt(long_values, "1,234,567 tokens/s") < 48
+    # Source line sits above the footer, under the tiles
+    src = _shape_with_text(tiles, "Source: test endnote")
+    tile_bottom = max(s.top + s.height for s in tiles.shapes if s.has_text_frame and s.text_frame.text == "vs. 192 GB")
+    assert tile_bottom < src.top and src.top + src.height <= 914400 * 6.9 + 10
+    # Hero: big accent number, left-aligned at the margin
+    value = _shape_with_text(hero, "1.3x")
+    assert _text_colour(hero, "1.3x") == "00C2DE" and _font_pt(hero, "1.3x") >= 96
+    assert abs(value.left - 914400 * 0.64) < 9144
+    assert "See endnote X-1" in [s.text_frame.text for s in hero.shapes if s.has_text_frame]
+    assert "TCO" in [s.text_frame.text for s in hero_titled.shapes if s.has_text_frame]

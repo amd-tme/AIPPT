@@ -91,8 +91,8 @@ _NAMED_IMPORT_RE = re.compile(
 _HELPER_FUNCTIONS: frozenset[str] = frozenset({
     "addAgendaSlide", "addBulletSlide", "addCardGrid", "addCinematicSlide",
     "addClosingSlide", "addCodeSlide", "addDisclaimerSlide", "addEyebrowText", "addFeatureListSlide",
-    "addFooter", "addFourImageGallery", "addHeroTitleSlide",
-    "addIconFeatureGrid", "addIconRowsSlide", "addImageBulletsSlide", "addImageSlide",
+    "addFooter", "addFourImageGallery", "addHeroNumber", "addHeroTitleSlide",
+    "addIconFeatureGrid", "addIconRowsSlide", "addImageBulletsSlide", "addKpiTiles", "addImageSlide",
     "addLogoGridSlide", "addPictureCaption", "addProcessFlow", "addProductTitleSlide",
     "addProofPointSlide", "addQuoteSlide",
     "addRoadmapSlide", "addSectionContent", "addSectionDivider", "addSectionIntroSlide",
