@@ -146,3 +146,52 @@ def test_kpi_tiles_and_hero_number(tmp_path, theme, ink):
     assert abs(value.left - 914400 * 0.64) < 9144
     assert "See endnote X-1" in [s.text_frame.text for s in hero.shapes if s.has_text_frame]
     assert "TCO" in [s.text_frame.text for s in hero_titled.shapes if s.has_text_frame]
+
+
+# ---------------------------------------------------------------------------
+# addMetricTable
+# ---------------------------------------------------------------------------
+
+_METRIC_SCRIPT = """\
+import { createDeck, addMetricTable } from '../lib/pptxgenjs-helpers.mjs';
+const deck = await createDeck('themes/__THEME__.yaml');
+const rows = [1, 2, 3, 4, 5, 6, 7].map(i => ({ label: `Metric ${i}`, value: `${i}.0x`, why: `Reason ${i}` }));
+addMetricTable(deck, 'With image', rows.slice(0, 4), 1, '', {
+  header: ['Metric', 'Ours', 'Why'], image: 'themes/assets/mi355x-die.png', source: 'Source: test',
+});
+addMetricTable(deck, 'Seven rows', rows, 2);
+addMetricTable(deck, 'Two columns', rows.slice(0, 2).map(({ label, value }) => ({ label, value })), 3);
+await deck.save(`${process.env.AIPPT_PREVIEW_OUT || 'output'}/metric.pptx`);
+"""
+
+
+@pytest.mark.parametrize("theme,ink", [("corp_black", "FFFFFF"), ("corp_white", "000000")])
+def test_metric_table(tmp_path, theme, ink):
+    prs = _render(tmp_path, "metric", _METRIC_SCRIPT.replace("__THEME__", theme))
+    with_image, seven, two_cols = prs.slides
+    table = next(s for s in with_image.shapes if s.has_table).table
+    assert len(table.rows) == 5 and len(table.columns) == 3       # header + 4
+    assert [c.text for c in table.rows[0].cells] == ["Metric", "Ours", "Why"]
+    label, value, why = table.rows[1].cells
+    run = lambda cell: cell.text_frame.paragraphs[0].runs[0].font
+    assert str(run(label).color.rgb) == ("9D9FA2" if theme == "corp_black" else "5E5E5E")
+    assert str(run(value).color.rgb) == "00C2DE" and run(value).size.pt == 36 and run(value).bold
+    assert str(run(why).color.rgb) == ink
+    # Product image to the left of the table, source line under it
+    tbl = next(s for s in with_image.shapes if s.has_table)
+    pic = next(s for s in with_image.shapes if s.shape_type == 13 and s.left < tbl.left)
+    assert pic.left + pic.width <= tbl.left
+    assert "Source: test" in [s.text_frame.text for s in with_image.shapes if s.has_text_frame]
+    # Horizontal rules only: no vertical borders in the XML
+    import re
+    xml = tbl._element.xml
+    for side in ("lnL", "lnR"):
+        assert all("<a:noFill/>" in m for m in re.findall(rf"<a:{side}\b.*?</a:{side}>", xml, re.S))
+    body_rules = re.findall(r"<a:lnB\b.*?</a:lnB>", xml, re.S)[3:]           # skip header cells
+    assert body_rules and all('w="28575"' in m for m in body_rules)    # 2.25 pt
+    # Capped at 6 rows (no header); values shrink for long tables
+    t7 = next(s for s in seven.shapes if s.has_table).table
+    assert len(t7.rows) == 6
+    assert run(t7.rows[0].cells[1]).size.pt < 36
+    # No "why" values -> two columns
+    assert len(next(s for s in two_cols.shapes if s.has_table).table.columns) == 2
