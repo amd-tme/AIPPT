@@ -187,3 +187,49 @@ class TestBackwardCompatibility:
         assert theme["heading"] == "Klavika"
         assert theme["body"] == "Arial"
         assert theme["mono"] == "Consolas"
+
+
+class TestCorporateThemes:
+    """corp_black / corp_white: opt-in themes from the AMD corporate templates."""
+
+    def _load(self, name):
+        return run_node(f"""
+            import {{ loadTheme, cardShadow }} from './lib/pptxgenjs-helpers.mjs';
+            import {{ existsSync }} from 'fs';
+            const t = loadTheme('themes/{name}.yaml');
+            const assets = [t.logo.path, ...['title_background', 'lockup', 'wordmark']
+              .map(k => 'themes/assets/' + t.brand[k])];
+            console.log(JSON.stringify({{ ...t, shadowObj: cardShadow(t) ?? null,
+              missing: assets.filter(p => !existsSync(p)) }}));
+        """)
+
+    @pytest.mark.parametrize("name,bg,text,label", [
+        ("corp_black", "000000", "FFFFFF", ""),
+        ("corp_white", "FFFFFF", "000000", "[AMD Official Use Only - General]"),
+    ])
+    def test_tokens(self, name, bg, text, label):
+        t = self._load(name)
+        assert t["colors"]["background"] == bg
+        assert t["colors"]["text_primary"] == text
+        assert t["colors"]["accent"] == "00C2DE"
+        assert t["fonts"]["heading"] == t["fonts"]["body"] == "Arial"
+        assert t["typography"]["heading_size"] == 28
+        assert t["footer"]["numberPosition"] == "left"
+        assert t["brand"]["sensitivity_label"] == label
+        # Lockup bottom-right, as in the template.
+        assert (t["logo"]["x"], t["logo"]["y"]) == (11.90, 6.99)
+        assert t["missing"] == []
+        assert t["shadowObj"] is None  # flat cards
+
+    def test_amd_brand_defaults_unchanged(self):
+        t = run_node("""
+            import { loadTheme, cardShadow } from './lib/pptxgenjs-helpers.mjs';
+            const t = loadTheme('themes/amd.yaml');
+            console.log(JSON.stringify({ brand: t.brand, footer: t.footer, shadow: cardShadow(t) }));
+        """)
+        assert t["brand"] == {
+            "variant": "dark", "title_background": "amd-arrow-hq.jpg",
+            "lockup": "amd-twa-lockup-wht.png", "wordmark": "", "sensitivity_label": "",
+        }
+        assert t["footer"]["numberPosition"] == "right"
+        assert t["shadow"]["opacity"] == 0.12

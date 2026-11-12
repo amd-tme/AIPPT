@@ -1,0 +1,87 @@
+name: AMD Corporate White
+description: AMD corporate template (2024 v1.2), white background, Arial, cyan accent
+
+# Light twin of corp_black.yaml: background and text swap, black-art logos,
+# and the template's sensitivity label on content slides.
+#
+# Opt-in alternative to amd.yaml (which stays the default). Values come from the
+# AMD corporate PowerPoint templates (corp_black / corp_white, "AMD Palette"):
+# dk1=000000, lt1=FFFFFF, dk2=5E5E5E, lt2=9D9FA2, accent1=636466 (bullets),
+# accent3=C1A968 gold, accent4=F26522 orange, accent5=ED1C24 red, accent6=00C2DE teal.
+#
+# Accent by product family: teal 00C2DE = EPYC / Instinct / PRO / Pensando
+# (default here), gold C1A968 = corporate, orange F26522 = Ryzen / Threadripper,
+# red ED1C24 = Radeon. Product colours are used sparingly; the rest is
+# black, white and the grey ramp 262626 / 404040 / 595959 / A6A6A6 / D9D9D9.
+
+colors:
+  background: "FFFFFF"
+  background_alt: "FFFFFF"
+  surface: "F2F2F2"          # card body: black at 5% on white
+  text_primary: "000000"
+  text_secondary: "5E5E5E"   # tx2: table headers, subtitles
+  text_body: "262626"
+  accent: "00C2DE"
+  accent_alt: "C1A968"
+  warning: "ED1C24"
+
+fonts:
+  heading: "Arial"           # the template uses Arial everywhere
+  body: "Arial"
+  mono: "Consolas"
+
+# Content-slide logo: "AMD together we advance_" lockup, bottom-right.
+logo:
+  path: "themes/assets/amd-twa-lockup-blk.png"
+  position: "bottom-right"
+  width_inches: 1.26
+  height_inches: 0.36
+  x_inches: 11.90
+  y_inches: 6.99
+
+slide:
+  layout: "LAYOUT_WIDE"
+  margin_inches: 0.64
+
+footer:
+  show: true
+  text: ""
+  show_slide_numbers: true
+  number_position: "left"    # bottom-left 7pt, as in the template
+
+typography:
+  title_size: 40             # cover title
+  heading_size: 28           # content slide title (bold)
+  subtitle_size: 18
+  body_size: 18              # body level 1; level 2 = 16, level 3 = 12
+  small_size: 12
+  eyebrow_size: 8
+  stat_size: 44
+  stat_bold: true
+  stat_label_size: 16
+  stat_desc_size: 14
+  code_size: 16
+  footer_size: 7
+
+data_colors:
+  series_1: "9D9FA2"         # competitor / baseline grey
+  series_2: "00C2DE"         # AMD
+  series_3: "636466"
+  positive: "7FCA60"         # status: met
+  negative: "FF0000"         # status: behind
+  neutral: "FFC000"          # status: mixed
+
+# The template uses flat cards with no shadows.
+shadow:
+  blur: 0
+  offset: 0
+  angle: 135
+  color: "000000"
+  opacity: 0
+
+brand:
+  variant: "light"
+  title_background: "amd-arrow-light.jpg"
+  lockup: "amd-twa-lockup-blk.png"
+  wordmark: "amd-wordmark-black.png"
+  sensitivity_label: "[AMD Official Use Only - General]"
