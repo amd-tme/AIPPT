@@ -9,6 +9,7 @@ engines transparently.
 """
 from __future__ import annotations
 
+import copy
 import re
 import textwrap
 from pathlib import Path
@@ -411,7 +412,7 @@ def _split_mixed_slides(slides: List[dict]) -> List[dict]:
             continue
         text_slide = dict(slide, _body=dict(body, code=[], table=None))
         block_slide = {
-            'title': slide['title'], 'content': [], 'section': slide.get('section'),
+            'title': slide['title'], 'content': [], 'section': slide.get('section'), '_tier': slide.get('_tier'),
             '_body': dict(_EMPTY_BODY, code=body['code'], table=body['table']),
         }
         out.extend([block_slide, text_slide] if body['first'] == block else [text_slide, block_slide])
@@ -1079,26 +1080,118 @@ _EMITTERS = {
 # Script assembler
 # ---------------------------------------------------------------------------
 
-def plan_slides(outline_text: str) -> List[dict]:
-    """Parsed slides in the order a layout plan indexes them (deck title first)."""
+# 30-3-30 tiers: H1 pattern → (divider title, PowerPoint section name)
+_TIERS = {
+    '30m': (re.compile(r'\b30[\s-]*m(?:in(?:ute)?s?)?\b', re.I), 'Deep Dive (30 Minute)', '30 Minutes'),
+    '3m':  (re.compile(r'(?<!\d)3[\s-]*m(?:in(?:ute)?s?)?\b', re.I), 'Overview (3 Minute)', '3 Minutes'),
+    '30s': (re.compile(r'\b30[\s-]*s(?:ec(?:ond)?s?)?\b', re.I), 'Executive Overview (30 Sec)', '30 Seconds'),
+}
+_APPENDIX_SECTION = re.compile(r'^\s*(?:appendix|backup)\b', re.I)
+_TIER_LINE = re.compile(r'^\s*TIER:\s*(.*?)\s*$')
+
+
+def _tier_of(section_name: str) -> Optional[str]:
+    """Tier key for an H1 name ('30s', '3m', '30m', 'appendix') or None."""
+    for key, (pattern, _, _) in _TIERS.items():
+        if pattern.search(section_name):
+            return key
+    return 'appendix' if _APPENDIX_SECTION.match(section_name) else None
+
+
+def _strip_tier_lines(outline_text: str):
+    """Remove ``TIER:`` lines; return (text, tier keys marked ``no-repeat``)."""
+    kept, no_repeat, tier = [], set(), None
+    for line in outline_text.split('\n'):
+        if line.startswith('# '):
+            tier = _tier_of(line[2:].strip())
+        m = _TIER_LINE.match(line)
+        if m:
+            if 'no-repeat' in m.group(1).lower() and tier:
+                no_repeat.add(tier)
+            continue
+        kept.append(line)
+    return '\n'.join(kept), no_repeat
+
+
+def _plan(outline_text: str):
+    """(slides, no-repeat tiers); 30-3-30 slides carry their tier as ``_tier``."""
+    outline_text, no_repeat = _strip_tier_lines(outline_text)
     parsed = parse_outline(outline_text)
     slides = parsed['slides']
     sections = parsed.get('sections', [])
     if not slides:
         raise ScriptGenerationError("Outline produced no slides.")
 
+    # A 30-3-30 outline has at least two of the timed H1 sections
+    tiers = {sec['name']: _tier_of(sec['name']) for sec in sections}
+    timed = {t for t in tiers.values() if t in _TIERS}
+    if len(timed) >= 2:
+        current = None
+        for slide in slides:
+            current = tiers.get(slide.get('section')) or current
+            slide['_tier'] = current
+    else:
+        tiers = {}
+
     # If the outline has H1 sections, prepend a synthetic title slide using
     # the first section name as the deck title (H1 → deck title, H2 → slides).
-    if sections and slides[0].get('section'):
+    # A 30-3-30 outline that opens with a tier uses its first slide's title.
+    # A 30-3-30 intro slide titled like the deck is the title slide itself.
+    first = sections[0]['name'] if sections else None
+    own_title = tiers and slides[0].get('section') == first and slides[0]['title'] == first
+    if sections and slides[0].get('section') and not own_title:
         deck_title_slide = {
-            'title': sections[0]['name'],
+            'title': slides[0]['title'] if tiers.get(first) else first,
             'content': [],
             'section': None,
             'layout': 'title_alt',
             '_synthetic': True,
         }
         slides = [deck_title_slide] + slides
-    return slides
+    return slides, no_repeat
+
+
+def plan_slides(outline_text: str) -> List[dict]:
+    """Parsed slides in the order a layout plan indexes them (deck title first)."""
+    return _plan(outline_text)[0]
+
+
+def _tier_sequence(slides: List[dict], layouts: List[str], no_repeat: set) -> list:
+    """Emission order for a 30-3-30 deck.
+
+    Intro slides, then per tier: a PowerPoint section, a tier divider, the
+    earlier tiers' slides again (unless ``TIER: no-repeat``), the tier's own
+    slides and a closing slide. The appendix gets a divider and no repeats.
+    Entries: ('section', name) | ('divider', title) | ('closing',) |
+    ('slide', slide, layout).
+    """
+    seq: list = [('section', 'Intro')]
+    own: dict = {}
+    for slide, layout in zip(slides, layouts):
+        tier = slide.get('_tier')
+        if tier is None:
+            seq.append(('slide', slide, layout))
+        else:
+            own.setdefault(tier, []).append((slide, layout))
+
+    earlier: list = []
+    for tier, entries in own.items():
+        if tier == 'appendix':
+            seq += [('section', 'Appendix'), ('divider', 'Appendix')]
+            seq += [('slide', s, l) for s, l in entries]
+            continue
+        _, divider, section = _TIERS[tier]
+        seq += [('section', section), ('divider', divider)]
+        if tier not in no_repeat:
+            seq += [('slide', s, l) for s, l in earlier]
+        last_slide = entries[-1][0]
+        if _CLOSING_WORDS.search(last_slide['title']):
+            entries[-1] = (last_slide, 'addClosingSlide')  # author's own closing
+        seq += [('slide', s, l) for s, l in entries]
+        if entries[-1][1] != 'addClosingSlide':
+            seq.append(('closing',))
+        earlier += [e for e in entries if e[1] != 'addClosingSlide']
+    return seq
 
 
 def _build_script(outline_text: str, theme: str = 'amd',
@@ -1108,7 +1201,7 @@ def _build_script(outline_text: str, theme: str = 'amd',
     *layout_plan* maps a ``plan_slides`` index to a LAYOUT directive value
     (e.g. ``'hero_title'``). An author's own LAYOUT: line always wins.
     """
-    slides = plan_slides(outline_text)
+    slides, no_repeat = _plan(outline_text)
     for i, layout in (layout_plan or {}).items():
         if 0 <= i < len(slides) and (not slides[i].get('layout') or slides[i].get('_synthetic')):
             slides[i]['layout'] = layout
@@ -1136,20 +1229,42 @@ def _build_script(outline_text: str, theme: str = 'amd',
         brand = {'title': _md_plain(slides[0]['title']),
                  'product': _product(slides[0]['title'] + ' ' + ' '.join(_body(slides[0])['prose']))}
 
-    slide_blocks: List[str] = []
-    for i, (slide, layout) in enumerate(zip(slides, layouts), start=1):
+    for slide, layout in zip(slides, layouts):
         slide['_layout'] = layout
         if brand:
             slide['_brand'] = brand
         _fold_unshown(slide, layout)
-        slide_blocks.append(_EMITTERS[layout](slide, i))
+
+    if any(slide.get('_tier') for slide in slides):
+        sequence = _tier_sequence(slides, layouts, no_repeat)
+    else:
+        sequence = [('slide', slide, layout) for slide, layout in zip(slides, layouts)]
+
+    deck_title = _js_str(_md_plain(slides[0]['title']))
+    slide_blocks: List[str] = []
+    n = 0
+    for entry in sequence:
+        if entry[0] == 'section':
+            slide_blocks.append(f"startSection(deck, `{_js_str(entry[1])}`);\n")
+            continue
+        n += 1
+        if entry[0] == 'divider':
+            subtitle = deck_title if entry[1] != 'Appendix' else ''
+            slide_blocks.append(f"// ═══ Slide {n}: {entry[1]} ═══\n"
+                                f"addTierDivider(deck, `{entry[1]}`, `{subtitle}`, {n});\n")
+        elif entry[0] == 'closing':
+            slide_blocks.append(f"// ═══ Slide {n}: Closing ═══\naddClosingSlide(deck, {n});\n")
+        else:
+            # A repeated slide is emitted again from a fresh copy
+            slide_blocks.append(_EMITTERS[entry[2]](copy.deepcopy(entry[1]), n))
 
     # Import exactly the helpers the emitted code calls (an emitter may pick
     # a variant, e.g. addImageBulletsSlide, of the layout it was given)
     body = '\n'.join(slide_blocks)
     used_helpers = set(re.findall(r'^(add[A-Z]\w+)\(deck', body, re.M)) | {'createDeck'}
-    if 'cardShadow(' in body:
-        used_helpers.add('cardShadow')
+    for helper in ('cardShadow', 'startSection'):
+        if f'{helper}(' in body:
+            used_helpers.add(helper)
 
     imports_line = (
         "import { " +

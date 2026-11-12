@@ -98,10 +98,10 @@ _HELPER_FUNCTIONS: frozenset[str] = frozenset({
     "addRoadmapSlide", "addSectionContent", "addSectionDivider", "addSectionIntroSlide",
     "addSplitImageContent", "addStatementSlide",
     "addStatCallout", "addTableSlide", "addTakeawaySlide", "addThreeColContent", "addThreeColImageText",
-    "addThreeImageGallery", "addTitleAlt", "addTitleSlide", "addTitleWithImage",
+    "addThreeImageGallery", "addTierDivider", "addTitleAlt", "addTitleSlide", "addTitleWithImage",
     "addTwoColNumbered", "addTwoColumn", "addTwoImageGallery", "cardShadow",
     "computeLayout", "createDeck", "iconToBase64", "loadTheme",
-    "preRenderIcons", "renderIconSvg",
+    "preRenderIcons", "renderIconSvg", "startSection",
 })
 
 

@@ -656,3 +656,118 @@ def test_render_disclaimer_scales_text(tmp_path):
         assert len(long_) == 2 and 9 <= size(long_[0]) < 18
     finally:
         shutil.rmtree(uploads / job_id, ignore_errors=True)
+
+
+# ---------------------------------------------------------------------------
+# 30-3-30 decks
+# ---------------------------------------------------------------------------
+
+TIER_OUTLINE = """\
+# Widget Platform
+
+## Widget Platform
+A short tour
+
+# 30 Seconds
+
+## Widgets in one slide
+- Reliability — fewer outages
+- Speed — faster builds
+- Cost — lower spend
+
+# 3 Minutes
+
+## How it works
+- Pilot with two teams
+- Expand to the org
+
+# 30 Minutes
+
+## Architecture
+- Control plane
+- Data plane
+
+## Thank you
+
+# Appendix
+
+## Resources
+- Docs: example.com
+"""
+
+
+def _sections(script):
+    return re.findall(r'^startSection\(deck, `([^`]*)`', script, re.M)
+
+
+def test_tier_outline_builds_sections_dividers_and_repeats():
+    script = _build_script(TIER_OUTLINE)
+    assert validate_script(script) == (True, [])
+    sections = _sections(script)
+    assert sections == ['Intro', '30 Seconds', '3 Minutes', '30 Minutes', 'Appendix']
+    dividers = re.findall(r'^addTierDivider\(deck, `([^`]*)`, `([^`]*)`', script, re.M)
+    assert dividers == [('Executive Overview (30 Sec)', 'Widget Platform'),
+                        ('Overview (3 Minute)', 'Widget Platform'),
+                        ('Deep Dive (30 Minute)', 'Widget Platform'),
+                        ('Appendix', '')]
+    # One title slide (the author's own), not a synthetic duplicate
+    assert script.count('addTitleSlide(deck') == 1 and 'A short tour' in script
+    # Earlier tiers are repeated: 30s slide x3, 3m slide x2
+    assert script.count('`Widgets in one slide`') == 3
+    assert script.count('`How it works`') == 2
+    # A closing slide ends each timed tier; the author's "Thank you" is the last one
+    assert script.count('addClosingSlide(deck') == 3
+    nums = [int(n) for n in re.findall(r'^// ═══ Slide (\d+):', script, re.M)]
+    assert nums == list(range(1, len(nums) + 1))
+
+
+def test_tier_no_repeat_directive():
+    outline = TIER_OUTLINE.replace('# 3 Minutes\n', '# 3 Minutes\nTIER: no-repeat\n')
+    script = _build_script(outline)
+    assert 'TIER' not in script
+    assert script.count('`Widgets in one slide`') == 2  # 30s tier + 30m repeat only
+    assert script.count('`How it works`') == 2
+
+
+def test_tier_names_vary():
+    outline = TIER_OUTLINE.replace('# 30 Seconds', '# Executive Overview (30 Sec)') \
+        .replace('# 3 Minutes', '# 3 Min').replace('# 30 Minutes', '# Deep Dive (30 Mins)')
+    sections = _sections(_build_script(outline))
+    assert sections == ['Intro', '30 Seconds', '3 Minutes', '30 Minutes', 'Appendix']
+
+
+def test_non_tier_outlines_unchanged():
+    # One timed heading or an appendix alone is not a 30-3-30 deck
+    outline = "# Deck\n\n## Intro\n- a\n- b\n\n# 30 Minutes\n\n## Topic\n- c\n- d\n\n# Appendix\n\n## More\n- e\n"
+    script = _build_script(outline)
+    assert 'startSection' not in script and 'addTierDivider' not in script
+    assert 'startSection' not in _build_script(SIMPLE_OUTLINE)
+
+
+def test_tier_outline_without_deck_title_uses_first_slide():
+    outline = TIER_OUTLINE.split('# 30 Seconds', 1)[1]
+    script = _build_script('# 30 Seconds' + outline)
+    assert re.search(r'^addTitleSlide\(deck, `Widgets in one slide`', script, re.M)
+
+
+@pytest.mark.skipif(not _node_available(), reason="node / node_modules not available")
+def test_render_tier_deck_has_powerpoint_sections(tmp_path):
+    import zipfile
+    from aippt.preview import Renderer
+    from aippt.web.routes import _stage_render_workspace
+
+    job_id = f"pytest-direct-tiers-{tmp_path.name}"
+    uploads = PROJECT_ROOT / "uploads"
+    try:
+        script_path, out_dir = _stage_render_workspace(
+            str(uploads), job_id, "tiers", str(PROJECT_ROOT))
+        generate_script(TIER_OUTLINE, script_path)
+        result = Renderer(project_root=str(PROJECT_ROOT)).render(script_path, out_dir)
+        assert result.success, result.stderr_tail
+        xml = zipfile.ZipFile(result.pptx_path).read('ppt/presentation.xml').decode()
+        names = re.findall(r'<p14:section name="([^"]+)"', xml)
+        assert names == ['Intro', '30 Seconds', '3 Minutes', '30 Minutes', 'Appendix']
+        # Every slide sits in a section
+        assert len(re.findall(r'<p14:sldId ', xml)) == len(re.findall(r'<p:sldId ', xml))
+    finally:
+        shutil.rmtree(uploads / job_id, ignore_errors=True)
