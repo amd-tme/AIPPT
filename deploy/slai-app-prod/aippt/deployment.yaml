@@ -1,3 +1,6 @@
+# Factory deploys this app only when a merged PR changes a file in this directory.
+# To ship an image-only change (Dockerfile, app code), update this note in the same
+# or a follow-up PR. Last image-only change: runtime file permissions (#49).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
