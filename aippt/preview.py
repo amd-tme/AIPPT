@@ -67,6 +67,62 @@ def _tail(text: str, lines: int = 30) -> str:
     return "\n".join(text.splitlines()[-lines:])
 
 
+# A picture with an SVG: the main blip is the PNG shown by viewers without SVG
+# support, the svgBlip extension inside it is the SVG itself.
+_SVG_PIC_RE = re.compile(r'<a:blip r:embed="(rId\d+)"[^>]*>(?:(?!</a:blip>).)*?'
+                         r'<asvg:svgBlip [^>]*r:embed="(rId\d+)"', re.DOTALL)
+_REL_RE = re.compile(r'<Relationship [^>]*?Id="(rId\d+)"[^>]*?Target="([^"]+)"')
+_MAX_SVG_BYTES = 2_000_000
+
+
+def _no_fetch(url, *args, **kwargs):
+    raise ValueError(f"external resource blocked in SVG: {url[:80]}")
+
+
+def add_svg_fallbacks(pptx_path: str) -> int:
+    """Give every SVG picture in *pptx_path* a real PNG fallback.
+
+    In Node, pptxgenjs can't draw an SVG, so the PNG it stores for viewers
+    without SVG support (older PowerPoint, some importers) is a "broken image"
+    placeholder. Replace each one with the SVG rendered by cairosvg. External
+    resources in the SVG are never fetched. Returns the number replaced.
+    """
+    import posixpath
+    import zipfile
+
+    from cairosvg.surface import PNGSurface
+
+    with zipfile.ZipFile(pptx_path) as z:
+        files = {info.filename: z.read(info.filename) for info in z.infolist()}
+    replaced = {}
+    for name, data in files.items():
+        if not re.fullmatch(r"ppt/slides/slide\d+\.xml", name) or b"svgBlip" not in data:
+            continue
+        rels_name = posixpath.join(posixpath.dirname(name), "_rels", posixpath.basename(name) + ".rels")
+        targets = dict(_REL_RE.findall(files.get(rels_name, b"").decode("utf-8")))
+        for png_rid, svg_rid in _SVG_PIC_RE.findall(data.decode("utf-8")):
+            png = posixpath.normpath(posixpath.join(posixpath.dirname(name), targets.get(png_rid, "")))
+            svg = posixpath.normpath(posixpath.join(posixpath.dirname(name), targets.get(svg_rid, "")))
+            if png in replaced or not png.endswith(".png") or svg not in files:
+                continue
+            if len(files[svg]) > _MAX_SVG_BYTES:
+                continue
+            try:
+                replaced[png] = PNGSurface.convert(bytestring=files[svg], output_width=512,
+                                                   url_fetcher=_no_fetch)
+            except Exception as exc:  # keep the placeholder for this one picture
+                logger.warning("No PNG fallback for %s: %s", svg, exc)
+    if not replaced:
+        return 0
+    files.update(replaced)
+    tmp = pptx_path + ".tmp"
+    with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as z:
+        for name, data in files.items():
+            z.writestr(name, data)
+    os.replace(tmp, pptx_path)
+    return len(replaced)
+
+
 class Renderer:
     """Run a slides-as-code script and produce a .pptx for browser-side rendering.
 
@@ -119,6 +175,11 @@ class Renderer:
                 exit_code=0,
                 stderr_tail="No .pptx file found after script completed.",
             )
+
+        try:
+            add_svg_fallbacks(str(pptx))
+        except Exception as exc:  # the deck is still usable in modern viewers
+            logger.warning("SVG fallback images not added to %s: %s", pptx, exc)
 
         duration_ms = int((time.monotonic() - t0) * 1000)
         return RenderResult(success=True, pptx_path=str(pptx), duration_ms=duration_ms)

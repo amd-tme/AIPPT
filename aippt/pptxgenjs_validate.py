@@ -100,7 +100,7 @@ _HELPER_FUNCTIONS: frozenset[str] = frozenset({
     "addStatCallout", "addTableSlide", "addTakeawaySlide", "addThreeColContent", "addThreeColImageText",
     "addThreeImageGallery", "addTierDivider", "addTitleAlt", "addTitleSlide", "addTitleWithImage",
     "addTwoColNumbered", "addTwoColumn", "addTwoImageGallery", "cardShadow",
-    "computeLayout", "createDeck", "iconToBase64", "loadTheme",
+    "computeLayout", "createDeck", "iconToBase64", "loadIcons", "loadTheme",
     "preRenderIcons", "renderIconSvg", "startSection",
 })
 
