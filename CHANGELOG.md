@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Image-only changes deploy without a placeholder edit.** The Factory deploy
+  target now watches the image's build inputs (the Dockerfile's `COPY` sources),
+  so a merge that changes only app code or the Dockerfile is a deploy candidate.
+  The note asking for a placeholder edit in `deployment.yaml` is gone, and the
+  adoption baseline moves to #50, whose image is live. Needs a Factory release
+  with target `watch_paths` on the deploy host; older releases ignore the key.
 - Refresh the complete slai-app-creator asset to 0.1.22 and reconcile AIPPT's
   existing apex route with the platform-reviewed `platform-apex-tls` binding.
   Include packaged creator templates previously hidden by the broad template

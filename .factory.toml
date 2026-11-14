@@ -6,15 +6,24 @@ main = "main"
 
 [apply]
 enabled = false
-# Adoption baseline: the merge of PR #40, whose bundle was deployed through the hosted
-# flow by hand in October 2026 (platform PR #2556). Changes after it must arrive
-# through approved agent/<ticket> PRs.
-baseline = "44baf05008f30b3a6755ed7b1938a130641efe5a"
+# Adoption baseline: the merge of PR #50, whose image (built from that tree) is live
+# after the platform job re-run recorded in #51. Merges up to it are deployed; moving
+# it here keeps the earlier image-only merges from becoming candidates once
+# watch_paths counts them. Changes after it must arrive through approved PRs.
+baseline = "8fec4046805f017707c2956421c114f16a9788a5"
 
 [apply.targets.aippt]
 dir = "deploy/slai-app-prod/aippt"
 adapter = "slai-app-platform"
 supersession = "latest"
+# Image inputs: the adapter builds the image from the merged tree, so a merge that
+# changes only these still deploys. Mirrors the Dockerfile's COPY sources.
+watch_paths = [
+  "Dockerfile", ".dockerignore", "deploy/ca/**",
+  "requirements.txt", "package.json", "package-lock.json", "pyproject.toml",
+  "aippt.py", "aippt/**", "lib/**", "themes/**", "examples/**", "docs/**",
+  "dirs.yaml", "gateway.yaml", "models.yaml", "templates.yaml",
+]
 
 [dispatch]
 max_active = 1
