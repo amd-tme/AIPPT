@@ -1771,6 +1771,15 @@
                             No-LLM <span style="font-size:0.72rem;color:var(--pico-muted-color);">(free, basic)</span>
                         </label>
                     </div>
+                    <div id="create-theme-row" style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem;font-size:0.82rem;">
+                        <label for="create-theme" style="color:var(--pico-muted-color);margin:0;">Theme</label>
+                        <select id="create-theme" style="width:auto;margin:0;padding:0.2rem 2rem 0.2rem 0.5rem;font-size:0.82rem;">
+                            <option value="amd" selected>AMD (default)</option>
+                            <option value="corp_black">AMD Corporate Black</option>
+                            <option value="corp_white">AMD Corporate White</option>
+                        </select>
+                        <span style="color:var(--pico-muted-color);">No-LLM adds brand layouts (KPI tiles, charts, timelines…) on the corporate themes</span>
+                    </div>
                     <div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.5rem;font-size:0.82rem;">
                         <label style="display:flex;align-items:center;gap:0.3rem;cursor:pointer;margin:0;">
                             <input type="checkbox" id="create-auto-refine" checked style="margin:0;">
@@ -4603,6 +4612,17 @@
                 count ? count + ' image' + (count > 1 ? 's' : '') + ' selected' : '';
         }
 
+        // Engines that render a pptxgenjs theme; the template engines ignore it.
+        const PPTXGENJS_ENGINES = ['pptxgenjs', 'pptxgenjs-fast', 'pptxgenjs-direct'];
+
+        function updateThemeRow() {
+            const engine = document.querySelector('input[name="create-engine"]:checked')?.value || 'pptxgenjs';
+            document.getElementById('create-theme-row').style.display =
+                PPTXGENJS_ENGINES.includes(engine) ? 'flex' : 'none';
+        }
+        document.querySelectorAll('input[name="create-engine"]').forEach(
+            radio => radio.addEventListener('change', updateThemeRow));
+
         async function createDeck() {
             const outlineText = document.getElementById('create-outline-text').value.trim();
             if (!outlineText) {
@@ -4634,6 +4654,9 @@
             formData.append('outline_text', outlineText);
             formData.append('enhance', enhance.toString());
             formData.append('engine', engine);
+            if (PPTXGENJS_ENGINES.includes(engine)) {
+                formData.append('theme', document.getElementById('create-theme').value);
+            }
             if (model) formData.append('model', model);
             if (audience && audience !== 'mixed') formData.append('audience', audience);
 

@@ -1827,6 +1827,10 @@ def _save_image_uploads(md_text, outline_save_path, image_data):
             f.write(data)
 
 
+# Themes the pptxgenjs engines can render (themes/<name>.yaml); amd is the default.
+PPTXGENJS_THEMES = ("amd", "corp_black", "corp_white")
+
+
 @router.post('/api/decks/create')
 async def create_deck_stream(
     request: Request,
@@ -1838,10 +1842,16 @@ async def create_deck_stream(
     title: str = Form(None),
     image_files: List[UploadFile] = File(default=[]),
     engine: str = Form("pptxgenjs"),
+    theme: str = Form("amd"),
 ):
     """API: Create a deck from markdown outline, streaming progress as SSE."""
     if getattr(request.app.state, "view_only", False):
         return JSONResponse({"error": VIEW_ONLY_MSG}, status_code=403)
+    if theme not in PPTXGENJS_THEMES:
+        return JSONResponse(
+            {"error": f"Unknown theme {theme!r}; choose one of {', '.join(PPTXGENJS_THEMES)}"},
+            status_code=400,
+        )
 
     ms_token = _extract_bearer_token(request)
     if not ms_token:
@@ -1985,7 +1995,7 @@ async def create_deck_stream(
                         output_script_path=script_path,
                         renderer=renderer,
                         out_dir=render_out_dir,
-                        theme="amd",
+                        theme=theme,
                         progress_callback=create_progress,
                         **gen_kwargs,
                     )
@@ -1993,7 +2003,7 @@ async def create_deck_stream(
                     generate_script(
                         outline_text=md_text,
                         output_script_path=script_path,
-                        theme="amd",
+                        theme=theme,
                         progress_callback=create_progress,
                         **gen_kwargs,
                     )
@@ -2042,9 +2052,9 @@ async def create_deck_stream(
                 _conn = get_db(db_path)
                 _conn.execute(
                     "UPDATE decks SET outline_path = ?, source_engine = ?, source_script_path = ?, "
-                    "source_generated_at = datetime('now'), updated_at = datetime('now') "
+                    "source_theme = ?, source_generated_at = datetime('now'), updated_at = datetime('now') "
                     "WHERE id = ?",
-                    (stable_outline, "pptxgenjs", stable_script, deck_id),
+                    (stable_outline, "pptxgenjs", stable_script, theme, deck_id),
                 )
                 _conn.commit()
                 _conn.close()
