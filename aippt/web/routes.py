@@ -1796,35 +1796,56 @@ async def upload_deck(
     }
 
 
-def _save_image_uploads(md_text, outline_save_path, image_data):
-    """Save uploaded images to paths matching IMAGE: directives.
+# Image types an IMAGE: upload may be, and the most one file may weigh.
+_IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".gif")
+_MAX_IMAGE_BYTES = 10 * 1024 * 1024
+_IMAGE_LINE_RE = re.compile(r'^IMAGE:\s*(.+)$', re.MULTILINE)
 
-    Parses IMAGE: directives from the outline to determine subdirectory
-    structure (e.g., ``IMAGE: memes/photo.jpg`` -> save as ``memes/photo.jpg``
-    relative to the outline). Falls back to saving with the original filename
-    if no matching directive is found.
+
+def _image_upload_error(image_data):
+    """A 400 message for the first unusable image upload, or None."""
+    for filename, data in image_data:
+        if not filename.lower().endswith(_IMAGE_EXTS):
+            return f"Unsupported image type: {filename} (use {', '.join(_IMAGE_EXTS)})"
+        if len(data) > _MAX_IMAGE_BYTES:
+            return f"Image too large: {filename} (max {_MAX_IMAGE_BYTES // (1024 * 1024)} MB)"
+    return None
+
+
+def _stage_image_uploads(md_text, job_dir, image_data):
+    """Save uploaded images into *job_dir* and point IMAGE: lines at them.
+
+    Each upload is saved under its own file name only (no folders, so an
+    ``IMAGE: ../../x.png`` line cannot write outside the job), in a folder of
+    its own per job so two decks' ``logo.png`` never collide. Every IMAGE:
+    line whose file name matches an upload is rewritten to the saved file's
+    absolute path, which every engine (and a later regenerate) can open. A
+    bare ``IMAGE: photo.png`` used to resolve against the render's cwd (the
+    project root), so pptxgenjs decks showed a placeholder instead.
 
     Args:
         md_text: Raw markdown outline text.
-        outline_save_path: Path where the outline was saved on disk.
+        job_dir: Folder for this job's images (created here).
         image_data: List of (filename, bytes) tuples from uploaded images.
+
+    Returns:
+        The outline text with matching IMAGE: lines rewritten.
     """
-    outline_dir = os.path.dirname(outline_save_path)
-
-    # Build map: basename -> relative path from IMAGE: directives
-    image_map = {}
-    for match in re.finditer(r'^IMAGE:\s*(.+)$', md_text, re.MULTILINE):
-        path = match.group(1).strip()
-        basename = os.path.basename(path)
-        image_map[basename] = path
-
+    os.makedirs(job_dir, exist_ok=True)
+    saved = {}
     for filename, data in image_data:
-        # Look up full relative path from IMAGE: directives
-        rel_path = image_map.get(filename, filename)
-        save_path = os.path.join(outline_dir, rel_path)
-        os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        with open(save_path, 'wb') as f:
+        name = os.path.basename(filename.replace("\\", "/"))
+        safe = re.sub(r"[^\w.-]", "_", name).lstrip(".") or "image"
+        path = os.path.join(os.path.abspath(job_dir), safe)
+        with open(path, 'wb') as f:
             f.write(data)
+        saved[name] = path
+
+    def _point(match):
+        path = saved.get(os.path.basename(match.group(1).strip().replace("\\", "/")))
+        return f"IMAGE: {path}" if path else match.group(0)
+
+    return _IMAGE_LINE_RE.sub(_point, md_text)
 
 
 # Themes the pptxgenjs engines can render (themes/<name>.yaml); amd is the default.
@@ -1908,13 +1929,7 @@ async def create_deck_stream(
     _short_id = uuid.uuid4().hex[:8]
     output_path = os.path.join(uploads_dir, f"{_short_id}_{_base_name}.pptx")
 
-    # Save outline to disk for IMAGE: directive resolution
-    outline_filename = outline_file.filename if (outline_file and outline_file.filename) else "outline.md"
-    outline_save_path = os.path.join(uploads_dir, f"{_short_id}_{outline_filename}")
-    with open(outline_save_path, 'w', encoding='utf-8') as f:
-        f.write(md_text)
-
-    # Save uploaded images relative to the outline
+    # Save uploaded images to this job's folder and point IMAGE: lines at them
     image_data = []
     for img in (image_files or []):
         if img.filename:
@@ -1922,7 +1937,17 @@ async def create_deck_stream(
             if data:
                 image_data.append((img.filename, data))
     if image_data:
-        _save_image_uploads(md_text, outline_save_path, image_data)
+        bad = _image_upload_error(image_data)
+        if bad:
+            return JSONResponse({"error": bad}, status_code=400)
+        md_text = _stage_image_uploads(
+            md_text, os.path.join(uploads_dir, "assets", "jobs", _short_id), image_data)
+
+    # Save outline to disk for IMAGE: directive resolution
+    outline_filename = outline_file.filename if (outline_file and outline_file.filename) else "outline.md"
+    outline_save_path = os.path.join(uploads_dir, f"{_short_id}_{outline_filename}")
+    with open(outline_save_path, 'w', encoding='utf-8') as f:
+        f.write(md_text)
 
     event_q: _queue.Queue = _queue.Queue()
 

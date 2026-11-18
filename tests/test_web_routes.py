@@ -461,14 +461,16 @@ class TestCreateDeckEndpoint:
         assert resp.status_code == 200
         assert "event: complete" in resp.text
 
-        # Verify image was saved to the correct subdirectory
+        # The image is saved in this job's own folder under uploads/assets and
+        # the saved outline's IMAGE: line points at it
         uploads_dir = client.app.state.uploads_dir
         md_files = [f for f in os.listdir(uploads_dir) if f.endswith(".md")]
         assert len(md_files) >= 1
-        outline_dir = os.path.dirname(os.path.join(uploads_dir, md_files[0]))
-        img_path = os.path.join(outline_dir, "imgs", "photo.png")
-        assert os.path.exists(img_path)
+        job = md_files[0].split("_", 1)[0]
+        img_path = os.path.abspath(os.path.join(uploads_dir, "assets", "jobs", job, "photo.png"))
         assert open(img_path, 'rb').read() == test_png
+        outline = open(os.path.join(uploads_dir, md_files[0]), encoding="utf-8").read()
+        assert f"IMAGE: {img_path}" in outline
 
     def test_create_passes_outline_path_to_create_deck(self, client, tmp_path, monkeypatch):
         """run_pipeline() should receive outline_path for IMAGE: resolution."""
