@@ -4,11 +4,16 @@ Engines only ever name icons by id; this module checks those ids, maps a
 wrong or redundant id to the icon to use, and finds candidate icons for a
 piece of slide text so prompts can list a short relevant set instead of all
 of them.
+
+Inside ``with user_icons(...)`` a user's own icons (ids ``my-<name>``) are
+searched too, ahead of the bank when they match as well or better.
 """
 from __future__ import annotations
 
 import json
 import re
+from contextlib import contextmanager
+from contextvars import ContextVar
 from functools import lru_cache
 from pathlib import Path
 from typing import Optional
@@ -23,6 +28,11 @@ _STOPWORDS = frozenset(
     "a an and are as at be by for from has have in into is it its of on or our "
     "the their this to up we with you your more new all can will how why what".split()
 )
+
+
+# The user's own icons for the deck being generated: [{id, name, tags, path}]
+_USER_ICONS: ContextVar[tuple] = ContextVar("user_icons", default=())
+USER_PREFIX = "my-"
 
 
 def slug(text: str) -> str:
@@ -46,8 +56,42 @@ def icon_ids(include_duplicates: bool = False) -> list[str]:
             if include_duplicates or not i.get("duplicate_of")]
 
 
+@contextmanager
+def user_icons(entries):
+    """Search *entries* (``{name, tags, path}`` each) alongside the bank.
+
+    Each gets the id ``my-<slug of name>`` (``-2``, ``-3`` … for repeats);
+    :func:`user_icon_paths` maps those ids back to their files.
+    """
+    seen, out = set(), []
+    for entry in entries or ():
+        base = USER_PREFIX + (slug(entry["name"]) or "icon")
+        icon_id, k = base, 2
+        while icon_id in seen:
+            icon_id, k = f"{base}-{k}", k + 1
+        seen.add(icon_id)
+        tags = list(entry.get("tags") or [])
+        out.append({"id": icon_id, "name": entry["name"], "tags": tags, "path": entry["path"],
+                    "description": f"your icon: {entry['name']}"
+                                   + (f" ({', '.join(tags)})" if tags else "")})
+    token = _USER_ICONS.set(tuple(out))
+    try:
+        yield out
+    finally:
+        _USER_ICONS.reset(token)
+
+
+def user_icon_paths() -> dict:
+    """``{id: file path}`` for the user icons in use (empty outside user_icons)."""
+    return {icon["id"]: icon["path"] for icon in _USER_ICONS.get()}
+
+
+def _user_by_id() -> dict:
+    return {icon["id"]: icon for icon in _USER_ICONS.get()}
+
+
 def get(icon_id: str) -> Optional[dict]:
-    return _by_id().get(icon_id)
+    return _user_by_id().get(icon_id) or _by_id().get(icon_id)
 
 
 def resolve(name: str) -> Optional[str]:
@@ -58,6 +102,10 @@ def resolve(name: str) -> Optional[str]:
     """
     if not name:
         return None
+    mine = _user_by_id()
+    for icon_id in (name, USER_PREFIX + slug(name)):
+        if icon_id in mine:
+            return icon_id
     icon = _by_id().get(name) or _by_id().get(slug(name))
     if icon is None:
         return None
@@ -85,11 +133,22 @@ def _index() -> list[tuple[str, set[str], set[str]]]:
     return out
 
 
+def _user_index() -> list[tuple[str, set[str], set[str]]]:
+    """User icons scored like the bank: name and tags are the strong words."""
+    out = []
+    for icon in _USER_ICONS.get():
+        strong = _words(icon["name"]) | {t.lower() for t in icon["tags"]}
+        strong |= set().union(*(_words(t) for t in icon["tags"]))
+        out.append((icon["id"], strong, set()))
+    return out
+
+
 def _scores(text: str, heading: str = "") -> list[tuple[int, str]]:
     """(score, id) for every icon that shares words with *text*.
 
     Words in *heading* (an item's bold label) count double: the label says
     what the item is about, the rest of the line is supporting detail.
+    User icons score the same way (name and tags are their strong words).
     """
     if heading:
         totals: dict[str, int] = {}
@@ -101,7 +160,7 @@ def _scores(text: str, heading: str = "") -> list[tuple[int, str]]:
     stems = {w[:5] for w in words if len(w) >= 5}
     phrase = " " + " ".join(_WORD_RE.findall(text.lower())) + " "
     scored = []
-    for icon_id, strong, weak in _index():
+    for icon_id, strong, weak in _user_index() + _index():
         # Multi-word tags ("data center") score when the whole phrase appears.
         score = sum(3 for t in strong if " " in t and f" {t} " in phrase)
         score += 2 * len(words & strong) + len(words & weak)
@@ -112,9 +171,14 @@ def _scores(text: str, heading: str = "") -> list[tuple[int, str]]:
     return scored
 
 
+def _rank(scored: tuple[int, str]):
+    """Best score first; on a tie the user's own icon first."""
+    return -scored[0], not scored[1].startswith(USER_PREFIX)
+
+
 def search(text: str, k: int = 8, heading: str = "") -> list[str]:
     """Icon ids that best fit *text*, best first (at most *k*)."""
-    return [icon_id for _, icon_id in sorted(_scores(text, heading), key=lambda s: -s[0])[:k]]
+    return [icon_id for _, icon_id in sorted(_scores(text, heading), key=_rank)[:k]]
 
 
 def best_match(text: str, min_score: int = 4, heading: str = "") -> Optional[str]:
@@ -122,7 +186,7 @@ def best_match(text: str, min_score: int = 4, heading: str = "") -> Optional[str
     scored = _scores(text, heading)
     if not scored:
         return None
-    score, icon_id = max(scored, key=lambda s: s[0])
+    score, icon_id = min(scored, key=_rank)
     return icon_id if score >= min_score else None
 
 

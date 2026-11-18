@@ -1192,6 +1192,10 @@ def _stage_writable_script(script_path: str, deck_id: int, uploads_dir: str, pro
         dst = base / rel
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, dst)
+        # The user's icons / co-brand for this script travel with it
+        sidecar = src.parent / "user-assets.json"
+        if sidecar.is_file():
+            shutil.copy2(sidecar, dst.parent / sidecar.name)
 
         # Copy the repo lib/ so relative "../../lib/..." imports resolve.
         lib_src = root / "lib"
@@ -1803,6 +1807,34 @@ _MAX_IMAGE_BYTES = 10 * 1024 * 1024
 _IMAGE_LINE_RE = re.compile(r'^IMAGE:\s*(.+)$', re.MULTILINE)
 
 
+def _user_deck_assets(request: Request, ntid: str, cobrand_id: str):
+    """``(icon entries, co-brand logo, None)`` for a deck, or ``(.., .., 400)``.
+
+    The caller's own icons are always offered to the pptxgenjs engines; the
+    co-brand logo only when *cobrand_id* names one of their logos.
+    """
+    from aippt import user_assets
+
+    if not ntid:
+        if cobrand_id:
+            return [], None, JSONResponse(
+                {"error": "Set your NTID (top right) to use a co-brand logo."}, status_code=400)
+        return [], None, None
+    state = request.app.state
+    folder = user_assets.user_dir(state.uploads_dir, ntid)
+    materialize_file(state, user_assets.manifest_path(folder))
+    for entry in user_assets.list_assets(folder):
+        if entry["kind"] == "icon" or entry["id"] == cobrand_id:
+            materialize_file(state, user_assets.asset_path(folder, entry))
+    logo = None
+    if cobrand_id:
+        try:
+            logo = user_assets.cobrand_logo(folder, cobrand_id)
+        except user_assets.AssetError as exc:
+            return [], None, JSONResponse({"error": str(exc)}, status_code=400)
+    return user_assets.icon_entries(folder), logo, None
+
+
 def _check_image_uploads(image_data):
     """Return ``(images, error)``: the uploads ready to save (SVGs cleaned),
     or a 400 message for the first unusable one."""
@@ -1875,8 +1907,14 @@ async def create_deck_stream(
     image_files: List[UploadFile] = File(default=[]),
     engine: str = Form("pptxgenjs"),
     theme: str = Form("amd"),
+    cobrand_logo: str = Form(""),
 ):
-    """API: Create a deck from markdown outline, streaming progress as SSE."""
+    """API: Create a deck from markdown outline, streaming progress as SSE.
+
+    pptxgenjs engines also use the caller's own icons (asset library), and
+    ``cobrand_logo`` (one of their logo asset ids) puts that partner logo on
+    the title and closing slides.
+    """
     if getattr(request.app.state, "view_only", False):
         return JSONResponse({"error": VIEW_ONLY_MSG}, status_code=403)
     if theme not in PPTXGENJS_THEMES:
@@ -1939,6 +1977,10 @@ async def create_deck_stream(
     _base_name = re.sub(r'\s+', ' ', _base_name)[:80]  # cap length
     _short_id = uuid.uuid4().hex[:8]
     output_path = os.path.join(uploads_dir, f"{_short_id}_{_base_name}.pptx")
+
+    user_icons, cobrand, bad = _user_deck_assets(request, ntid, cobrand_logo)
+    if bad is not None:
+        return bad
 
     # Save uploaded images to this job's folder and point IMAGE: lines at them
     image_data = []
@@ -2023,26 +2065,31 @@ async def create_deck_stream(
                     return None
 
             renderer = Renderer(project_root=project_root)
+            from aippt import icons as _icons
+            from aippt.user_assets import write_sidecar
             try:
-                if use_llm:
-                    # Render inside the generator so Node errors get repaired
-                    render_result = generate_and_render(
-                        outline_text=md_text,
-                        output_script_path=script_path,
-                        renderer=renderer,
-                        out_dir=render_out_dir,
-                        theme=theme,
-                        progress_callback=create_progress,
-                        **gen_kwargs,
-                    )
-                else:
-                    generate_script(
-                        outline_text=md_text,
-                        output_script_path=script_path,
-                        theme=theme,
-                        progress_callback=create_progress,
-                        **gen_kwargs,
-                    )
+                with _icons.user_icons(user_icons):
+                    # The helpers read this next to the script: my-* icon files + co-brand
+                    write_sidecar(os.path.dirname(script_path), _icons.user_icon_paths(), cobrand)
+                    if use_llm:
+                        # Render inside the generator so Node errors get repaired
+                        render_result = generate_and_render(
+                            outline_text=md_text,
+                            output_script_path=script_path,
+                            renderer=renderer,
+                            out_dir=render_out_dir,
+                            theme=theme,
+                            progress_callback=create_progress,
+                            **gen_kwargs,
+                        )
+                    else:
+                        generate_script(
+                            outline_text=md_text,
+                            output_script_path=script_path,
+                            theme=theme,
+                            progress_callback=create_progress,
+                            **gen_kwargs,
+                        )
             except ScriptGenerationError as exc:
                 event_q.put(("error", {"message": str(exc)}))
                 return None
@@ -2085,6 +2132,10 @@ async def create_deck_stream(
                 _shutil.copy2(script_path, stable_script)
                 persist_file(request.app.state, stable_outline)
                 persist_file(request.app.state, stable_script)
+                _sidecar = os.path.join(os.path.dirname(script_path), "user-assets.json")
+                if os.path.isfile(_sidecar):
+                    _shutil.copy2(_sidecar, os.path.join(stable_dir, "user-assets.json"))
+                    persist_file(request.app.state, os.path.join(stable_dir, "user-assets.json"))
                 _conn = get_db(db_path)
                 _conn.execute(
                     "UPDATE decks SET outline_path = ?, source_engine = ?, source_script_path = ?, "

@@ -148,3 +148,53 @@ def delete_asset(folder: str, asset_id: str):
     except FileNotFoundError:
         pass
     return entry
+
+
+SIDECAR = "user-assets.json"
+
+
+def icon_entries(folder: str) -> list:
+    """The user's icons as ``{name, tags, path}`` for :func:`aippt.icons.user_icons`."""
+    return [{"name": a["name"], "tags": a["tags"], "path": asset_path(folder, a)}
+            for a in list_assets(folder)
+            if a["kind"] == "icon" and os.path.isfile(asset_path(folder, a))]
+
+
+def _length(value) -> float:
+    m = re.match(r"\s*(\d+(?:\.\d+)?)", value or "")
+    return float(m.group(1)) if m else 0.0
+
+
+def image_size(path: str) -> tuple:
+    """(width, height) of an image in its own units, for aspect-correct placement."""
+    if path.lower().endswith(".svg"):
+        import xml.etree.ElementTree as ET
+        root = ET.parse(path).getroot()
+        box = (root.get("viewBox") or "").replace(",", " ").split()
+        if len(box) == 4:
+            return float(box[2]), float(box[3])
+        w, h = _length(root.get("width")), _length(root.get("height"))
+        return (w, h) if w and h else (1.0, 1.0)
+    from PIL import Image
+    with Image.open(path) as img:
+        return img.size
+
+
+def cobrand_logo(folder: str, asset_id: str) -> dict:
+    """``{path, width, height}`` of the user's logo *asset_id*; AssetError if not theirs."""
+    entry = next((a for a in list_assets(folder)
+                  if a["id"] == asset_id and a["kind"] == "logo"), None)
+    if entry is None or not os.path.isfile(asset_path(folder, entry)):
+        raise AssetError("Co-brand logo not found in your asset library")
+    path = asset_path(folder, entry)
+    width, height = image_size(path)
+    return {"path": path, "width": width, "height": height, "name": entry["name"]}
+
+
+def write_sidecar(script_dir: str, icon_paths: dict, logo: dict = None) -> str:
+    """Write ``user-assets.json`` next to a deck script; the helpers read it
+    in createDeck (icons by ``my-*`` id, and the co-brand logo if any)."""
+    path = os.path.join(script_dir, SIDECAR)
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump({"icons": icon_paths, "cobrand": logo}, fh, indent=1)
+    return path
