@@ -16,6 +16,8 @@ from typing import Optional
 ICON_DIR = Path(__file__).resolve().parents[1] / "themes" / "assets" / "icons" / "amd"
 
 _WORD_RE = re.compile(r"[a-z0-9]+")
+# Letters before a version/size suffix ("hbm3e" → "hbm", "fp8" → "fp").
+_PREFIX_RE = re.compile(r"([a-z]{2,})\d")
 # Words too common in slide text to say anything about which icon fits.
 _STOPWORDS = frozenset(
     "a an and are as at be by for from has have in into is it its of on or our "
@@ -64,6 +66,7 @@ def resolve(name: str) -> Optional[str]:
 
 def _words(text: str) -> set[str]:
     words = set(_WORD_RE.findall(text.lower())) - _STOPWORDS
+    words |= {m.group(1) for w in words if (m := _PREFIX_RE.match(w))}
     # Crude plural folding so "GPUs" and "servers" find "gpu" and "server".
     return words | {w[:-1] for w in words if len(w) > 3 and w.endswith("s")}
 
@@ -82,8 +85,18 @@ def _index() -> list[tuple[str, set[str], set[str]]]:
     return out
 
 
-def _scores(text: str) -> list[tuple[int, str]]:
-    """(score, id) for every icon that shares words with *text*."""
+def _scores(text: str, heading: str = "") -> list[tuple[int, str]]:
+    """(score, id) for every icon that shares words with *text*.
+
+    Words in *heading* (an item's bold label) count double: the label says
+    what the item is about, the rest of the line is supporting detail.
+    """
+    if heading:
+        totals: dict[str, int] = {}
+        for weight, part in ((2, heading), (1, text)):
+            for score, icon_id in _scores(part):
+                totals[icon_id] = totals.get(icon_id, 0) + weight * score
+        return [(score, icon_id) for icon_id, score in totals.items()]
     words = _words(text)
     stems = {w[:5] for w in words if len(w) >= 5}
     phrase = " " + " ".join(_WORD_RE.findall(text.lower())) + " "
@@ -99,14 +112,14 @@ def _scores(text: str) -> list[tuple[int, str]]:
     return scored
 
 
-def search(text: str, k: int = 8) -> list[str]:
+def search(text: str, k: int = 8, heading: str = "") -> list[str]:
     """Icon ids that best fit *text*, best first (at most *k*)."""
-    return [icon_id for _, icon_id in sorted(_scores(text), key=lambda s: -s[0])[:k]]
+    return [icon_id for _, icon_id in sorted(_scores(text, heading), key=lambda s: -s[0])[:k]]
 
 
-def best_match(text: str, min_score: int = 4) -> Optional[str]:
+def best_match(text: str, min_score: int = 4, heading: str = "") -> Optional[str]:
     """The single best icon for *text*, only when the match is confident."""
-    scored = _scores(text)
+    scored = _scores(text, heading)
     if not scored:
         return None
     score, icon_id = max(scored, key=lambda s: s[0])

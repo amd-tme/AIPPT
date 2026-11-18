@@ -84,6 +84,23 @@ def test_best_match_needs_a_confident_score():
     assert icons.best_match("Quarterly overview") is None
 
 
+@pytest.mark.parametrize("heading,text,expected", [
+    # The label decides: "models"/"parameter" in the detail used to pick fine-tuning.
+    ("Memory", "288 GB HBM3E holds 500B-parameter models on one GPU", "hbm"),
+    # "design"/"silicon" in the detail used to pick the DFT icon.
+    ("Security", "Secure by design, from silicon to software", "secure-processor"),
+    ("Open software", "ROCm is open source end to end", "software-stability"),
+])
+def test_heading_words_outweigh_the_detail(heading, text, expected):
+    assert icons.search(text, k=1, heading=heading) == [expected]
+    assert icons.best_match(text, heading=heading) == expected
+
+
+def test_versioned_names_match_their_family():
+    # "HBM3E" is the HBM icon, not an unknown word.
+    assert icons.search("HBM3E", k=1) == ["hbm"]
+
+
 def test_catalogue_lines():
     text = icons.catalogue_lines(["gpu", "calendar", "nope"])
     lines = text.splitlines()

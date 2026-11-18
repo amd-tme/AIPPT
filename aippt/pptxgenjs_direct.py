@@ -1194,7 +1194,7 @@ def _icon_items(items: List[dict]) -> Optional[List[dict]]:
     out = []
     for it in items:
         label, desc = _split_lead(it['text'])
-        icon = icons.resolve(label) or icons.best_match(f'{label} {desc}')
+        icon = icons.resolve(label) or icons.best_match(desc, heading=label)
         if not desc or len(label.split()) > 4 or not icon:
             return None
         out.append({'icon': icon, 'label': label, 'desc': desc})
@@ -1247,7 +1247,7 @@ def _emit_icon_grid(slide: dict, n: int) -> str:
     feats = []
     for it in source[:_MAX_ICON_ITEMS]:
         label, desc = _split_lead(it['text'])
-        icon = icons.resolve(label) or icons.best_match(f'{label} {desc}')
+        icon = icons.resolve(label) or icons.best_match(desc, heading=label)
         feats.append({k: v for k, v in (('icon', icon), ('label', label), ('desc', desc)) if v})
     # addIconFeatureGrid has no source row — Source / Endnote lines go to the notes
     extra = prose + _item_lines(source[_MAX_ICON_ITEMS:]) + [f'{k.title()}: {_flat_meta(v)}' for k, v in meta.items()]

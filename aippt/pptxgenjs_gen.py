@@ -414,7 +414,7 @@ def _icon_hints(outline_text: str) -> str:
             items += found
     for label, desc in items:
         exact = icons.resolve(label)
-        for icon_id in ([exact] if exact else []) + icons.search(f"{label} {desc}", k=2):
+        for icon_id in ([exact] if exact else []) + icons.search(desc, k=2, heading=label):
             if icon_id not in ids:
                 ids.append(icon_id)
     if not ids:
