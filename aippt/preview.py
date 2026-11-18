@@ -76,6 +76,10 @@ _MAX_SVG_BYTES = 2_000_000
 
 
 def _no_fetch(url, *args, **kwargs):
+    # A data: URI is a raster embedded in the SVG itself: no file or network read
+    if url.startswith("data:"):
+        from cairosvg.url import fetch
+        return fetch(url, *args, **kwargs)
     raise ValueError(f"external resource blocked in SVG: {url[:80]}")
 
 

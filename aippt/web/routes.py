@@ -1797,19 +1797,30 @@ async def upload_deck(
 
 
 # Image types an IMAGE: upload may be, and the most one file may weigh.
-_IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".gif")
+# SVGs are cleaned (aippt.svg_clean) and have their own, smaller cap.
+_IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".gif", ".svg")
 _MAX_IMAGE_BYTES = 10 * 1024 * 1024
 _IMAGE_LINE_RE = re.compile(r'^IMAGE:\s*(.+)$', re.MULTILINE)
 
 
-def _image_upload_error(image_data):
-    """A 400 message for the first unusable image upload, or None."""
+def _check_image_uploads(image_data):
+    """Return ``(images, error)``: the uploads ready to save (SVGs cleaned),
+    or a 400 message for the first unusable one."""
+    from aippt.svg_clean import SvgError, clean_svg
+
+    checked = []
     for filename, data in image_data:
         if not filename.lower().endswith(_IMAGE_EXTS):
-            return f"Unsupported image type: {filename} (use {', '.join(_IMAGE_EXTS)})"
+            return [], f"Unsupported image type: {filename} (use {', '.join(_IMAGE_EXTS)})"
         if len(data) > _MAX_IMAGE_BYTES:
-            return f"Image too large: {filename} (max {_MAX_IMAGE_BYTES // (1024 * 1024)} MB)"
-    return None
+            return [], f"Image too large: {filename} (max {_MAX_IMAGE_BYTES // (1024 * 1024)} MB)"
+        if filename.lower().endswith(".svg"):
+            try:
+                data = clean_svg(data)
+            except SvgError as exc:
+                return [], f"{filename}: {exc}"
+        checked.append((filename, data))
+    return checked, None
 
 
 def _stage_image_uploads(md_text, job_dir, image_data):
@@ -1937,7 +1948,7 @@ async def create_deck_stream(
             if data:
                 image_data.append((img.filename, data))
     if image_data:
-        bad = _image_upload_error(image_data)
+        image_data, bad = _check_image_uploads(image_data)
         if bad:
             return JSONResponse({"error": bad}, status_code=400)
         md_text = _stage_image_uploads(

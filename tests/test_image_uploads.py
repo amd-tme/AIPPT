@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from aippt.web.routes import _image_upload_error, _stage_image_uploads
+from aippt.web.routes import _check_image_uploads, _stage_image_uploads
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -51,9 +51,19 @@ def test_two_jobs_with_the_same_name_do_not_collide(tmp_path):
 
 
 def test_upload_type_and_size_are_checked():
-    assert _image_upload_error([("a.png", b"x"), ("b.JPG", b"x")]) is None
-    assert "Unsupported image type" in _image_upload_error([("run.sh", b"x")])
-    assert "too large" in _image_upload_error([("big.png", b"x" * (10 * 1024 * 1024 + 1))])
+    ok = [("a.png", b"x"), ("b.JPG", b"x")]
+    assert _check_image_uploads(ok) == (ok, None)
+    assert "Unsupported image type" in _check_image_uploads([("run.sh", b"x")])[1]
+    assert "too large" in _check_image_uploads([("big.png", b"x" * (10 * 1024 * 1024 + 1))])[1]
+
+
+def test_svg_uploads_are_cleaned_or_rejected():
+    svg = (b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">'
+           b'<script>alert(1)</script><rect width="5" height="5" onclick="x()"/></svg>')
+    [(name, data)], err = _check_image_uploads([("logo.svg", svg)])
+    assert err is None and name == "logo.svg"
+    assert b"<rect" in data and b"script" not in data and b"onclick" not in data
+    assert "Not an SVG" in _check_image_uploads([("x.svg", b"<html/>")])[1]
 
 
 def test_route_rejects_unsupported_uploads(tmp_path):
