@@ -125,3 +125,52 @@ def test_tier_outline_builds_30_3_30_deck(tmp_path):
         'Intro', '30 Seconds', '3 Minutes']
     assert _helpers(script).count('addTierDivider') == 2
     assert _helpers(script).count('addClosingSlide') == 2
+
+
+# ---------------------------------------------------------------------------
+# Brand recipes (aippt/brand/recipes.json)
+# ---------------------------------------------------------------------------
+
+RECIPE_OUTLINE = """# Instinct
+Sub
+
+# Headline results
+- 3x — faster training
+- 40% — lower cost per token
+
+# Specs
+| Spec | MI355X | B200 |
+|---|---|---|
+| HBM | 288 GB | 192 GB |
+
+# Not a table
+- HBM: 288 GB
+- FP4: 10 PF
+"""
+
+
+def test_prompt_lists_every_recipe():
+    from aippt import recipes
+    prompt = build_prompt(plan_slides(OUTLINE))
+    for rid in recipes.ids():
+        assert f'- {rid}: ' in prompt
+    assert prompt.index('- endnotes: ') < prompt.index('- auto: ')
+
+
+def test_parse_plan_accepts_recipes_on_any_title():
+    plan, dropped = parse_plan(_plan('title_alt', 'kpi_tiles', 'hero_number'), 3)
+    assert plan == {0: 'title_alt', 1: 'kpi_tiles', 2: 'hero_number'} and not dropped
+
+
+def test_parse_plan_drops_table_recipe_without_table():
+    slides = plan_slides(RECIPE_OUTLINE)
+    plan, dropped = parse_plan(_plan('title_alt', 'kpi_tiles', 'spec_table', 'check_matrix'), 4, slides)
+    assert plan == {0: 'title_alt', 1: 'kpi_tiles', 2: 'spec_table'}
+    assert dropped == [{'i': 3, 'layout': 'check_matrix'}]
+
+
+@pytest.mark.parametrize('theme', ['amd', 'corp_black'])
+def test_generate_uses_recipe_plan(tmp_path, theme):
+    llm = FakeLLM(_plan('title_alt', 'kpi_tiles', 'spec_table', 'icon_grid'))
+    script = generate_script(RECIPE_OUTLINE, str(tmp_path / 'deck.mjs'), llm_client=llm, theme=theme)
+    assert _helpers(script)[:4] == ['addTitleSlide', 'addKpiTiles', 'addSpecTable', 'addIconFeatureGrid']

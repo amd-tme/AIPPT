@@ -13,6 +13,7 @@ import json
 import re
 from typing import Callable, Dict, List, Optional, Tuple
 
+from aippt import recipes as _recipes
 from aippt.pptxgenjs_direct import (
     ScriptGenerationError,
     generate_script as _direct_generate_script,
@@ -42,8 +43,13 @@ _LAYOUTS = {
     'statement': 'BRAND ONLY: one bold claim, optional evidence bullets with sources',
     'proof_point': 'BRAND ONLY: before/after metric pair ("**A** — 100", "**B** — 60")',
     'feature_list': 'BRAND ONLY: 2-4 product features with short descriptions',
-    'auto': 'let the engine decide (cards, stats, code and images are detected automatically)',
 }
+# Brand recipes (aippt/brand/recipes.json): "when; not for …; capacity"
+_LAYOUTS.update({r['id']: f"{r['when']}; not for {r['when_not']} ({r['capacity']})"
+                 for r in _recipes.recipes()})
+_LAYOUTS['auto'] = 'let the engine decide (cards, stats, code and images are detected automatically)'
+# Recipes that draw a markdown table — dropped on a slide without one
+_NEEDS_TABLE = {'spec_table', 'check_matrix', 'competitive_chart'}
 _BRAND_TITLES = ('hero_title', 'product_title')
 _BRAND_ONLY = {'section_intro', 'statement', 'proof_point', 'feature_list'}
 _TITLES = {'title_alt', *_BRAND_TITLES}
@@ -66,6 +72,7 @@ Layouts:
 Rules:
 - Slide 0 is the deck title: choose title_alt, hero_title or product_title.
 - BRAND ONLY layouts are allowed only when slide 0 is hero_title or product_title.
+- spec_table, check_matrix and competitive_chart need a markdown table on the slide.
 - Use "auto" when unsure; the engine detects cards, stats, code and images itself.
 - You only choose layouts; the slide text is used exactly as written.
 
@@ -75,12 +82,18 @@ Slides:
 Reply exactly as: {{"slides": [{{"i": 0, "layout": "..."}}, ...]}}"""
 
 
-def parse_plan(raw: str, slide_count: int) -> Tuple[Dict[int, str], List]:
+def _has_table(slide: dict) -> bool:
+    return any(line.strip().startswith('|') for line in slide.get('content', []))
+
+
+def parse_plan(raw: str, slide_count: int,
+               slides: Optional[List[dict]] = None) -> Tuple[Dict[int, str], List]:
     """Turn the LLM reply into ``{index: directive}``; return (plan, dropped entries).
 
     Unknown layouts, bad indexes, a non-title layout on slide 0 or a title
-    layout elsewhere, and brand-only layouts in a non-brand deck are dropped
-    (those slides fall back to the rule-based choice).
+    layout elsewhere, brand-only layouts in a non-brand deck and (given
+    *slides*) a table recipe on a slide without a table are dropped (those
+    slides fall back to the rule-based choice).
     """
     match = re.search(r'\{.*\}', raw or '', re.S)
     try:
@@ -101,6 +114,8 @@ def parse_plan(raw: str, slide_count: int) -> Tuple[Dict[int, str], List]:
             dropped.append(entry)
         elif name != 'auto' and (name in _TITLES) != (i == 0):
             dropped.append(entry)  # title layouts belong on slide 0 only
+        elif name in _NEEDS_TABLE and slides is not None and not _has_table(slides[i]):
+            dropped.append(entry)
         elif name != 'auto':
             plan[i] = layout if name == 'two_column' else name
 
@@ -136,7 +151,7 @@ def generate_script(
             max_tokens=2000,
             temperature=0.2,
         )
-        plan, dropped = parse_plan(raw, len(slides))
+        plan, dropped = parse_plan(raw, len(slides), slides)
         if progress_callback:
             note = f', {len(dropped)} ignored' if dropped else ''
             progress_callback('generate', f'Layout plan ready ({len(plan)} picks{note})')
