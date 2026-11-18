@@ -509,3 +509,47 @@ def test_tier_render_repair_reassembles(tmp_path):
     repair_prompt = client.generate_text.call_args_list[1].kwargs["prompt"]
     assert "startSection" not in repair_prompt  # the LLM only sees its own script
     assert "A fixed tour" in out.read_text() and "startSection" in out.read_text()
+
+
+# ---------------------------------------------------------------------------
+# Theme — the script loads the requested theme even if the LLM copies amd
+# ---------------------------------------------------------------------------
+
+_META_SCRIPT = _GOOD_SCRIPT.replace(
+    "addClosingSlide(deck, 3, '');",
+    'addClosingSlide(deck, 3, `[AIPPT-META]\n[{"operation":"create","theme":"amd"}]\n[/AIPPT-META]`);')
+
+
+@pytest.mark.parametrize("theme", ["corp_black", "corp_white", "amd"])
+def test_script_loads_requested_theme(tmp_path, theme):
+    client = _make_client(_META_SCRIPT)
+    script = generate_script(_OUTLINE, str(tmp_path / "d.mjs"), client, theme=theme)
+    assert f"createDeck('themes/{theme}.yaml')" in script
+    assert f'"theme":"{theme}"' in script
+    assert script == (tmp_path / "d.mjs").read_text()
+    assert f"createDeck('themes/{theme}.yaml')" in client.generate_text.call_args.kwargs["prompt"]
+
+
+def test_unknown_theme_leaves_script_alone(tmp_path):
+    script = generate_script(_OUTLINE, str(tmp_path / "d.mjs"), _make_client(_META_SCRIPT),
+                             theme="no_such_theme")
+    assert "createDeck('themes/amd.yaml')" in script and '"theme":"amd"' in script
+
+
+def test_tier_script_loads_requested_theme(tmp_path):
+    script = generate_script(_TIER_OUTLINE, str(tmp_path / "d.mjs"),
+                             _make_client(_unique_script()), theme="corp_white")
+    assert "createDeck('themes/corp_white.yaml')" in script
+    assert "themes/amd.yaml" not in script
+
+
+def test_repaired_script_loads_requested_theme(tmp_path):
+    from aippt.pptxgenjs_gen import generate_and_render
+    client = MagicMock()
+    client.generate_text.side_effect = [_fenced(_GOOD_SCRIPT), _fenced(_GOOD_SCRIPT)]
+    renderer = MagicMock()
+    renderer.render.side_effect = _render_results(False, True)
+    out = tmp_path / "d.mjs"
+    assert generate_and_render(_OUTLINE, str(out), client, renderer, str(tmp_path),
+                               theme="corp_black").success
+    assert "createDeck('themes/corp_black.yaml')" in out.read_text()

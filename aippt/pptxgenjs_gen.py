@@ -423,10 +423,23 @@ def _icon_hints(outline_text: str) -> str:
             + icons.catalogue_lines(ids[:_MAX_ICON_HINTS]) + "\n\n")
 
 
+_THEMES_DIR = Path(__file__).resolve().parents[1] / "themes"
+_CREATE_DECK_RE = re.compile(r"""createDeck\(\s*(['"`])themes/[\w-]+\.yaml\1""")
+_META_THEME_RE = re.compile(r'"theme"\s*:\s*"[\w-]*"')
+
+
+def _with_theme(script: str, theme: str) -> str:
+    """*script* loading *theme* — the LLM tends to copy the prompt's amd example."""
+    if not (_THEMES_DIR / f"{theme}.yaml").is_file():
+        return script
+    script = _CREATE_DECK_RE.sub(f"createDeck('themes/{theme}.yaml'", script)
+    return _META_THEME_RE.sub(f'"theme":"{theme}"', script)
+
+
 def _base_prompt(outline_text: str, theme: str) -> str:
     return (
         f"Generate a pptxgenjs .mjs script for the following presentation outline.\n"
-        f"Theme: {theme}\n\n"
+        f"Theme: {theme} — call createDeck('themes/{theme}.yaml')\n\n"
         f"---\n{outline_text.strip()}\n---\n\n"
         + _icon_hints(outline_text)
         + "Output ONLY the script inside a ```javascript code fence."
@@ -664,7 +677,7 @@ def generate_script(
     llm_client:
         An ``aippt.llm.LLMClient`` instance (gateway-aware).
     theme:
-        Theme name — currently only ``"amd"`` is used in v1.
+        Theme name (a ``themes/<name>.yaml``); the script is made to load it.
     max_retries:
         Number of LLM generation attempts before raising.
     progress_callback:
@@ -687,6 +700,7 @@ def generate_script(
         base = _base_prompt(outline_text, theme)
         script = _generate_valid(base, base, llm_client, max_retries,
                                  progress_callback, "Generating pptxgenjs script…")
+    script = _with_theme(script, theme)
     Path(output_script_path).write_text(script, encoding="utf-8")
     return script
 
@@ -716,7 +730,7 @@ def generate_and_render(
         # Repairs work on the one-slide-per-heading script, then re-assemble
         base = _base_prompt(plan.outline, theme) + _tier_instructions(len(plan.slides))
         script, full = _generate_tiered(plan, theme, llm_client, max_retries, progress_callback)
-        Path(output_script_path).write_text(full, encoding="utf-8")
+        Path(output_script_path).write_text(_with_theme(full, theme), encoding="utf-8")
     else:
         base = _base_prompt(outline_text, theme)
         script = generate_script(outline_text, output_script_path, llm_client,
@@ -743,5 +757,5 @@ def generate_and_render(
         else:
             script = full = _generate_valid(base, prompt, llm_client, max_retries,
                                             progress_callback, "Repairing script…")
-        Path(output_script_path).write_text(full, encoding="utf-8")
+        Path(output_script_path).write_text(_with_theme(full, theme), encoding="utf-8")
     return result
