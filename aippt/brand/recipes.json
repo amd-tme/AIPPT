@@ -1,0 +1,101 @@
+{
+  "version": 1,
+  "about": "Brand layout recipes: the new pattern helpers, when to use each, and the outline shape that feeds it. Every engine names a recipe by id (the LAYOUT: directive value). auto_themes lists the themes where the no-LLM engine picks a recipe by itself; on other themes a recipe is used only from a LAYOUT: line or an AI pick.",
+  "auto_themes": ["corp_black", "corp_white"],
+  "recipes": [
+    {
+      "id": "icon_grid",
+      "helper": "addIconFeatureGrid",
+      "when": "3-6 parallel features or benefits, each a short label and one line",
+      "when_not": "long descriptions, sub-bullets, or features with no clear icon",
+      "capacity": "3-6 items",
+      "outline": "- **Label** — one-line description",
+      "auto": "3-6 flat 'Label — description' items that each match a brand icon"
+    },
+    {
+      "id": "kpi_tiles",
+      "helper": "addKpiTiles",
+      "when": "2-4 headline numbers with labels",
+      "when_not": "a single number (use hero_number) or numbers that need a chart",
+      "capacity": "2-4 stats",
+      "outline": "- 3x — faster training (vs. prior gen)",
+      "auto": "every item leads with a value (instead of the stat callout)"
+    },
+    {
+      "id": "hero_number",
+      "helper": "addHeroNumber",
+      "when": "the one number a section hinges on",
+      "when_not": "two or more numbers",
+      "capacity": "1 stat",
+      "outline": "- 40% — lower cost per token (vs. prior gen)",
+      "auto": "a slide with a single value-led item"
+    },
+    {
+      "id": "metric_table",
+      "helper": "addMetricTable",
+      "when": "AMD vs. competitor metrics, each with a big value and why it matters",
+      "when_not": "raw spec sheets (use spec_table)",
+      "capacity": "up to 6 rows",
+      "outline": "| Metric | MI355X vs. B200 | Why it matters |  (or '- **Metric** — 1.3x — why')",
+      "auto": null
+    },
+    {
+      "id": "spec_table",
+      "helper": "addSpecTable",
+      "when": "specs down the side, 1-3 products across, AMD column highlighted",
+      "when_not": "check/cross comparisons (use check_matrix)",
+      "capacity": "up to 12 rows, 1-3 products",
+      "outline": "| Spec | MI355X | B200 |",
+      "auto": "a markdown table with an AMD product column header"
+    },
+    {
+      "id": "competitive_chart",
+      "helper": "addCompetitiveChart",
+      "when": "AMD vs. competitor performance numbers per workload or model",
+      "when_not": "non-numeric data, or more than 8 categories",
+      "capacity": "up to 8 categories, 1-4 series",
+      "outline": "| Model | MI355X | B200 |  with numeric cells; optional 'Metric: Tokens/s (higher is better)', 'Date: …', 'Source: …' lines",
+      "auto": "an all-numeric table with an AMD column on a performance-titled slide"
+    },
+    {
+      "id": "check_matrix",
+      "helper": "addCheckMatrix",
+      "when": "feature support compared across 1-4 products",
+      "when_not": "numbers or long text in the cells",
+      "capacity": "up to 14 features, 1-4 products",
+      "outline": "| Capability | MI355X | H200 |  with cells ✓ / ✗ / partial; a row with only its first cell filled starts a group",
+      "auto": "a markdown table whose cells are all check/partial/none marks"
+    },
+    {
+      "id": "timeline",
+      "helper": "addTimeline",
+      "when": "3-7 dated milestones; mark the present one with (now)",
+      "when_not": "milestones with several bullets each (use roadmap)",
+      "capacity": "3-7 milestones",
+      "outline": "**Q1 2025** then '- Label' and an optional second '- description' line; '**2025 (now)**' marks the current one",
+      "auto": "3-7 dated groups with at most two items each"
+    },
+    {
+      "id": "stage_flow",
+      "helper": "addStageFlow",
+      "when": "a 3-4 stage process where each stage has a few points",
+      "when_not": "more than 4 stages (use numbered)",
+      "capacity": "3-4 stages, up to 5 bullets each",
+      "outline": "**Stage** then '- **Sub-head**' (optional) and bullets; a '> ' line becomes the closing line",
+      "auto": "3-4 headed groups on a process / workflow / pipeline slide"
+    },
+    {
+      "id": "endnotes",
+      "helper": "addEndnotesSlide",
+      "when": "the back-matter list of endnotes behind 'See endnote' pointers",
+      "when_not": "legal notices (use disclaimer)",
+      "capacity": "any; long lists flow into two columns",
+      "outline": "- **PERF-01** — endnote text",
+      "auto": "a slide titled Endnotes"
+    }
+  ],
+  "slide_lines": {
+    "Source: …": "source line under the content on these recipes",
+    "Endnote: PERF-01": "'See endnote PERF-01' pointer at the bottom right on these recipes"
+  }
+}

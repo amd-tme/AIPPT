@@ -15,6 +15,7 @@ import textwrap
 from pathlib import Path
 from typing import Callable, List, Optional
 
+from aippt import recipes as _recipes
 from aippt.parser import parse_outline
 from aippt.pptxgenjs_validate import validate_script
 
@@ -241,13 +242,17 @@ _LAYOUT_DIRECTIVES = {
     'proof_point':       'addProofPointSlide',
     'feature_list':      'addFeatureListSlide',
 }
+# Brand recipes (icon_grid, kpi_tiles, …) — aippt/brand/recipes.json
+_LAYOUT_DIRECTIVES.update(_recipes.helpers())
+_ENDNOTES_TITLE = re.compile(r'^\s*end\s*notes?\s*$', re.I)
 _BRAND_TITLES = {'addHeroTitleSlide', 'addProductTitleSlide'}
 
 _MAX_AGENDA = 10
 _MAX_MILESTONES = 6
 
 
-def _pick_layout(slide: dict, prev_layout: str, slide_index: int, total_slides: int) -> str:
+def _pick_layout(slide: dict, prev_layout: str, slide_index: int, total_slides: int,
+                 recipes: bool = False) -> str:
     """Choose the best pptxgenjs helper name for a slide.
 
     Rules applied in priority order:
@@ -274,6 +279,9 @@ def _pick_layout(slide: dict, prev_layout: str, slide_index: int, total_slides: 
     12. Fallback → addBulletSlide
     A takeaway on a slide picked by directive goes to the notes when that
     layout can't draw it.
+    With *recipes* (themes in recipes.json auto_themes) the brand recipes
+    join in: check / spec / chart tables, Endnotes, timeline, stage flow,
+    hero number, KPI tiles (for the stat callout) and icon grid.
     Variety rule: avoid repeating prev_layout where an alternative fits.
     Nothing is truncated — layouts are only chosen when all items fit.
     """
@@ -312,7 +320,11 @@ def _pick_layout(slide: dict, prev_layout: str, slide_index: int, total_slides: 
     if body['code']:
         return 'addCodeSlide'
     if body['table']:
-        return 'addTableSlide'
+        return (recipes and _table_recipe(slide, body['table'])) or 'addTableSlide'
+
+    # 5a. Endnotes (before the disclaimer check — "notes" matches both)
+    if recipes and _ENDNOTES_TITLE.match(_md_plain(slide['title'])) and (items or body['prose']):
+        return 'addEndnotesSlide'
 
     # 5a. Shared slide patterns
     if _DISCLAIMER_TITLE.search(slide['title']) and (items or body['prose']):
@@ -323,13 +335,18 @@ def _pick_layout(slide: dict, prev_layout: str, slide_index: int, total_slides: 
             and 2 <= n <= _MAX_AGENDA and not has_subs):
         return 'addAgendaSlide'
     if _looks_like_roadmap(slide):
+        if recipes and _timeline_fits(slide) and prev_layout != 'addTimeline':
+            return 'addTimeline'
         return 'addRoadmapSlide'
-    if body['quote'] and (items or body['prose']):
+    # (a recipe that draws the takeaway itself beats the takeaway slide)
+    if body['quote'] and (items or body['prose']) and not (recipes and _recipe_takes_quote(slide)):
         return 'addTakeawaySlide'
 
     # 6. Grouped content ("**Heading**" followed by its own bullets)
     groups = body['groups']
     if groups and not body['loose']:
+        if recipes and _stage_flow_fits(slide) and prev_layout != 'addStageFlow':
+            return 'addStageFlow'
         if len(groups) == 2 and prev_layout != 'addTwoColumn':
             return 'addTwoColumn'
         if (3 <= len(groups) <= _MAX_CARDS and prev_layout != 'addCardGrid'
@@ -340,8 +357,12 @@ def _pick_layout(slide: dict, prev_layout: str, slide_index: int, total_slides: 
         return 'addBulletSlide'
 
     # 7. Stats — every item leads with a value
-    if _is_stat_slide(items) and prev_layout != 'addStatCallout':
-        return 'addStatCallout'
+    stats = 'addKpiTiles' if recipes else 'addStatCallout'
+    if _is_stat_slide(items) and prev_layout != stats:
+        return stats
+    if (recipes and n == 1 and not has_subs and len(body['prose']) <= 1
+            and _STAT_LEAD.match(_md_plain(items[0]['text']))):
+        return 'addHeroNumber'
 
     # 8. Two-column — author column break, or comparison signal
     if body['col_break'] is not None:
@@ -358,7 +379,9 @@ def _pick_layout(slide: dict, prev_layout: str, slide_index: int, total_slides: 
                 and n <= _MAX_STEPS and prev_layout != 'addProcessFlow'):
             return 'addProcessFlow'
 
-    # 10. Card grid — a handful of short, flat items
+    # 10. Icon grid (each item matches a brand icon), else card grid
+    if recipes and prev_layout != 'addIconFeatureGrid' and _icon_items(items):
+        return 'addIconFeatureGrid'
     if _cardable(items) and prev_layout != 'addCardGrid':
         return 'addCardGrid'
 
@@ -523,8 +546,11 @@ def _table_lines(table: dict) -> List[str]:
 
 # Layouts that draw the ``> takeaway`` / table themselves
 _SHOWS_QUOTE = {'addTakeawaySlide', 'addTableSlide', 'addRoadmapSlide', 'addQuoteSlide',
-                'addStatementSlide', 'addProofPointSlide', 'addFeatureListSlide'}
-_SHOWS_TABLE = {'addTableSlide'}
+                'addStatementSlide', 'addProofPointSlide', 'addFeatureListSlide',
+                'addIconFeatureGrid', 'addKpiTiles', 'addMetricTable', 'addSpecTable',
+                'addCompetitiveChart', 'addCheckMatrix', 'addTimeline', 'addStageFlow'}
+_SHOWS_TABLE = {'addTableSlide', 'addMetricTable', 'addSpecTable', 'addCompetitiveChart',
+                'addCheckMatrix'}
 
 
 def _fold_unshown(slide: dict, layout: str) -> None:
@@ -1047,6 +1073,392 @@ def _emit_feature_list(slide: dict, n: int) -> str:
     )
 
 
+# ---------------------------------------------------------------------------
+# Brand recipe emitters (aippt/brand/recipes.json)
+# ---------------------------------------------------------------------------
+
+# Lines the recipe helpers show in their source row instead of the notes
+_META_LINES = {
+    'source':  re.compile(r'^(?:sources?|data source)\s*:\s*(.+)$', re.I),
+    'endnote': re.compile(r'^(?:see\s+)?endnotes?\s*:?\s+(\S.*)$', re.I),
+    'date':    re.compile(r'^date\s*:\s*(.+)$', re.I),
+    'metric':  re.compile(r'^metric\s*:\s*(.+)$', re.I),
+}
+_NOW_MARK = re.compile(r'\s*[(\[](?:now|current|today|we are here)[)\]]\s*$', re.I)
+_ENDNOTE_ID = re.compile(r'^[A-Za-z]{0,8}[-_ ]?\d{1,4}[A-Za-z]?$|^[A-Z][A-Z0-9]*-[A-Z0-9-]+$')
+_CONTEXT = re.compile(r'^(.*?)\s*\(((?:vs\.?|versus|compared|over|from|per)\b[^)]*)\)\s*$', re.I)
+_MAX_ICON_ITEMS = 6
+_MAX_STAGES = 4
+_MAX_STAGE_BULLETS = 5
+
+
+def _js(value) -> str:
+    """Python value → JS literal (strings quoted, lists/dicts recursive)."""
+    if isinstance(value, str):
+        return _js_quoted(value)
+    if isinstance(value, bool):
+        return 'true' if value else 'false'
+    if value is None:
+        return 'null'
+    if isinstance(value, (int, float)):
+        return repr(value)
+    if isinstance(value, (list, tuple)):
+        return '[' + ', '.join(_js(v) for v in value) + ']'
+    return '{ ' + ', '.join(f'{k}: {_js(v)}' for k, v in value.items()) + ' }'
+
+
+def _js_rows(rows: list) -> str:
+    """A JS array with one entry per line."""
+    return '[\n' + ''.join(f'    {_js(r)},\n' for r in rows) + '  ]'
+
+
+def _meta(body: dict):
+    """Pull Source: / Endnote: / Date: / Metric: lines out of the prose."""
+    meta, rest = {}, []
+    for line in body['prose']:
+        for key, pattern in _META_LINES.items():
+            m = pattern.match(line)
+            if m and key not in meta:
+                meta[key] = m.group(1).strip()
+                break
+        else:
+            rest.append(line)
+    if 'endnote' in meta:
+        ids = [i.strip() for i in re.split(r'[,;]', meta['endnote']) if i.strip()]
+        meta['endnote'] = ids[0] if len(ids) == 1 else ids
+    return meta, rest
+
+
+def _flat_meta(value) -> str:
+    return ', '.join(value) if isinstance(value, list) else value
+
+
+def _recipe_opts(meta: dict, keys=('source', 'endnote'), **extra) -> str:
+    """JS options object from *meta* (only *keys*) plus *extra*, skipping empty values."""
+    kw = {k: meta[k] for k in keys if meta.get(k)}
+    kw.update({k: v for k, v in extra.items() if v not in (None, '', [], False)})
+    return f', {_js(kw)}' if kw else ''
+
+
+def _recipe_call(slide: dict, n: int, helper: str, args: str, extra_notes: List[str], opts: str) -> str:
+    return (_header(slide, n) +
+            f"{helper}(deck, {args},\n  {n}, `{_notes(helper, extra_notes)}`{opts});\n")
+
+
+def _number(cell: str) -> Optional[float]:
+    """'1,234', '2.5x', '310 tok/s' → float; None when the cell is not a number."""
+    m = re.match(r'^\s*[~≈]?\$?(-?\d[\d,]*(?:\.\d+)?)\s*[A-Za-z%×/]*(?:\s*[A-Za-z/]+)?\s*$', cell or '')
+    return float(m.group(1).replace(',', '')) if m else None
+
+
+_MARK_CELL = re.compile(r'^(?:✓|✔|✗|✘|◐|~|-|—|x|yes|no|check|partial|half|none|n/?a)?$', re.I)
+
+
+def _is_mark_table(table: dict) -> bool:
+    cells = [c.strip() for r in table['rows'] for c in r[1:]]
+    return bool(table['header']) and any(cells) and all(_MARK_CELL.match(c) for c in cells)
+
+
+def _amd_column(header: Optional[list]) -> Optional[int]:
+    if not header:
+        return None
+    return next((i for i, h in enumerate(header) if i and _AMD_HEADER.search(h)), None)
+
+
+_AMD_HEADER = re.compile(r'\b(?:AMD|Instinct|MI\d{3}\w*|EPYC|Radeon|ROCm)\b', re.I)
+_PERF_TITLE = re.compile(r'\b(?:perf\w*|throughput|latency|tokens?|speed\w*|faster|benchmarks?|inference|training|tok/s|tflops|scores?)\b', re.I)
+
+
+def _numeric_table(table: dict) -> bool:
+    rows = table['rows']
+    return (bool(table['header']) and 1 <= len(rows) <= 8 and 2 <= len(table['header']) <= 5
+            and all(len(r) == len(table['header']) and all(_number(c) is not None for c in r[1:]) for r in rows))
+
+
+def _table_recipe(slide: dict, table: dict) -> Optional[str]:
+    """Recipe for a markdown table on an auto-recipe theme, or None for the plain table."""
+    if _is_mark_table(table) and len(table['header']) <= 5:
+        return 'addCheckMatrix'
+    if _numeric_table(table) and _amd_column(table['header']) and _PERF_TITLE.search(slide['title']):
+        return 'addCompetitiveChart'
+    if _amd_column(table['header']) and 2 <= len(table['header']) <= 4 and len(table['rows']) <= 12:
+        return 'addSpecTable'
+    return None
+
+
+def _icon_items(items: List[dict]) -> Optional[List[dict]]:
+    """[{label, desc, icon}] when every item is a short 'Label — description' with a confident icon."""
+    from aippt import icons
+    if not 3 <= len(items) <= _MAX_ICON_ITEMS or any(it['subs'] for it in items):
+        return None
+    out = []
+    for it in items:
+        label, desc = _split_lead(it['text'])
+        icon = icons.resolve(label) or icons.best_match(f'{label} {desc}')
+        if not desc or len(label.split()) > 4 or not icon:
+            return None
+        out.append({'icon': icon, 'label': label, 'desc': desc})
+    return out
+
+
+def _timeline_fits(slide: dict) -> bool:
+    groups = _body(slide)['groups']
+    return (3 <= len(groups) <= 7
+            and all(1 <= len(g['items']) <= 2 and not any(it['subs'] for it in g['items']) for g in groups))
+
+
+def _stage_flow_fits(slide: dict) -> bool:
+    body = _body(slide)
+    groups = body['groups']
+    text = slide['title'] + ' ' + ' '.join(g['heading'] for g in groups)
+    return (3 <= len(groups) <= _MAX_STAGES and not body['loose']
+            and all(1 <= len(g['items']) <= _MAX_STAGE_BULLETS + 1 for g in groups)
+            and bool(_PROCESS_WORDS.search(text)))
+
+
+def _stat(item: dict):
+    """(value, label, context) for a value-led item; the lead/rest split otherwise."""
+    text = _md_plain(item['text'])
+    m = _STAT_LEAD.match(text)
+    value, label = (m.group(1).strip(), m.group(2).strip()) if m else _split_lead(item['text'])
+    context = ''
+    c = _CONTEXT.match(label)
+    if c:
+        label, context = c.group(1).strip(), c.group(2).strip()
+    if item['subs'] and not context:
+        context = _md_plain(item['subs'][0])
+    return value, label, context
+
+
+def _recipe_takes_quote(slide: dict) -> bool:
+    body = _body(slide)
+    if body['groups'] and not body['loose']:
+        return _stage_flow_fits(slide)
+    return _is_stat_slide(body['items']) or bool(_icon_items(body['items']))
+
+
+def _emit_icon_grid(slide: dict, n: int) -> str:
+    # addIconFeatureGrid(deck, title, [{icon, label, desc}], slideNum, notes, {takeaway})
+    from aippt import icons
+    body = _body(slide)
+    meta, prose = _meta(body)
+    source = body['items'] or [{'text': f"**{g['heading']}** — {'; '.join(_flat_text(i) for i in g['items'])}",
+                                'subs': []} for g in body['groups']]
+    feats = []
+    for it in source[:_MAX_ICON_ITEMS]:
+        label, desc = _split_lead(it['text'])
+        icon = icons.resolve(label) or icons.best_match(f'{label} {desc}')
+        feats.append({k: v for k, v in (('icon', icon), ('label', label), ('desc', desc)) if v})
+    # addIconFeatureGrid has no source row — Source / Endnote lines go to the notes
+    extra = prose + _item_lines(source[_MAX_ICON_ITEMS:]) + [f'{k.title()}: {_flat_meta(v)}' for k, v in meta.items()]
+    return _recipe_call(slide, n, 'addIconFeatureGrid', f"`{_title(slide)}`, {_js_rows(feats)}", extra,
+                        _recipe_opts({}, (), takeaway=_takeaway(body)))
+
+
+def _emit_kpi_tiles(slide: dict, n: int) -> str:
+    # addKpiTiles(deck, title, [{value, label, context, highlight}], slideNum, notes, {takeaway, source, endnote})
+    body = _body(slide)
+    meta, prose = _meta(body)
+    items = body['items'][:4]
+    tiles = []
+    for k, it in enumerate(items):
+        value, label, context = _stat(it)
+        tile = {'value': value, 'label': label}
+        if context:
+            tile['context'] = context
+        if k == 0:
+            tile['highlight'] = True
+        tiles.append(tile)
+    extra = prose + _item_lines(body['items'][4:])
+    return _recipe_call(slide, n, 'addKpiTiles', f"`{_title(slide)}`, {_js_rows(tiles)}", extra,
+                        _recipe_opts(meta, takeaway=_takeaway(body)))
+
+
+def _emit_hero_number(slide: dict, n: int) -> str:
+    # addHeroNumber(deck, value, label, slideNum, notes, {title, context, source, endnote})
+    body = _body(slide)
+    meta, prose = _meta(body)
+    items = body['items']
+    if items:
+        value, label, context = _stat(items[0])
+    else:
+        value, label, context = _md_plain(slide['title']), (prose.pop(0) if prose else ''), ''
+    extra = prose + _item_lines(items[1:]) + body['quote']
+    return _recipe_call(slide, n, 'addHeroNumber', f"{_js(value)}, {_js(label)}", extra,
+                        _recipe_opts(meta, title=_md_plain(slide['title']) if items else '', context=context))
+
+
+def _table_or_items(body: dict):
+    """(header, rows) from the markdown table, else from 'Label — value — more' items."""
+    table = body['table']
+    if table and (table['rows'] or table['header']):
+        header, rows = table['header'], [list(r) for r in table['rows']]
+        if not header and rows:
+            header, rows = rows[0], rows[1:]
+        return header, rows
+    rows = []
+    for it in body['items']:
+        lead, rest = _split_lead(it['text'])
+        cells = [lead] + [c.strip() for c in re.split(r'\s+[—–]\s+', rest) if c.strip()]
+        rows.append(cells + [_md_plain(s) for s in it['subs']])
+    return None, rows
+
+
+def _emit_metric_table(slide: dict, n: int) -> str:
+    # addMetricTable(deck, title, [{label, value, why}], slideNum, notes, {header, takeaway, source, endnote})
+    body = _body(slide)
+    meta, prose = _meta(body)
+    header, rows = _table_or_items(body)
+    out = []
+    for r in rows[:6]:
+        row = {'label': r[0] if r else '', 'value': r[1] if len(r) > 1 else ''}
+        if len(r) > 2:
+            row['why'] = ' '.join(r[2:])
+        out.append(row)
+    extra = prose + [' | '.join(r) for r in rows[6:]]
+    if body['table']:
+        extra += _item_lines(body['items'])
+    return _recipe_call(slide, n, 'addMetricTable', f"`{_title(slide)}`, {_js_rows(out)}", extra,
+                        _recipe_opts(meta, takeaway=_takeaway(body), header=(header or [])[:3]))
+
+
+def _emit_spec_table(slide: dict, n: int) -> str:
+    # addSpecTable(deck, title, header, rows, slideNum, notes, {takeaway, source, endnote})
+    body = _body(slide)
+    meta, prose = _meta(body)
+    header, rows = _table_or_items(body)
+    width = max([len(header or [])] + [len(r) for r in rows] + [2])
+    header = list(header or ['Spec'] + [''] * (width - 1))
+    rows = [r + [''] * (len(header) - len(r)) for r in rows]
+    extra = prose + [' | '.join(r) for r in rows[12:]]
+    if body['table']:
+        extra += _item_lines(body['items'])
+    return _recipe_call(slide, n, 'addSpecTable', f"`{_title(slide)}`, {_js(header)},\n  {_js_rows(rows[:12])}",
+                        extra, _recipe_opts(meta, takeaway=_takeaway(body)))
+
+
+def _emit_competitive_chart(slide: dict, n: int) -> str:
+    # addCompetitiveChart(deck, title, categories, [{name, values}], slideNum, notes,
+    #   {takeaway, metric, date, source, endnote})
+    body = _body(slide)
+    table = body['table']
+    if not table or not _numeric_table(table):
+        # LAYOUT: competitive_chart needs a numeric table — show the data as a table instead
+        return _emit_table(slide, n)
+    meta, prose = _meta(body)
+    header, rows = table['header'], table['rows']
+    series = [{'name': name, 'values': [_number(r[k]) for r in rows]}
+              for k, name in enumerate(header) if k]
+    categories = [r[0] for r in rows]
+    extra = prose + _item_lines(body['items'])
+    decimals = max((len(f'{v:g}'.partition('.')[2]) for s in series for v in s['values']), default=0)
+    lower = bool(re.search(r'lower is better|latency|\btime\b', meta.get('metric') or slide['title'], re.I))
+    return _recipe_call(slide, n, 'addCompetitiveChart',
+                        f"`{_title(slide)}`, {_js(categories)},\n  {_js_rows(series)}", extra,
+                        _recipe_opts(meta, ('source', 'endnote', 'date', 'metric'), takeaway=_takeaway(body),
+                                     valueFormat='#,##0.' + '0' * min(decimals, 2) if decimals else '',
+                                     lowerIsBetter=lower))
+
+
+def _emit_check_matrix(slide: dict, n: int) -> str:
+    # addCheckMatrix(deck, title, header, [{label, values, group}], slideNum, notes, {takeaway, source, endnote})
+    body = _body(slide)
+    meta, prose = _meta(body)
+    header, rows = _table_or_items(body)
+    out, group = [], ''
+    for r in rows:
+        if len(r) > 1 and not any(c.strip() for c in r[1:]) or len(r) == 1:
+            group = r[0]            # a row with only its first cell filled heads a group
+            continue
+        row = {'label': r[0], 'values': r[1:]}
+        if group:
+            row['group'] = group
+        out.append(row)
+    width = max([len(r['values']) for r in out] + [1]) + 1
+    header = list(header or ['Feature'] + [''] * (width - 1))
+    extra = prose + [' | '.join([r['label']] + r['values']) for r in out[14:]]
+    if body['table']:
+        extra += _item_lines(body['items'])
+    return _recipe_call(slide, n, 'addCheckMatrix', f"`{_title(slide)}`, {_js(header)},\n  {_js_rows(out[:14])}",
+                        extra, _recipe_opts(meta, takeaway=_takeaway(body)))
+
+
+def _milestone(date: str, label: str, desc: str) -> dict:
+    current = bool(_NOW_MARK.search(date))
+    m = {'date': _NOW_MARK.sub('', date).strip(), 'label': label}
+    if desc:
+        m['desc'] = desc
+    if current:
+        m['current'] = True
+    return m
+
+
+def _emit_timeline(slide: dict, n: int) -> str:
+    # addTimeline(deck, title, [{date, label, desc, current}], slideNum, notes, {takeaway, source, endnote, caveat})
+    body = _body(slide)
+    meta, prose = _meta(body)
+    milestones, extra = [], list(prose)
+    if body['groups']:
+        for g in body['groups']:
+            texts = [_flat_text(it) for it in g['items']]
+            milestones.append(_milestone(_md_plain(g['heading']), texts[0] if texts else '', ' '.join(texts[1:])))
+        extra += _item_lines(body['loose'])
+    else:
+        for it in body['items']:
+            date, rest = _split_lead(it['text'])
+            label, desc = _split_lead(rest) if rest else ('', '')
+            desc = ' '.join([desc] + [_md_plain(s) for s in it['subs']]).strip()
+            milestones.append(_milestone(date, label, desc))
+    extra += [f"{m['date']}: {m['label']} {m.get('desc', '')}".strip() for m in milestones[7:]]
+    caveat = 'roadmap' in slide['title'].lower()
+    return _recipe_call(slide, n, 'addTimeline', f"`{_title(slide)}`, {_js_rows(milestones[:7])}", extra,
+                        _recipe_opts(meta, takeaway=_takeaway(body), caveat=caveat))
+
+
+def _emit_stage_flow(slide: dict, n: int) -> str:
+    # addStageFlow(deck, title, [{title, subhead, bullets}], slideNum, notes, {takeaway, closing, source, endnote})
+    body = _body(slide)
+    meta, prose = _meta(body)
+    stages, extra = [], list(prose)
+    if body['groups']:
+        for g in body['groups']:
+            items = list(g['items'])
+            stage = {'title': _md_plain(g['heading'])}
+            first = items[0]['text'].strip() if items else ''
+            if len(items) > 1 and re.fullmatch(r'\*\*[^*]+\*\*:?', first):
+                stage['subhead'] = _md_plain(first).rstrip(':')
+                items = items[1:]
+            bullets = [_flat_text(it) for it in items]
+            stage['bullets'] = bullets[:_MAX_STAGE_BULLETS]
+            extra += [f"{stage['title']}: {b}" for b in bullets[_MAX_STAGE_BULLETS:]]
+            stages.append(stage)
+        extra += _item_lines(body['loose'])
+    else:
+        for it in body['items']:
+            head, rest = _split_lead(it['text'])
+            bullets = [r for r in [rest] if r] + [_md_plain(s) for s in it['subs']]
+            stages.append({'title': head, 'bullets': bullets[:_MAX_STAGE_BULLETS]})
+    extra += [f"{s['title']}: {'; '.join(s['bullets'])}" for s in stages[_MAX_STAGES:]]
+    return _recipe_call(slide, n, 'addStageFlow', f"`{_title(slide)}`, {_js_rows(stages[:_MAX_STAGES])}", extra,
+                        _recipe_opts(meta, closing=_takeaway(body)))
+
+
+def _emit_endnotes(slide: dict, n: int) -> str:
+    # addEndnotesSlide(deck, title, [{id, text} | text], slideNum, notes)
+    body = _body(slide)
+    notes = []
+    lines = [it['text'] for it in body['items']] + body['prose']
+    for g in body['groups']:
+        lines += [it['text'] for it in g['items']]
+    for line in lines:
+        lead, rest = _split_lead(line)
+        if rest and _ENDNOTE_ID.match(lead):
+            notes.append({'id': lead, 'text': rest})
+        else:
+            notes.append(_md_plain(line))
+    return _recipe_call(slide, n, 'addEndnotesSlide', f"`{_title(slide)}`, {_js_rows(notes)}", [], '')
+
+
 _EMITTERS = {
     'addTitleSlide':        _emit_title,
     'addClosingSlide':      _emit_closing,
@@ -1073,6 +1485,17 @@ _EMITTERS = {
     'addStatementSlide':    _emit_statement,
     'addProofPointSlide':   _emit_proof_point,
     'addFeatureListSlide':  _emit_feature_list,
+    # Brand recipes (aippt/brand/recipes.json)
+    'addIconFeatureGrid':   _emit_icon_grid,
+    'addKpiTiles':          _emit_kpi_tiles,
+    'addHeroNumber':        _emit_hero_number,
+    'addMetricTable':       _emit_metric_table,
+    'addSpecTable':         _emit_spec_table,
+    'addCompetitiveChart':  _emit_competitive_chart,
+    'addCheckMatrix':       _emit_check_matrix,
+    'addTimeline':          _emit_timeline,
+    'addStageFlow':         _emit_stage_flow,
+    'addEndnotesSlide':     _emit_endnotes,
 }
 
 
@@ -1222,8 +1645,9 @@ def _build_script(outline_text: str, theme: str = 'amd',
     layouts: List[str] = []
     prev = ''
     section_no = 0
+    auto_recipes = theme in _recipes.auto_themes()
     for i, slide in enumerate(slides):
-        layout = _pick_layout(slide, prev, i, len(slides))
+        layout = _pick_layout(slide, prev, i, len(slides), recipes=auto_recipes)
         if layout not in _EMITTERS:
             # Never import a helper we can't emit a call for
             layout = 'addBulletSlide'

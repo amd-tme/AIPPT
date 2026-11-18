@@ -124,6 +124,8 @@ def test_layout_directive_produces_valid_script(directive):
     expected = _LAYOUT_DIRECTIVES[directive]
     if directive == "diagram":
         expected = "addBulletSlide"  # no IMAGE: given, so nothing to diagram
+    if directive == "competitive_chart":
+        expected = "addTableSlide"  # no numeric table, so the data is shown as a table
     assert _calls(script)[1] == expected
 
 
