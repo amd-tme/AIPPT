@@ -1295,6 +1295,46 @@
             display: none;
         }
         #tag-filter-info.active { display: flex; justify-content: space-between; align-items: center; }
+        /* My icons & logos dialog */
+        .assets-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
+            gap: 0.5rem;
+            max-height: 16rem;
+            overflow-y: auto;
+        }
+        .assets-grid .asset-empty { grid-column: 1 / -1; font-size: 0.85rem; color: var(--pico-muted-color); }
+        .asset-card {
+            position: relative;
+            border: 1px solid var(--pico-muted-border-color);
+            border-radius: 6px;
+            padding: 0.4rem;
+            font-size: 0.78rem;
+            text-align: center;
+        }
+        .asset-card .asset-thumb {
+            height: 4rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            /* Checkerboard so white and dark marks both show */
+            background: repeating-conic-gradient(#8882 0% 25%, transparent 0% 50%) 0 0 / 12px 12px;
+            border-radius: 4px;
+            margin-bottom: 0.3rem;
+        }
+        .asset-card .asset-thumb img { max-width: 100%; max-height: 100%; }
+        .asset-card .asset-name { font-weight: 600; overflow-wrap: anywhere; }
+        .asset-card .asset-tags { color: var(--pico-muted-color); overflow-wrap: anywhere; }
+        .asset-card .asset-delete {
+            position: absolute;
+            top: 0.2rem;
+            right: 0.2rem;
+            width: auto;
+            margin: 0;
+            padding: 0 0.4rem;
+            font-size: 0.8rem;
+            line-height: 1.4;
+        }
         .ntid-badge {
             font-size: 0.75rem;
             color: var(--accent, var(--pico-primary));
@@ -1780,6 +1820,14 @@
                         </select>
                         <span style="color:var(--pico-muted-color);">No-LLM adds brand layouts (KPI tiles, charts, timelines…) on the corporate themes</span>
                     </div>
+                    <div id="create-cobrand-row" style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem;font-size:0.82rem;">
+                        <label for="create-cobrand" style="color:var(--pico-muted-color);margin:0;">Co-brand logo</label>
+                        <select id="create-cobrand" style="width:auto;margin:0;padding:0.2rem 2rem 0.2rem 0.5rem;font-size:0.82rem;" title="Adds a partner logo to the title and closing slides">
+                            <option value="" selected>None</option>
+                        </select>
+                        <button class="outline" type="button" onclick="openAssetsDialog()" style="width:auto;margin:0;padding:0.2rem 0.6rem;font-size:0.8rem;">My icons &amp; logos</button>
+                        <span style="color:var(--pico-muted-color);">Your icons are used where they match a slide</span>
+                    </div>
                     <div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.5rem;font-size:0.82rem;">
                         <label style="display:flex;align-items:center;gap:0.3rem;cursor:pointer;margin:0;">
                             <input type="checkbox" id="create-auto-refine" checked style="margin:0;">
@@ -2211,6 +2259,42 @@
                 <footer style="display:flex; justify-content:flex-end; margin-top:1rem;">
                     <button id="regen-done-btn" style="display:none;" onclick="document.getElementById('regen-progress-dialog').close()">Done</button>
                 </footer>
+            </article>
+        </dialog>
+
+        <!-- The user's own icons and logos (per NTID) -->
+        <dialog id="assets-dialog">
+            <article style="max-width:46rem;width:100%;">
+                <header>
+                    <button aria-label="Close" rel="prev" onclick="document.getElementById('assets-dialog').close()"></button>
+                    <h3>My icons &amp; logos</h3>
+                </header>
+                <p style="font-size:0.85rem;color:var(--pico-muted-color);margin-bottom:0.75rem;">
+                    Icons are matched to slides by name and tags, like the AMD icon set (dark parts
+                    take the theme colour). A logo can go on your title and closing slides as a
+                    co-brand. Only you see your library.
+                </p>
+                <p id="assets-notice" style="display:none;font-size:0.9rem;"></p>
+                <form id="assets-upload-form" onsubmit="uploadAsset(event)" style="display:grid;grid-template-columns:auto 1fr 1fr;gap:0.5rem;align-items:end;font-size:0.85rem;margin-bottom:0.75rem;">
+                    <label style="margin:0;">Type
+                        <select id="assets-kind" onchange="updateAssetKind()" style="margin:0;">
+                            <option value="icon">Icon (SVG, PNG)</option>
+                            <option value="logo">Logo (SVG, PNG, JPG)</option>
+                        </select>
+                    </label>
+                    <label style="margin:0;">Name
+                        <input id="assets-name" type="text" maxlength="60" placeholder="e.g. Partner Cloud (default: file name)" style="margin:0;">
+                    </label>
+                    <label id="assets-tags-label" style="margin:0;">Tags
+                        <input id="assets-tags" type="text" placeholder="e.g. cloud, hosting" style="margin:0;">
+                    </label>
+                    <input id="assets-file" type="file" accept=".svg,.png" required style="grid-column:1 / 3;margin:0;">
+                    <button id="assets-upload-btn" type="submit" style="margin:0;">Upload</button>
+                </form>
+                <h4 style="font-size:0.95rem;margin:0.5rem 0;">Icons <span id="assets-icon-count" style="color:var(--pico-muted-color);font-weight:normal;"></span></h4>
+                <div id="assets-icons" class="assets-grid"></div>
+                <h4 style="font-size:0.95rem;margin:0.75rem 0 0.5rem;">Logos <span id="assets-logo-count" style="color:var(--pico-muted-color);font-weight:normal;"></span></h4>
+                <div id="assets-logos" class="assets-grid"></div>
             </article>
         </dialog>
 
@@ -4617,11 +4701,182 @@
 
         function updateThemeRow() {
             const engine = document.querySelector('input[name="create-engine"]:checked')?.value || 'pptxgenjs';
-            document.getElementById('create-theme-row').style.display =
-                PPTXGENJS_ENGINES.includes(engine) ? 'flex' : 'none';
+            const display = PPTXGENJS_ENGINES.includes(engine) ? 'flex' : 'none';
+            document.getElementById('create-theme-row').style.display = display;
+            document.getElementById('create-cobrand-row').style.display = display;
         }
         document.querySelectorAll('input[name="create-engine"]').forEach(
             radio => radio.addEventListener('change', updateThemeRow));
+
+        // ── My icons & logos: the user's own library (api/assets, keyed by NTID) ──
+        let myAssets = [];
+        let assetThumbUrls = [];
+
+        function assetsNotice(msg) {
+            const el = document.getElementById('assets-notice');
+            el.textContent = msg || '';
+            el.style.display = msg ? '' : 'none';
+        }
+
+        // Fetch the library; returns an error message, or '' on success.
+        async function loadAssets() {
+            myAssets = [];
+            let error = '';
+            if (!getUserNtid()) {
+                error = 'Set your NTID (top right) to use your asset library.';
+            } else {
+                try {
+                    const resp = await msAuth.fetchWithAuth('api/assets');
+                    const data = await resp.json().catch(() => ({}));
+                    if (resp.ok) myAssets = data.assets || [];
+                    else error = data.error || data.detail || resp.statusText;
+                } catch (e) {
+                    error = e.message;
+                }
+            }
+            fillCobrandSelect();
+            return error;
+        }
+
+        function fillCobrandSelect() {
+            const select = document.getElementById('create-cobrand');
+            const current = select.value;
+            select.innerHTML = '<option value="">None</option>';
+            for (const asset of myAssets.filter(a => a.kind === 'logo')) {
+                const opt = document.createElement('option');
+                opt.value = asset.id;
+                opt.textContent = asset.name;
+                select.appendChild(opt);
+            }
+            select.value = myAssets.some(a => a.id === current && a.kind === 'logo') ? current : '';
+        }
+
+        function renderAssets() {
+            assetThumbUrls.forEach(url => URL.revokeObjectURL(url));
+            assetThumbUrls = [];
+            for (const kind of ['icon', 'logo']) {
+                const grid = document.getElementById(`assets-${kind}s`);
+                const items = myAssets.filter(a => a.kind === kind);
+                document.getElementById(`assets-${kind}-count`).textContent = items.length ? `(${items.length})` : '';
+                grid.innerHTML = '';
+                if (!items.length) {
+                    grid.innerHTML = `<div class="asset-empty">No ${kind}s yet.</div>`;
+                    continue;
+                }
+                for (const asset of items) {
+                    const card = document.createElement('div');
+                    card.className = 'asset-card';
+                    const thumb = document.createElement('div');
+                    thumb.className = 'asset-thumb';
+                    const img = document.createElement('img');
+                    img.alt = asset.name;
+                    thumb.appendChild(img);
+                    const name = document.createElement('div');
+                    name.className = 'asset-name';
+                    name.textContent = asset.name;
+                    card.append(thumb, name);
+                    if (asset.tags && asset.tags.length) {
+                        const tags = document.createElement('div');
+                        tags.className = 'asset-tags';
+                        tags.textContent = asset.tags.join(', ');
+                        card.appendChild(tags);
+                    }
+                    if (!viewOnly) {
+                        const del = document.createElement('button');
+                        del.className = 'outline secondary asset-delete';
+                        del.type = 'button';
+                        del.title = 'Delete';
+                        del.setAttribute('aria-label', `Delete ${asset.name}`);
+                        del.textContent = '×';
+                        del.onclick = () => deleteAsset(asset);
+                        card.appendChild(del);
+                    }
+                    grid.appendChild(card);
+                    loadAssetThumb(asset.id, img);
+                }
+            }
+        }
+
+        // The file route needs the NTID header, so fetch it and show a blob URL
+        async function loadAssetThumb(assetId, img) {
+            try {
+                const resp = await msAuth.fetchWithAuth(`api/assets/${encodeURIComponent(assetId)}/file`);
+                if (!resp.ok) return;
+                const url = URL.createObjectURL(await resp.blob());
+                assetThumbUrls.push(url);
+                img.src = url;
+            } catch (e) { /* leave the thumbnail empty */ }
+        }
+
+        function updateAssetKind() {
+            const icon = document.getElementById('assets-kind').value === 'icon';
+            document.getElementById('assets-file').accept = icon ? '.svg,.png' : '.svg,.png,.jpg,.jpeg';
+            document.getElementById('assets-tags-label').style.visibility = icon ? 'visible' : 'hidden';
+        }
+
+        async function openAssetsDialog() {
+            document.getElementById('assets-dialog').showModal();
+            updateAssetKind();
+            const error = await loadAssets();
+            const blocked = !getUserNtid() || viewOnly;
+            document.getElementById('assets-upload-form').style.display = blocked ? 'none' : 'grid';
+            assetsNotice(error || (viewOnly ? 'Uploads are disabled in view-only mode.' : ''));
+            renderAssets();
+        }
+
+        async function uploadAsset(event) {
+            event.preventDefault();
+            const fileInput = document.getElementById('assets-file');
+            if (!fileInput.files.length) return;
+            const kind = document.getElementById('assets-kind').value;
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            formData.append('kind', kind);
+            formData.append('name', document.getElementById('assets-name').value.trim());
+            if (kind === 'icon') formData.append('tags', document.getElementById('assets-tags').value);
+            const btn = document.getElementById('assets-upload-btn');
+            btn.disabled = true;
+            try {
+                const resp = await msAuth.fetchWithAuth('api/assets', {method: 'POST', body: formData});
+                const data = await resp.json().catch(() => ({}));
+                if (!resp.ok) {
+                    assetsNotice('Upload failed: ' + (data.error || data.detail || resp.statusText));
+                    return;
+                }
+                fileInput.value = '';
+                document.getElementById('assets-name').value = '';
+                document.getElementById('assets-tags').value = '';
+                toast(`Added "${data.asset.name}"`);
+                assetsNotice(await loadAssets());
+                renderAssets();
+            } catch (e) {
+                assetsNotice('Upload failed: ' + e.message);
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        async function deleteAsset(asset) {
+            if (!confirm(`Delete "${asset.name}" from your library?`)) return;
+            try {
+                const resp = await msAuth.fetchWithAuth(`api/assets/${encodeURIComponent(asset.id)}`, {method: 'DELETE'});
+                if (!resp.ok) {
+                    const data = await resp.json().catch(() => ({}));
+                    assetsNotice('Delete failed: ' + (data.error || data.detail || resp.statusText));
+                    return;
+                }
+                toast(`Deleted "${asset.name}"`);
+                assetsNotice(await loadAssets());
+                renderAssets();
+            } catch (e) {
+                assetsNotice('Delete failed: ' + e.message);
+            }
+        }
+
+        // Refresh the co-brand picker whenever the create panel opens
+        document.getElementById('create-panel').addEventListener('toggle', function () {
+            if (this.open) loadAssets();
+        });
 
         async function createDeck() {
             const outlineText = document.getElementById('create-outline-text').value.trim();
@@ -4656,6 +4911,8 @@
             formData.append('engine', engine);
             if (PPTXGENJS_ENGINES.includes(engine)) {
                 formData.append('theme', document.getElementById('create-theme').value);
+                const cobrand = document.getElementById('create-cobrand').value;
+                if (cobrand) formData.append('cobrand_logo', cobrand);
             }
             if (model) formData.append('model', model);
             if (audience && audience !== 'mixed') formData.append('audience', audience);

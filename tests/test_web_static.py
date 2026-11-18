@@ -130,3 +130,17 @@ def test_sse_handler_signs_out_on_401(html_source: str, handler: str):
         f"{handler} sees the 401 but doesn't call msAuth.signOut() — the "
         "UI will keep claiming the user is signed in with a dead token."
     )
+
+
+def test_asset_library_calls_send_the_ntid(html_source: str):
+    """The asset library is keyed by X-AIPPT-NTID, so every api/assets call
+    (list, upload, thumbnail, delete) must go through fetchWithAuth."""
+    calls = re.findall(r"(\w+(?:\.\w+)?)\s*\(\s*[`'\"]/?api/assets", html_source)
+    assert len(calls) >= 4, calls
+    assert all(fn.endswith("fetchWithAuth") for fn in calls), calls
+
+
+def test_create_sends_the_cobrand_logo(html_source: str):
+    body = _extract_function_body(html_source, "createDeck")
+    assert "formData.append('cobrand_logo'" in body
+    assert 'id="create-cobrand"' in html_source
