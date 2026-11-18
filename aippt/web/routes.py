@@ -2527,6 +2527,106 @@ async def serve_deck_pptx(deck_id: int, request: Request):
     )
 
 
+def _asset_folder(request: Request):
+    """``(folder, None)`` for the caller's asset library, or ``(None, 4xx)``.
+
+    Assets are per user, so unlike deck creation the NTID header is required.
+    """
+    from aippt import user_assets
+
+    ntid, err = _ntid_or_400(request)
+    if err is not None:
+        return None, err
+    if not ntid:
+        return None, JSONResponse(
+            {"error": "Set your NTID (top right) to use your asset library."},
+            status_code=400)
+    folder = user_assets.user_dir(request.app.state.uploads_dir, ntid)
+    materialize_file(request.app.state, user_assets.manifest_path(folder))
+    return folder, None
+
+
+@router.get('/api/assets')
+async def list_user_assets(request: Request):
+    """API: the caller's own icons and logos."""
+    from aippt import user_assets
+
+    folder, err = _asset_folder(request)
+    if err is not None:
+        return err
+    return {"assets": user_assets.list_assets(folder),
+            "max_assets": user_assets.MAX_ASSETS}
+
+
+@router.post('/api/assets')
+async def upload_user_asset(
+    request: Request,
+    file: UploadFile = File(...),
+    kind: str = Form(...),
+    name: str = Form(""),
+    tags: str = Form(""),
+):
+    """API: add an icon (name + tags pick the slide it fits) or a partner logo.
+
+    SVGs are cleaned (scripts, outside links removed); PNG/JPEG must be real
+    images. Stored under ``uploads/assets/users/<ntid>/``.
+    """
+    from aippt import user_assets
+
+    if getattr(request.app.state, "view_only", False):
+        return JSONResponse({"error": "Asset uploads are disabled in view-only mode"},
+                            status_code=403)
+    folder, err = _asset_folder(request)
+    if err is not None:
+        return err
+    data = await file.read()
+    try:
+        entry = user_assets.add_asset(folder, kind, file.filename, data, name=name, tags=tags)
+    except user_assets.AssetError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
+    persist_file(request.app.state, user_assets.asset_path(folder, entry))
+    persist_file(request.app.state, user_assets.manifest_path(folder))
+    return {"asset": entry}
+
+
+@router.get('/api/assets/{asset_id}/file')
+async def get_user_asset_file(request: Request, asset_id: str):
+    """API: one of the caller's asset files (for the library thumbnails)."""
+    from aippt import user_assets
+
+    folder, err = _asset_folder(request)
+    if err is not None:
+        return err
+    entry = next((a for a in user_assets.list_assets(folder) if a["id"] == asset_id), None)
+    path = entry and user_assets.asset_path(folder, entry)
+    if not entry or not materialize_file(request.app.state, path):
+        return JSONResponse({"error": "Asset not found"}, status_code=404)
+    # Cleaned already; the CSP is a second guard if the SVG is opened directly
+    return FileResponse(path, headers={
+        "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; img-src data:",
+        "X-Content-Type-Options": "nosniff"})
+
+
+@router.delete('/api/assets/{asset_id}')
+async def delete_user_asset(request: Request, asset_id: str):
+    """API: remove one of the caller's assets (other users' ids are 404)."""
+    from aippt import user_assets
+    from aippt.web.asset_sync import unpersist_file
+
+    if getattr(request.app.state, "view_only", False):
+        return JSONResponse({"error": "Asset uploads are disabled in view-only mode"},
+                            status_code=403)
+    folder, err = _asset_folder(request)
+    if err is not None:
+        return err
+    entry = user_assets.delete_asset(folder, asset_id)
+    if entry is None:
+        return JSONResponse({"error": "Asset not found"}, status_code=404)
+    unpersist_file(request.app.state, user_assets.asset_path(folder, entry))
+    persist_file(request.app.state, user_assets.manifest_path(folder))
+    return {"deleted": entry["id"]}
+
+
 @router.get('/api/logs')
 async def get_logs(request: Request):
     """API: return recent in-memory application log records.

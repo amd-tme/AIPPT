@@ -70,6 +70,19 @@ def persist_tree(state, local_dir: str) -> None:
             persist_file(state, os.path.join(dirpath, name))
 
 
+def unpersist_file(state, local_path: str) -> None:
+    """Remove *local_path*'s object-storage copy (no-op in fs mode)."""
+    if not _enabled(state):
+        return
+    key = _key_or_none(state, local_path)
+    if key is None:
+        return
+    try:
+        state.storage.delete(key)
+    except Exception:
+        logger.exception("Failed to delete %s from object storage", key)
+
+
 def materialize_file(state, local_path: str) -> bool:
     """Ensure *local_path* exists locally, fetching from object storage if needed.
 

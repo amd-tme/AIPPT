@@ -17,6 +17,7 @@ from aippt.web.asset_sync import (
     persist_file,
     persist_tree,
     materialize_file,
+    unpersist_file,
 )
 
 
@@ -162,3 +163,23 @@ def test_s3_mode_key_escaping_data_root_is_skipped(tmp_path):
     # must not raise, and must not upload anything outside the root
     persist_file(state, str(outside))
     assert not remote.exists() or list(remote.rglob("*")) == []
+
+
+def test_s3_mode_unpersist_removes_remote_copy(tmp_path):
+    data = tmp_path / "data"
+    (data / "uploads").mkdir(parents=True)
+    f = data / "uploads" / "icon.svg"
+    f.write_bytes(b"<svg/>")
+    state = _state("s3", data, str(tmp_path / "remote"))
+    persist_file(state, str(f))
+
+    unpersist_file(state, str(f))
+    assert not state.storage.exists("uploads/icon.svg")
+    unpersist_file(state, str(f))  # absent key is fine
+
+
+def test_fs_mode_unpersist_is_noop(tmp_path):
+    f = tmp_path / "icon.svg"
+    f.write_bytes(b"<svg/>")
+    unpersist_file(_state("fs", tmp_path, str(tmp_path / "remote")), str(f))
+    assert f.exists()
