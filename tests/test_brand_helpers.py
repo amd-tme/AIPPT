@@ -5,6 +5,7 @@ same path the web app uses.
 """
 from __future__ import annotations
 
+import re
 import shutil
 from pathlib import Path
 
@@ -383,3 +384,93 @@ def test_check_matrix(tmp_path, theme, ink, tint):
     assert str(tbl3.cell(1, 1).text_frame.paragraphs[0].runs[0].font.color.rgb) == "00C2DE"
     # Empty input -> title-only slide
     assert not [s for s in slides[3].shapes if s.has_table]
+
+
+# ---------------------------------------------------------------------------
+# addTimeline / addStageFlow
+# ---------------------------------------------------------------------------
+
+_TIMELINE_SCRIPT = """\
+import { createDeck, addTimeline, addStageFlow } from '../lib/pptxgenjs-helpers.mjs';
+const deck = await createDeck('themes/__THEME__.yaml');
+addTimeline(deck, 'Roadmap', [
+  { date: '2023', label: 'A1', desc: 'first' },
+  { date: '2024', label: 'A2' },
+  { date: '2025', label: 'A3', current: true },
+  { date: '2026', label: 'A4', desc: 'later' },
+], 1, '', { caveat: true, source: 'Src.' });
+addTimeline(deck, 'Seven', Array.from({ length: 9 }, (_, i) => ({
+  date: `Q${i}`, label: `M${i}`, desc: 'A fairly long description that wraps onto two lines', current: i === 3,
+})), 2, '', { caveat: 'Plans may change.', takeaway: 'Takeaway' });
+addStageFlow(deck, 'Flow', [
+  { title: 'Assess', subhead: 'Profile', bullets: ['one', 'two'] },
+  { title: 'Port', bullets: ['three'] },
+  { title: 'Tune', image: 'themes/assets/does-not-exist.png', bullets: ['four'] },
+  { title: 'Deploy', bullets: ['five'] },
+  { title: 'Dropped' },
+], 3, '', { closing: 'Closing line.', source: 'Src.' });
+addTimeline(deck, 'Empty', [], 4);
+addStageFlow(deck, 'Empty', [], 5);
+await deck.save(`${process.env.AIPPT_PREVIEW_OUT || 'output'}/timeline.pptx`);
+"""
+
+_EMU = 914400
+
+
+def _prst(shape):
+    # Preset geometry name; python-pptx can't map pptxgenjs's "line" preset
+    m = re.search(r'prst="(\w+)"', shape._element.xml)
+    return m.group(1) if m else None
+
+
+def _ovals(slide, w):
+    return [s for s in slide.shapes if _prst(s) == "ellipse" and abs(s.width / _EMU - w) < 0.01]
+
+
+def _dots(slide):
+    # Milestone dots are the 0.22in ovals
+    return _ovals(slide, 0.22)
+
+
+@pytest.mark.parametrize("theme,ink,bg", [("corp_black", "FFFFFF", "000000"), ("corp_white", "000000", "FFFFFF")])
+def test_timeline_and_stage_flow(tmp_path, theme, ink, bg):
+    prs = _render(tmp_path, "timeline", _TIMELINE_SCRIPT.replace("__THEME__", theme))
+    slides = list(prs.slides)
+    assert len(slides) == 5
+
+    # Past dots in ink, current in the accent with a ring, future in the background colour (outlined)
+    road = slides[0]
+    dots = sorted(_dots(road), key=lambda s: s.left)
+    assert [str(d.fill.fore_color.rgb) for d in dots] == [ink, ink, "00C2DE", bg]
+    assert len(_ovals(road, 0.4)) == 1
+    assert _text_colour(road, "2025") == "00C2DE"
+    assert _text_colour(road, "A4") != ink                 # future label muted
+    assert _shape_with_text(road, "Src.  Roadmap subject to change.")
+
+    # Capped at 7; odd milestones put the label above the line
+    seven = slides[1]
+    assert len(_dots(seven)) == 7
+    assert not [s for s in seven.shapes if s.has_text_frame and s.text_frame.text == "M7"]
+    assert _shape_with_text(seven, "M1").top < _shape_with_text(seven, "Q1").top
+    assert _shape_with_text(seven, "M0").top > _shape_with_text(seven, "Q0").top
+    assert _shape_with_text(seven, "Plans may change.")
+    for s in seven.shapes:
+        if s.has_text_frame and s.text_frame.text.startswith(("M", "A fairly")):
+            assert (s.top + s.height) / _EMU <= 6.9 - 0.3
+
+    # Stage flow: capped at 4 stages, 3 arrows, title colour readable on the tile
+    flow = slides[2]
+    arrows = [s for s in flow.shapes if _prst(s) == "rightArrow"]
+    assert len(arrows) == 3
+    assert not [s for s in flow.shapes if s.has_text_frame and s.text_frame.text == "Dropped"]
+    assert _text_colour(flow, "Assess") == ("00C2DE" if theme == "corp_black" else ink)
+    assert _text_colour(flow, "Profile") == "00C2DE"
+    assert not [s for s in flow.shapes if s.shape_type == 13 and b"svgBlip" not in s._element.xml.encode()
+                and s.top / _EMU < 6]                    # missing image skipped
+    closing = _shape_with_text(flow, "Closing line.")
+    assert (closing.top + closing.height) / _EMU <= 6.9 - 0.3
+
+    # Empty input -> title-only slides
+    for s in slides[3:]:
+        assert not _dots(s)
+        assert not [x for x in s.shapes if _prst(x) == "rightArrow"]
