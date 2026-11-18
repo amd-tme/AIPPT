@@ -474,3 +474,75 @@ def test_timeline_and_stage_flow(tmp_path, theme, ink, bg):
     for s in slides[3:]:
         assert not _dots(s)
         assert not [x for x in s.shapes if _prst(x) == "rightArrow"]
+
+
+# ---------------------------------------------------------------------------
+# addEndnoteRef / addEndnotesSlide / opts.endnote
+# ---------------------------------------------------------------------------
+
+_ENDNOTE_SCRIPT = """\
+import { createDeck, addKpiTiles, addCompetitiveChart, addBulletSlide, addEndnoteRef, addEndnotesSlide }
+  from '../lib/pptxgenjs-helpers.mjs';
+const deck = await createDeck('themes/__THEME__.yaml');
+addKpiTiles(deck, 'K', [{ value: '1', label: 'a' }, { value: '2', label: 'b' }], 1, '',
+  { source: 'Src.', endnote: 'PERF-01' });
+addCompetitiveChart(deck, 'C', ['A', 'B'], [{ name: 'AMD', values: [2, 3], amd: true }, { name: 'X', values: [1, 2] }],
+  2, '', { endnote: ['PERF-02', 'PERF-03'] });
+const s = addBulletSlide(deck, 'B', ['x'], 3);
+addEndnoteRef(deck, s, 'See endnote PERF-04');
+addEndnoteRef(deck, s, '');
+addEndnotesSlide(deck, 'Endnotes', [{ id: 'PERF-01', text: 'Short note.' }, 'Bare note.'], 4);
+addEndnotesSlide(deck, null, Array.from({ length: 14 }, (_, i) => ({ id: `P${i}`, text: 'Long endnote text. '.repeat(14) })), 5);
+addEndnotesSlide(deck, 'Empty', [], 6);
+await deck.save(`${process.env.AIPPT_PREVIEW_OUT || 'output'}/endnote.pptx`);
+"""
+
+
+def _panels(slide):
+    # The endnotes panel: an empty full-content-width rectangle
+    return [s for s in slide.shapes if _prst(s) == "rect" and s.has_text_frame and not s.text_frame.text
+            and s.width / _EMU > 12]
+
+
+def _texts(slide):
+    return [s for s in slide.shapes if s.has_text_frame and s.text_frame.text]
+
+
+@pytest.mark.parametrize("theme", ["corp_black", "corp_white"])
+def test_endnotes(tmp_path, theme):
+    prs = _render(tmp_path, "endnote", _ENDNOTE_SCRIPT.replace("__THEME__", theme))
+    slides = list(prs.slides)
+    assert len(slides) == 6
+
+    # Pointer sits bottom-right on the source row, clear of the source text and above the footer
+    kpi = slides[0]
+    ref, src = _shape_with_text(kpi, "See endnote PERF-01"), _shape_with_text(kpi, "Src.")
+    assert ref.top == src.top
+    assert src.left + src.width <= ref.left
+    assert (ref.top + ref.height) / _EMU <= 6.9 + 0.01
+    assert ref.text_frame.paragraphs[0].alignment == 3        # right
+    # Several ids; works with no source line, and on older layouts
+    assert _shape_with_text(slides[1], "See endnotes PERF-02, PERF-03")
+    assert not [t for t in _texts(slides[1]) if "Data Source" in t.text_frame.text]
+    assert len([t for t in _texts(slides[2]) if t.text_frame.text.startswith("See endnote")]) == 1
+    assert _shape_with_text(slides[2], "See endnote PERF-04")
+
+    # Endnotes slide: bold id, muted text; panel shrinks for a short list
+    notes = slides[3]
+    body = next(t for t in _texts(notes) if "Short note." in t.text_frame.text)
+    first = body.text_frame.paragraphs[0].runs
+    assert first[0].text.strip() == "PERF-01" and first[0].font.bold
+    assert body.text_frame.paragraphs[1].text == "Bare note."
+    assert body.text_frame.paragraphs[0].runs[0].font.size.pt == 16
+    panels = _panels(notes)
+    assert len(panels) == 1 and panels[0].height / _EMU < 2
+    # Long list: two columns at a readable minimum, all inside the content area
+    long = [t for t in _texts(slides[4]) if t.text_frame.text.startswith("P")]
+    assert len(long) == 2
+    assert _shape_with_text(slides[4], "Endnotes")
+    for t in long:
+        assert t.text_frame.paragraphs[0].runs[0].font.size.pt >= 8
+        assert (t.top + t.height) / _EMU <= 6.9
+    # Empty input -> title-only slide
+    assert not _panels(slides[5])
+    assert _panels(slides[4])
