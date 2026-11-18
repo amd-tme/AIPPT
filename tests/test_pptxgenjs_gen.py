@@ -214,6 +214,60 @@ def test_prompt_helper_signatures_match_library():
             f"{name}: prompt says ({', '.join(params)}), library has ({', '.join(actual[name])})")
 
 
+def test_prompt_lists_every_brand_recipe():
+    """Each recipe helper is documented and has a when-to-use row named by helper."""
+    import re
+    from aippt import recipes
+    from aippt.pptxgenjs_gen import _SYSTEM_PROMPT
+
+    for helper in recipes.helpers().values():
+        assert re.search(rf"^{helper}\(", _SYSTEM_PROMPT, re.M), helper
+        assert re.search(rf"^\|.*\| {helper} \|$", _SYSTEM_PROMPT, re.M), helper
+    assert "{recipes}" not in _SYSTEM_PROMPT and "{recipe_rows}" not in _SYSTEM_PROMPT
+    # Rows point at helpers, not recipe / directive ids
+    assert "use hero_number" not in _SYSTEM_PROMPT and "(use addHeroNumber)" in _SYSTEM_PROMPT
+
+
+_ICON_OUTLINE = """\
+# Deck
+Sub
+
+# Why Instinct
+- **Security** — secure by design
+- **Performance** — leadership throughput
+- **Open software** — ROCm is open source
+
+# Key metrics
+- **Throughput** — 1.3x — more tokens per GPU
+- **TCO** — 40% — lower cost per token
+- **Bandwidth** — 2x — more HBM bandwidth
+
+# Endnotes
+- **PERF-01** — Testing by AMD.
+- **PERF-02** — Training throughput.
+- **PERF-03** — vLLM, FP8.
+"""
+
+
+def test_prompt_lists_icons_for_feature_slides(tmp_path):
+    from aippt import icons
+    client = _make_client(_GOOD_SCRIPT)
+    generate_script(_ICON_OUTLINE, str(tmp_path / "d.mjs"), client)
+    prompt = client.generate_text.call_args.kwargs["prompt"]
+    hints = prompt.split("Brand icons", 1)[1].split("Output ONLY", 1)[0]
+    ids = [line.split(" — ")[0] for line in hints.strip().splitlines()[1:]]
+    assert "security" in ids
+    assert all(icons.get(i) for i in ids)
+    # Only the feature slide feeds the list — not metrics or endnotes
+    assert "bandwidth" not in ids
+
+
+def test_prompt_has_no_icons_without_feature_items(tmp_path):
+    client = _make_client(_GOOD_SCRIPT)
+    generate_script(_OUTLINE, str(tmp_path / "d.mjs"), client)
+    assert "Brand icons" not in client.generate_text.call_args.kwargs["prompt"]
+
+
 # ---------------------------------------------------------------------------
 # Retry context, truncation, render repair
 # ---------------------------------------------------------------------------

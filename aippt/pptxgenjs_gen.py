@@ -13,6 +13,7 @@ import re
 from pathlib import Path
 from typing import Callable, Optional
 
+from aippt import icons, recipes as _recipes
 from aippt.pptxgenjs_validate import (
     _CALL_START, _helper_signatures, _scan_until, _skip_comment, _skip_quoted,
     _skip_template, validate_script,
@@ -85,6 +86,54 @@ const outDir = process.env.AIPPT_PREVIEW_OUT || 'output';
 await deck.save(`${outDir}/faster-inference-on-mi300x.pptx`);
 """
 
+# Brand recipe helpers (aippt/brand/recipes.json). The when-to-use rows in the
+# layout table are built from recipes.json so every engine shares one rule set.
+_RECIPE_HELPERS = """\\
+Brand recipes (AMD brand patterns, any theme). opts on these take source (footnote text) and
+endnote ('PERF-01' or a list) from the outline's `Source:` / `Endnote:` lines; never invent either:
+addIconFeatureGrid(deck, title, items, slideNum, notes, opts?)
+  — items=[{icon, label, desc?, highlight?}] × 3-6; icon = an id from "Brand icons" in the
+    request (never invent one; use addCardGrid if an item has no fitting icon); opts={takeaway?}
+addKpiTiles(deck, title, tiles, slideNum, notes, opts?)
+  — tiles=[{value, label, context?, highlight?}] × 2-4 (context = 'vs. prior gen'; highlight one at most);
+    opts={takeaway?, source?, endnote?}
+addHeroNumber(deck, value, label, slideNum, notes, opts?)
+  — one big number; opts={title?, context?, source?, endnote?}
+addMetricTable(deck, title, rows, slideNum, notes, opts?)
+  — rows=[{label, value, why?}] × ≤6 (value = '1.3x'); opts={header?: [3 headings], takeaway?, source?, endnote?}
+addSpecTable(deck, title, header, rows, slideNum, notes, opts?)
+  — header=['Spec', 'MI355X', 'B200'], rows=string[][] (≤12, 1-3 products); keep every cell;
+    opts={takeaway?, source?, endnote?}
+addCompetitiveChart(deck, title, categories, series, slideNum, notes, opts?)
+  — categories=string[] (≤8), series=[{name, values: number[]}] × 1-4 (plain numbers from the table);
+    opts={takeaway?, metric?, date?, lowerIsBetter?, valueFormat?, source?, endnote?}
+    (metric = 'Tokens/s (higher is better)'; lowerIsBetter for latency/time; valueFormat '#,##0.0' for decimals)
+addCheckMatrix(deck, title, header, rows, slideNum, notes, opts?)
+  — header=['Capability', 'MI355X', 'H200'], rows=[{label, values: string[], group?}] × ≤14
+    (values '✓' / '✗' / 'partial'; a table row with only its first cell is the group of the rows below it);
+    opts={takeaway?, source?, endnote?}
+addTimeline(deck, title, milestones, slideNum, notes, opts?)
+  — milestones=[{date, label, desc?, current?}] × 3-7 ('(now)' in the outline = current: true);
+    opts={takeaway?, caveat?, source?, endnote?} (caveat: true on a roadmap of future items)
+addStageFlow(deck, title, stages, slideNum, notes, opts?)
+  — stages=[{title, subhead?, bullets: string[]}] × 3-4; opts={takeaway?, closing?, source?, endnote?}
+    (closing = the slide's `> ` line)
+addEndnotesSlide(deck, title, endnotes, slideNum, notes)
+  — endnotes=[{id, text}] — the outline's Endnotes slide, every note kept"""
+
+
+# recipes.json names other layouts by directive id; this prompt names helpers.
+_LAYOUT_NAMES = {**_recipes.helpers(), 'roadmap': 'addRoadmapSlide',
+                 'numbered': 'addProcessFlow', 'disclaimer': 'addDisclaimerSlide'}
+
+
+def _recipe_rows() -> str:
+    def helper_names(text):
+        return re.sub(r"\buse (\w+)", lambda m: "use " + _LAYOUT_NAMES.get(m.group(1), m.group(1)), text)
+    return "\n".join(f"| {r['when']} (not {helper_names(r['when_not'])}) | {r['helper']} |"
+                     for r in _recipes.recipes())
+
+
 _SYSTEM_PROMPT = """\
 You are an expert slides-as-code generator for AIPPT. Your job is to read a
 markdown presentation outline and produce a complete, runnable pptxgenjs .mjs
@@ -155,6 +204,8 @@ addFeatureListSlide(deck, title, tagline, features, slideNum, notes, opts?)
   — product-branded header (lockup | title + accent tagline) with features=[{heading, lines: string[]}] × 2-4;
     opts={product?, image?}
 
+{recipes}
+
 Optional: import { masterNameFor } from '../lib/pptxgenjs-masters.mjs'
 
 Note on `steps` (addProcessFlow): unlike `cards` (addCardGrid), which takes an
@@ -222,6 +273,7 @@ Map each slide's content to the best layout:
 | Content Signal | Layout |
 |---|---|
 | First heading in outline | a title slide — see "Choosing the title slide" |
+{recipe_rows}
 | Section heading (no children, corp-match) | SKIP — do not render |
 | 2-4 named items / features / use cases | addCardGrid |
 | Prominent number or statistic | addStatCallout |
@@ -282,7 +334,10 @@ Variety Rule: NEVER use the same layout on two consecutive slides.
 Substitution: if you would use addBulletSlide twice in a row, use addCardGrid, addTwoColumn, addThreeColContent, or addProcessFlow instead.
 Preference: addBulletSlide is the LAST RESORT — always prefer richer layouts when the content fits.
 Gallery preference: for 2 images use addTwoImageGallery; for 3 use addThreeImageGallery; for 4+ use addFourImageGallery.
-Takeaways: when the outline gives a `> ` line on a table or roadmap slide, pass it as opts.takeaway. On any other layout that can't show it, put it first in the speaker notes — never drop it.
+Brand recipes: the recipe rows near the top of the table win over the general rows below them
+(addStatCallout, addTableSlide, addRoadmapSlide, addProcessFlow, addCardGrid) when the content
+fits the recipe; keep the general row when it doesn't. They work on every theme and with any title slide.
+Takeaways: when the outline gives a `> ` line on a table, roadmap or recipe slide, pass it as opts.takeaway (every recipe except addHeroNumber and addEndnotesSlide takes one). On any other layout that can't show it, put it first in the speaker notes — never drop it.
 
 ## Speaker Notes Metadata
 
@@ -298,8 +353,9 @@ Add this block to the notes string of every slide:
 
 Respond with ONLY the .mjs script inside a ```javascript code fence and nothing else.
 Do not include any explanation, preamble, or text outside the code fence.
-""".replace("{example}", "## Complete example (correct calls, backtick text)\n\n```javascript\n"
-            + _EXAMPLE_SCRIPT + "```")
+""".replace("{recipes}", _RECIPE_HELPERS).replace("{recipe_rows}", _recipe_rows()).replace(
+    "{example}", "## Complete example (correct calls, backtick text)\n\n```javascript\n"
+    + _EXAMPLE_SCRIPT + "```")
 
 
 # ---------------------------------------------------------------------------
@@ -340,12 +396,40 @@ def _with_previous(base_prompt: str, script: str, intro: str, problems: list[str
     )
 
 
+# "- **Label** — description" items: the ones an icon grid can show.
+_LABELLED_ITEM_RE = re.compile(r"^\s*[-*]\s+\*\*(.+?)\*\*\s*(?:[—–:-]\s*(.*))?$", re.M)
+_ENDNOTE_LABEL_RE = re.compile(r"^[A-Z]+-?\d+$")
+_MAX_ICON_HINTS = 40
+
+
+def _icon_hints(outline_text: str) -> str:
+    """Brand icons that fit the labelled items of slides that could be icon grids."""
+    ids: list[str] = []
+    items = []
+    for slide in re.split(r"^# ", outline_text, flags=re.M):
+        # Endnote ids (PERF-01) and value-led metrics (1.3x — …) are not icon items.
+        found = [(label, desc) for label, desc in _LABELLED_ITEM_RE.findall(slide)
+                 if not _ENDNOTE_LABEL_RE.match(label) and not desc[:1].isdigit()]
+        if 3 <= len(found) <= 6:
+            items += found
+    for label, desc in items:
+        exact = icons.resolve(label)
+        for icon_id in ([exact] if exact else []) + icons.search(f"{label} {desc}", k=2):
+            if icon_id not in ids:
+                ids.append(icon_id)
+    if not ids:
+        return ""
+    return ("Brand icons (the only icon ids addIconFeatureGrid may use; id — what it shows):\n"
+            + icons.catalogue_lines(ids[:_MAX_ICON_HINTS]) + "\n\n")
+
+
 def _base_prompt(outline_text: str, theme: str) -> str:
     return (
         f"Generate a pptxgenjs .mjs script for the following presentation outline.\n"
         f"Theme: {theme}\n\n"
         f"---\n{outline_text.strip()}\n---\n\n"
-        "Output ONLY the script inside a ```javascript code fence."
+        + _icon_hints(outline_text)
+        + "Output ONLY the script inside a ```javascript code fence."
     )
 
 
