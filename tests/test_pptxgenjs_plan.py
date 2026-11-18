@@ -174,3 +174,9 @@ def test_generate_uses_recipe_plan(tmp_path, theme):
     llm = FakeLLM(_plan('title_alt', 'kpi_tiles', 'spec_table', 'icon_grid'))
     script = generate_script(RECIPE_OUTLINE, str(tmp_path / 'deck.mjs'), llm_client=llm, theme=theme)
     assert _helpers(script)[:4] == ['addTitleSlide', 'addKpiTiles', 'addSpecTable', 'addIconFeatureGrid']
+
+
+def test_prompt_names_recipes_that_show_the_takeaway():
+    line = next(l for l in build_prompt(plan_slides(OUTLINE)).splitlines() if 'takeaway line' in l)
+    assert 'kpi_tiles' in line and 'stage_flow' in line
+    assert 'hero_number' not in line and 'endnotes' not in line

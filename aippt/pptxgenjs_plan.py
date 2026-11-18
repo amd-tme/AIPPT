@@ -15,6 +15,7 @@ from typing import Callable, Dict, List, Optional, Tuple
 
 from aippt import recipes as _recipes
 from aippt.pptxgenjs_direct import (
+    _SHOWS_QUOTE,
     ScriptGenerationError,
     generate_script as _direct_generate_script,
     plan_slides,
@@ -48,6 +49,8 @@ _LAYOUTS = {
 _LAYOUTS.update({r['id']: f"{r['when']}; not for {r['when_not']} ({r['capacity']})"
                  for r in _recipes.recipes()})
 _LAYOUTS['auto'] = 'let the engine decide (cards, stats, code and images are detected automatically)'
+# Recipes that draw the "> " takeaway themselves
+_TAKEAWAY_RECIPES = [r['id'] for r in _recipes.recipes() if r['helper'] in _SHOWS_QUOTE]
 # Recipes that draw a markdown table — dropped on a slide without one
 _NEEDS_TABLE = {'spec_table', 'check_matrix', 'competitive_chart'}
 _BRAND_TITLES = ('hero_title', 'product_title')
@@ -73,6 +76,7 @@ Rules:
 - Slide 0 is the deck title: choose title_alt, hero_title or product_title.
 - BRAND ONLY layouts are allowed only when slide 0 is hero_title or product_title.
 - spec_table, check_matrix and competitive_chart need a markdown table on the slide.
+- {', '.join(_TAKEAWAY_RECIPES)} also show the > takeaway line; prefer one of them over takeaway when the content fits it.
 - Use "auto" when unsure; the engine detects cards, stats, code and images itself.
 - You only choose layouts; the slide text is used exactly as written.
 
