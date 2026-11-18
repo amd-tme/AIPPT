@@ -324,3 +324,62 @@ def test_competitive_chart(tmp_path, theme):
 def _chart_bottom(slide):
     frame = next(s for s in slide.shapes if s.has_chart)
     return frame.top + frame.height
+
+
+# ---------------------------------------------------------------------------
+# addCheckMatrix
+# ---------------------------------------------------------------------------
+
+_MATRIX_SCRIPT = """\
+import { createDeck, addCheckMatrix } from '../lib/pptxgenjs-helpers.mjs';
+const deck = await createDeck('themes/__THEME__.yaml');
+addCheckMatrix(deck, 'Matrix', ['Capability', 'AMD Instinct MI355X', 'Rival'], [
+  { label: 'FP8', values: ['check', 'yes'], group: 'Precision' },
+  { label: 'FP4', values: ['check', 'partial'], group: 'Precision' },
+  { label: 'Open stack', values: ['✓', 'none'], group: 'Software' },
+  { label: 'Price', values: ['$$', '$$$'], group: 'Software' },
+], 1, '', { source: 'Illustrative' });
+const many = Array.from({ length: 20 }, (_, i) => ({ label: `F${i}`, values: ['check', 'no'], group: `G${i % 4}` }));
+addCheckMatrix(deck, 'Overflow', ['F', 'MI355X', 'X'], many, 2);
+addCheckMatrix(deck, 'No highlight', ['F', 'A', 'B'], [{ label: 'x', values: ['check', 'check'] }], 3, '', { highlight: false });
+addCheckMatrix(deck, 'Empty', [], [], 4);
+await deck.save(`${process.env.AIPPT_PREVIEW_OUT || 'output'}/matrix.pptx`);
+"""
+
+
+@pytest.mark.parametrize("theme,ink,tint", [("corp_black", "FFFFFF", "00313"), ("corp_white", "000000", "D9F6")])
+def test_check_matrix(tmp_path, theme, ink, tint):
+    prs = _render(tmp_path, "matrix", _MATRIX_SCRIPT.replace("__THEME__", theme))
+    slides = list(prs.slides)
+    assert len(slides) == 4
+
+    tbl = _table(slides[0])
+    text = [[c.text for c in r.cells] for r in tbl.rows]
+    # Header, then a group row each time the group changes
+    assert [r[0] for r in text] == ["Capability", "Precision", "FP8", "FP4", "Software", "Open stack", "Price"]
+    assert text[2][1:] == ["✓", "✓"]
+    assert text[3][1:] == ["✓", "Partial"]
+    assert text[5][1:] == ["✓", "✗"]
+    assert text[6][1:] == ["$$", "$$$"]          # free text passes through
+    # Group rows span the table
+    assert tbl.cell(1, 0).span_width == 3
+    # AMD column: accent header, tinted body, accent ticks; rival ticks in ink, ✗ muted
+    assert _cell_fill(tbl.cell(0, 1)) == "00C2DE"
+    assert _cell_fill(tbl.cell(2, 1)).startswith(tint)
+    colour = lambda r, c: str(tbl.cell(r, c).text_frame.paragraphs[0].runs[0].font.color.rgb)
+    assert colour(2, 1) == "00C2DE"
+    assert colour(2, 2) == ink
+    assert colour(5, 2) not in ("00C2DE", ink, "FF0000")
+    assert colour(3, 2) == colour(5, 2)            # Partial and ✗ share the muted grey
+
+    # Long input is capped at 14 features and still fits above the footer
+    frame = next(s for s in slides[1].shapes if s.has_table)
+    assert (frame.top + frame.height) / 914400 <= 6.9 + 0.01
+    assert sum(1 for r in frame.table.rows if r.cells[0].text.startswith("F")) == 15  # header "F" + 14
+
+    # highlight: false -> no accent header, ticks fall back to the accent
+    tbl3 = _table(slides[2])
+    assert _cell_fill(tbl3.cell(0, 1)) != "00C2DE"
+    assert str(tbl3.cell(1, 1).text_frame.paragraphs[0].runs[0].font.color.rgb) == "00C2DE"
+    # Empty input -> title-only slide
+    assert not [s for s in slides[3].shapes if s.has_table]

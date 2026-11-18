@@ -95,7 +95,7 @@ _HELPER_FUNCTIONS: frozenset[str] = frozenset({
     "addIconFeatureGrid", "addIconRowsSlide", "addImageBulletsSlide", "addKpiTiles", "addImageSlide",
     "addLogoGridSlide", "addMetricTable", "addPictureCaption", "addProcessFlow", "addProductTitleSlide",
     "addProofPointSlide", "addQuoteSlide",
-    "addRoadmapSlide", "addSectionContent", "addSectionDivider", "addSectionIntroSlide", "addSpecTable", "addCompetitiveChart",
+    "addRoadmapSlide", "addSectionContent", "addSectionDivider", "addSectionIntroSlide", "addSpecTable", "addCompetitiveChart", "addCheckMatrix",
     "addSplitImageContent", "addStatementSlide",
     "addStatCallout", "addTableSlide", "addTakeawaySlide", "addThreeColContent", "addThreeColImageText",
     "addThreeImageGallery", "addTierDivider", "addTitleAlt", "addTitleSlide", "addTitleWithImage",
