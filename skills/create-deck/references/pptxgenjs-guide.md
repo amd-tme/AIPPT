@@ -111,6 +111,8 @@ const deck = createDeck('themes/amd.yaml');
 ```
 
 - `opts.useSlideMaster` — render on the theme's slide masters (default `false`)
+- `opts.userAssets` — `{ icons: { "my-…": path }, cobrand: { path, width, height } | null }`. Defaults to `user-assets.json` next to the running script (the web app writes it from the user's **My icons & logos** library), else none. `my-*` icon ids then work in `loadIcons` and the brand helpers; a `cobrand` logo is drawn on the title-slide variants and `addClosingSlide`.
+- Themes: `amd` (default), `instinct`, `default`, and the AMD corporate `corp_black` / `corp_white`.
 
 **Theme colors available via `deck.theme.colors`:**
 
@@ -578,6 +580,90 @@ Factory function returning a fresh shadow object. **Never reuse shadow objects**
 
 ```javascript
 slide.addShape(pptx.ShapeType.rect, { shadow: cardShadow(deck.theme) });
+```
+
+## Brand layouts (AMD asset bank)
+
+Content layouts from the AMD brand reference. Each one is a recipe in
+`aippt/brand/recipes.json` (when to use it, when not, capacity); the No-LLM web
+engine picks them by itself on `corp_black` / `corp_white`. They work on every
+theme. Icons sit on the slide with no circle or card behind them.
+
+Common options: `opts.takeaway` (accent line at the bottom), `opts.source`
+(small `Source: …` line), `opts.endnote` (id or ids → "See endnote …" pointer,
+same as `addEndnoteRef`).
+
+### loadIcons(ids, color?)
+
+Loads icons from the AMD icon bank (`themes/assets/icons/amd/`, 239 SVGs) or
+the user's `my-*` icons, recoloured to `color` (default `FFFFFF`; use `000000`
+on light themes). Returns `{ id: dataUri }` for `iconImg` / `iconImages`;
+unknown ids are skipped with a warning. Find ids with
+`venv/bin/python -c "from aippt import icons; print(icons.search('secure data'))"`.
+The grid and tile helpers also take an id directly as `icon`.
+
+### addIconFeatureGrid(deck, title, items, slideNum, notes?, opts?)
+
+- 3-6 `{ icon?, label, desc?, highlight? }` — icon over a short bold label and one line
+- Up to 4 in a row; 5 as 3 + 2; 6 as 3 × 2
+
+### addKpiTiles(deck, title, tiles, slideNum, notes?, opts?)
+
+- 2-4 `{ value, label, context?, icon?, highlight? }` — flat tiles; highlight one value, not all
+
+### addHeroNumber(deck, value, label, slideNum, notes?, opts?)
+
+- One very large statistic + label; `opts.title`, `opts.context` (baseline line)
+
+### addMetricTable(deck, title, rows, slideNum, notes?, opts?)
+
+- Up to 6 `{ label, value, why? }` — grey metric, large accent value (`1.3x`), "why it matters"
+- `opts.header` — three headings, e.g. `['Metric', 'MI355X vs. B200', 'Why it matters']`; `opts.image` — product image on the left
+
+### addSpecTable(deck, title, header, rows, slideNum, notes?, opts?)
+
+- `header` — `['Spec', 'MI355X', 'B200']` (1-3 products); `rows` — up to 12 string arrays
+- AMD column highlighted (first AMD-looking header, or `opts.highlight` index; `false` for none)
+
+### addCompetitiveChart(deck, title, categories, series, slideNum, notes?, opts?)
+
+- Native, editable column chart: up to 8 `categories`, 1-4 `{ name, values, amd? }` series
+- AMD series in the accent colour, competitors grey, values on the bars, `1.3×` ratio labels over the AMD bars
+- `opts.ratios` (`false` or one label per category), `opts.lowerIsBetter`, `opts.metric` (unit note, e.g. `'Tokens/s (higher is better)'`), `opts.date`, `opts.valueFormat` (Excel format; decimals are kept by default)
+
+### addCheckMatrix(deck, title, header, rows, slideNum, notes?, opts?)
+
+- `header` — `['Capability', 'AMD Instinct MI355X', 'H200']` (1-4 products)
+- Up to 14 `{ label, values, group? }`; values `check`/`yes`/`✓`, `partial`/`◐`, `none`/`no`/`✗`, or text; `group` starts a section
+- `opts.highlight` as in `addSpecTable`
+
+### addTimeline(deck, title, milestones, slideNum, notes?, opts?)
+
+- 3-7 `{ date, label, desc?, current? }` — dots on a rule, current one ringed; 6-7 alternate above/below
+- `opts.caveat` — `true` for "Roadmap subject to change.", or custom text
+
+### addStageFlow(deck, title, stages, slideNum, notes?, opts?)
+
+- 3-4 `{ title, image?, subhead?, bullets? }` — header tiles joined by arrows; `opts.closing` line at the bottom
+
+### addEndnotesSlide(deck, title, endnotes, slideNum, notes?)
+
+- `endnotes` — strings or `{ id, text }`; sized to fit (16pt down to 8pt), two columns when that keeps it larger
+
+### addEndnoteRef(deck, slide, ref)
+
+- "See endnote PERF-01" at the bottom right of any slide; `ref` — id, ids, or full text starting with "See"
+
+```javascript
+addIconFeatureGrid(deck, 'Why MI355X', [
+  { icon: 'gpu', label: 'Memory', desc: '288 GB HBM3E per GPU' },
+  { icon: 'security', label: 'Security', desc: 'Protect data at every layer' },
+  { icon: 'my-partner-cloud', label: 'Partner Cloud', desc: 'Burst capacity on demand' },  // user icon, needs user-assets.json
+], 2);
+addCompetitiveChart(deck, 'Inference throughput', ['Llama 3.1 70B', 'DeepSeek R1'],
+  [{ name: 'MI355X', values: [1.3, 1.2], amd: true }, { name: 'B200', values: [1.0, 1.0] }],
+  3, '', { metric: 'Relative throughput (higher is better)', endnote: 'PERF-01' });
+addEndnotesSlide(deck, 'Endnotes', [{ id: 'PERF-01', text: 'Testing by AMD …' }], 4);
 ```
 
 ## Icon Integration

@@ -180,7 +180,12 @@ new deck from a markdown outline. The panel supports:
 - A textarea for pasting markdown, or an **Upload outline file** button for
   ``.md`` uploads.
 - An **Attach images** button for embedding local images referenced by the
-  outline (``image/*``, multiple).
+  outline (``image/*``, multiple). Uploads must be PNG, JPG, GIF or SVG, up
+  to 10 MB each (SVGs are cleaned of scripts and external links). Each job's
+  images are saved under ``uploads/assets/jobs/<job>/``, and every
+  ``IMAGE:`` line naming an uploaded file is rewritten to that file's
+  absolute path, so the saved outline shows server paths in place of the
+  names you wrote.
 - **Enhanced mode** (checked by default) -- LLM picks layouts and writes
   speaker notes. Toggling off creates a deck from the outline as-is.
 - **Model** -- pick a model for enhanced mode (populated from
@@ -193,8 +198,33 @@ new deck from a markdown outline. The panel supports:
   - **pptxgenjs** (default, *rich visuals*) -- the LLM writes a validated
     ``.mjs`` script; the server executes it via Node.js and the result is a
     full-fidelity PPTX with the AMD corporate theme applied automatically.
+  - **AI Fast** (*quick, may be messy*) -- one LLM call picks a layout for
+    each slide; the outline text is used as written and the script is built
+    without further LLM calls.
+  - **AMD templates** (*branded layouts*) -- python-pptx on the AMD
+    corporate template.
   - **python-pptx** (*template*) -- original pipeline: the LLM fills a
     ``.pptx`` template slide by slide.
+  - **No-LLM** (*free, basic*) -- rule-based layouts, no AI calls.
+
+- **Theme** (pptxgenjs, AI Fast and No-LLM) -- ``AMD (default)``,
+  ``AMD Corporate Black`` or ``AMD Corporate White``. On the two corporate
+  themes the No-LLM engine also picks brand layouts (icon grids, KPI tiles,
+  charts, timelines, ...) by itself where the outline fits one; the AI
+  engines can use them on any theme. See *Brand layouts* in the outline
+  format reference.
+- **Co-brand logo** (same engines) -- ``None`` by default, or one of your
+  uploaded logos. The logo goes on the title slide and the closing slide
+  (AMD wordmark | divider | partner logo); no other slide changes. Sent as
+  the ``cobrand_logo`` form field (the logo's asset id).
+- **My icons & logos** -- opens your personal asset library (keyed by your
+  NTID; set it top right first). Upload icons (SVG or PNG, with a name and
+  optional tags) and logos (SVG, PNG or JPG), see them as thumbnails and
+  delete them. Your icons are matched to slides by name and tags, the same
+  way as the AMD icon bank, and win a tie with it; dark parts of an SVG
+  icon take the slide's icon colour. Uploads and deletes are hidden in
+  view-only mode. A dark logo on a dark theme has no backing plate, so
+  upload a light version for ``AMD Corporate Black``.
 
 - **Auto-refine after generation** (checked by default, pptxgenjs only) --
   after the deck is cataloged, a bounded 1–2 round review loop runs
@@ -456,3 +486,29 @@ Admin actions emit an audit log line that records both the claimed
 ``X-AIPPT-NTID`` and a best-effort identity parsed from the Bearer JWT
 (unverified -- audit only). See :doc:`configuration` for the threat
 model.
+
+Asset Library Endpoints
+^^^^^^^^^^^^^^^^^^^^^^^
+
+The **My icons & logos** dialog uses these. All need the ``X-AIPPT-NTID``
+header (400 without it) and only ever see that NTID's own files under
+``uploads/assets/users/<ntid>/`` (a ``manifest.json`` plus one file per
+asset; synced to object storage in ``s3`` mode).
+
+- ``GET /api/assets`` -- ``{assets: [{id, kind, name, tags, file, created}], max_assets}``.
+- ``POST /api/assets`` -- multipart ``file``, ``kind`` (``icon`` or
+  ``logo``), optional ``name`` (default: the file name) and ``tags``
+  (icons only, comma separated). Icons: SVG or PNG; logos: SVG, PNG or JPG.
+  SVGs are cleaned, rasters must really be the format their extension says
+  and at most 5 MB, and a library holds at most 200 assets. 403 in
+  view-only mode, 400 with a message for a bad upload.
+- ``GET /api/assets/{id}/file`` -- the file, served with a locked-down
+  ``Content-Security-Policy`` and ``nosniff``.
+- ``DELETE /api/assets/{id}`` -- ``{deleted: id}``; 404 for an id that is
+  not yours, 403 in view-only mode.
+
+When a pptxgenjs deck is created with an NTID, the user's icons (as
+``my-<name>`` ids) and the chosen co-brand logo are written to
+``user-assets.json`` next to the deck script; ``createDeck()`` reads it, so
+editing the script in Live Preview keeps them. **Regenerate** rebuilds
+through the python-pptx pipeline and does not use them.

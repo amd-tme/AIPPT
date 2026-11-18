@@ -216,6 +216,12 @@ aippt/
   export.py         # CSV metadata export
   remix.py          # Manifest generation, slide copy, deck assembly
   mcp.py            # MCP client infrastructure (FastMCP wrapper)
+  icons.py          # AMD icon bank search (search, best_match, resolve) + user icons
+  recipes.py        # Loads brand/recipes.json (brand layout recipes)
+  user_assets.py    # Per-user icon/logo library (by NTID) + user-assets.json sidecar
+  svg_clean.py      # Allowlist SVG cleaner for uploaded images and icons
+  brand/
+    recipes.json    # When to use each brand layout helper (icon grid … endnotes)
   schema.sql        # SQLite schema definition
   web/
     app.py          # FastAPI app factory
@@ -226,7 +232,10 @@ aippt/
 themes/
   amd.yaml            # AMD corporate theme (colors, fonts, logo)
   default.yaml        # Clean dark theme, no branding
+  corp_black.yaml     # AMD corporate template, black (pptxgenjs engines, opt-in)
+  corp_white.yaml     # AMD corporate template, white (pptxgenjs engines, opt-in)
   assets/
+    icons/amd/        # 239 AMD brand icons (SVG) + manifest.json
     amd-logo.jpg      # AMD logo graphic
     amd-wordmark.png  # AMD text wordmark
 ```
@@ -277,6 +286,8 @@ IMAGE: images/diagram.png
 
 - **`LAYOUT: <type>`**: Sets the layout (`bullet`, `two_column`, `numbered`, `basic`, `diagram`). Overrides LLM suggestion in `--enhance` mode.
 - **`IMAGE: <path>`**: Embeds an image file. Path resolved relative to the outline file. Image takes full content area; text moves to speaker notes.
+  In the web UI, images attached on the create form are saved under `uploads/assets/jobs/<job>/` and matching `IMAGE:` lines are rewritten to those absolute paths.
+- The pptxgenjs engines also take brand `LAYOUT:` values (`icon_grid`, `kpi_tiles`, `hero_number`, `metric_table`, `spec_table`, `competitive_chart`, `check_matrix`, `timeline`, `stage_flow`, `endnotes`) — see `skills/create-outline/references/outline-format-reference.md`.
 - Directives are stripped from content before rendering (not visible on slides).
 - Case-sensitive (uppercase). First occurrence wins if duplicated.
 - Parsed by `_extract_directives()` in `parser.py`, honored by `_add_slide()` in `cli.py`.
