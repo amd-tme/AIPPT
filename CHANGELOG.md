@@ -175,6 +175,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `IMAGE:` lines are rewritten to their absolute paths (PNG, JPG, GIF, SVG; 10 MB
   max). Uploaded SVGs are cleaned (`aippt.svg_clean`: scripts, event handlers
   and external references removed) before use.
+- **Attached images were stretched to fill their box.** pptxgenjs `contain`
+  sizing needs the picture's real size, which the helpers never passed. The
+  helpers now read it (`imageSize`) and fit or crop each image without
+  distortion. Uploaded phone photos are turned upright (EXIF), CMYK JPEGs
+  become RGB and images over 4000 px are scaled down (`aippt.raster`); PNG
+  files must really be PNG, and so on. The PNG copy of an SVG for older viewers
+  is drawn at 200 px per inch of its size on the slide instead of 512 px.
 - **Competitive chart labels dropped decimals** (1.3 shown as 1). The value
   format now keeps the decimals the data has.
 - **Thumbnail invalidation never fired for script-origin decks.** Real chat

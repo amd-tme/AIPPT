@@ -1836,8 +1836,10 @@ def _user_deck_assets(request: Request, ntid: str, cobrand_id: str):
 
 
 def _check_image_uploads(image_data):
-    """Return ``(images, error)``: the uploads ready to save (SVGs cleaned),
-    or a 400 message for the first unusable one."""
+    """Return ``(images, error)``: the uploads ready to save (SVGs cleaned,
+    rasters checked and turned upright), or a 400 message for the first
+    unusable one."""
+    from aippt import raster
     from aippt.svg_clean import SvgError, clean_svg
 
     checked = []
@@ -1851,6 +1853,11 @@ def _check_image_uploads(image_data):
                 data = clean_svg(data)
             except SvgError as exc:
                 return [], f"{filename}: {exc}"
+        else:
+            try:
+                data = raster.prepare(filename, data)
+            except raster.RasterError as exc:
+                return [], str(exc)
         checked.append((filename, data))
     return checked, None
 

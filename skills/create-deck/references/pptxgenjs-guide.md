@@ -387,7 +387,8 @@ Full-image slide. Image fills the content area with aspect ratio preserved.
 
 - `imagePath` — File path string or base64 data URI (prefix `"image/png;base64,..."`)
 - `notes` — Optional speaker notes string
-- Image uses `sizing: { type: 'contain' }` — fits within CONTENT_W × CONTENT_H without distortion
+- The image's own size is read from the file (PNG, JPEG, GIF, SVG), so it fits within CONTENT_W × CONTENT_H, centred, without distortion; a small raster is never enlarged past 72 px per inch
+- Calling `slide.addImage` yourself? pptxgenjs `sizing: { type: 'contain' }` needs the image's real w/h; passing the box size stretches the picture. Use `imageSize(path)` (exported) to get them
 - Data URIs (starting with `"image/"`) are passed as `data:` to pptxgenjs
 - Missing files show a gray placeholder with `[Image: <path>]` text
 

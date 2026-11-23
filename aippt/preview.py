@@ -71,8 +71,15 @@ def _tail(text: str, lines: int = 30) -> str:
 # support, the svgBlip extension inside it is the SVG itself.
 _SVG_PIC_RE = re.compile(r'<a:blip r:embed="(rId\d+)"[^>]*>(?:(?!</a:blip>).)*?'
                          r'<asvg:svgBlip [^>]*r:embed="(rId\d+)"', re.DOTALL)
+_PIC_RE = re.compile(r'<p:pic>.*?</p:pic>', re.DOTALL)
+_PIC_WIDTH_RE = re.compile(r'<a:ext cx="(\d+)"')
 _REL_RE = re.compile(r'<Relationship [^>]*?Id="(rId\d+)"[^>]*?Target="([^"]+)"')
 _MAX_SVG_BYTES = 2_000_000
+# The PNG is drawn at this many pixels per inch of the picture's width on the
+# slide, so it stays sharp at full screen; small icons get at least the minimum
+_FALLBACK_PPI = 200
+_FALLBACK_MIN_PX, _FALLBACK_MAX_PX = 256, 2400
+_EMU_PER_INCH = 914400
 
 
 def _no_fetch(url, *args, **kwargs):
@@ -104,15 +111,22 @@ def add_svg_fallbacks(pptx_path: str) -> int:
             continue
         rels_name = posixpath.join(posixpath.dirname(name), "_rels", posixpath.basename(name) + ".rels")
         targets = dict(_REL_RE.findall(files.get(rels_name, b"").decode("utf-8")))
-        for png_rid, svg_rid in _SVG_PIC_RE.findall(data.decode("utf-8")):
+        for pic in _PIC_RE.findall(data.decode("utf-8")):
+            found = _SVG_PIC_RE.search(pic)
+            if not found:
+                continue
+            png_rid, svg_rid = found.groups()
             png = posixpath.normpath(posixpath.join(posixpath.dirname(name), targets.get(png_rid, "")))
             svg = posixpath.normpath(posixpath.join(posixpath.dirname(name), targets.get(svg_rid, "")))
             if png in replaced or not png.endswith(".png") or svg not in files:
                 continue
             if len(files[svg]) > _MAX_SVG_BYTES:
                 continue
+            ext = _PIC_WIDTH_RE.search(pic)
+            px = int(ext.group(1)) * _FALLBACK_PPI // _EMU_PER_INCH if ext else 0
+            px = min(max(px, _FALLBACK_MIN_PX), _FALLBACK_MAX_PX)
             try:
-                replaced[png] = PNGSurface.convert(bytestring=files[svg], output_width=512,
+                replaced[png] = PNGSurface.convert(bytestring=files[svg], output_width=px,
                                                    url_fetcher=_no_fetch)
             except Exception as exc:  # keep the placeholder for this one picture
                 logger.warning("No PNG fallback for %s: %s", svg, exc)

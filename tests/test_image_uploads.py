@@ -51,9 +51,16 @@ def test_two_jobs_with_the_same_name_do_not_collide(tmp_path):
 
 
 def test_upload_type_and_size_are_checked():
-    ok = [("a.png", b"x"), ("b.JPG", b"x")]
+    import io
+    from PIL import Image
+
+    jpg = io.BytesIO()
+    Image.new("RGB", (4, 4)).save(jpg, "JPEG")
+    ok = [("a.png", _png()), ("b.JPG", jpg.getvalue())]
     assert _check_image_uploads(ok) == (ok, None)
     assert "Unsupported image type" in _check_image_uploads([("run.sh", b"x")])[1]
+    assert "not a readable image" in _check_image_uploads([("a.png", b"x")])[1]
+    assert "file is JPEG, not PNG" in _check_image_uploads([("a.png", jpg.getvalue())])[1]
     assert "too large" in _check_image_uploads([("big.png", b"x" * (10 * 1024 * 1024 + 1))])[1]
 
 

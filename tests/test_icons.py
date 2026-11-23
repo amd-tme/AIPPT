@@ -149,7 +149,7 @@ def test_load_icons_renders(tmp_path):
         from PIL import Image
         for pic in pictures:
             png = Image.open(io.BytesIO(pic.image.blob))
-            assert png.size[0] == 512
+            assert png.size[0] >= 256  # drawn for its size on the slide
             colours = {c for _, c in png.convert("RGBA").getcolors(1 << 20) if c[3] > 200}
             assert colours and all(max(abs(x - y) for x, y in zip(c, (0x00, 0xC2, 0xDE))) <= 3
                                    for c in colours)  # the icon colour, ± anti-aliasing

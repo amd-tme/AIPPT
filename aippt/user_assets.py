@@ -20,6 +20,7 @@ import re
 import uuid
 from datetime import datetime, timezone
 
+from aippt import raster
 from aippt.svg_clean import SvgError, clean_svg
 
 KINDS = ("icon", "logo")
@@ -89,6 +90,10 @@ def _check_file(kind: str, filename: str, data: bytes) -> tuple:
         raise AssetError(f"{filename}: not a readable image") from None
     if fmt != _PIL_FORMATS[ext]:
         raise AssetError(f"{filename}: file is {fmt}, not {ext[1:].upper()}")
+    try:
+        data = raster.prepare(filename, data)
+    except raster.RasterError as exc:
+        raise AssetError(str(exc)) from None
     return (".jpg" if ext == ".jpeg" else ext), data
 
 

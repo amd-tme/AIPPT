@@ -220,6 +220,7 @@ aippt/
   recipes.py        # Loads brand/recipes.json (brand layout recipes)
   user_assets.py    # Per-user icon/logo library (by NTID) + user-assets.json sidecar
   svg_clean.py      # Allowlist SVG cleaner for uploaded images and icons
+  raster.py         # Checks uploaded PNG/JPEG/GIF; turns phone photos upright, scales huge ones
   brand/
     recipes.json    # When to use each brand layout helper (icon grid … endnotes)
   schema.sql        # SQLite schema definition
