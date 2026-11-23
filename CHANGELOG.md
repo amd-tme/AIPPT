@@ -27,6 +27,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   setup, the full fast suite and Sphinx checks now have matching local and
   pull-request checks. Agent issue templates and observation-only control bands
   support manual onboarding without enabling a queue.
+- **AI Fast and No-LLM pptxgenjs engines, and 30-3-30 decks.** AI Fast
+  (`aippt.pptxgenjs_plan`) asks the LLM for a small slide plan (~2 s) and
+  builds the script locally; No-LLM (`aippt.pptxgenjs_direct`) maps the outline
+  straight to helpers (~1 s, no LLM call). Both, and the main AI engine, can
+  build 30-3-30 decks (30 s / 3 min / 30 min tiers in PowerPoint sections).
+- **AMD asset bank.** 239 brand icons in `themes/assets/icons/amd/` with a
+  searchable manifest (`aippt.icons`: `search`, `best_match`, `resolve`) and a
+  `loadIcons()` helper that recolours them per theme. New opt-in AMD corporate
+  themes `corp_black` and `corp_white` (Arial, cyan accent, grey ramp), chosen
+  from a theme picker on the create form for the pptxgenjs engines.
+- **Brand layout helpers and recipes.** `addIconFeatureGrid`, `addKpiTiles`,
+  `addHeroNumber`, `addMetricTable`, `addSpecTable`, `addCompetitiveChart`
+  (native chart, AMD series in accent, ×-ratio labels), `addCheckMatrix`,
+  `addTimeline`, `addStageFlow`, `addEndnotesSlide` and `addEndnoteRef`.
+  `aippt/brand/recipes.json` records when to use each one; the outline
+  `LAYOUT:` values `icon_grid` … `endnotes` and the `Source:` / `Endnote:` /
+  `Metric:` / `Date:` lines select and fill them. The No-LLM engine picks them
+  by itself on the corporate themes; AI Fast and the main AI engine can choose
+  them too, and icons are matched from the bank.
+- **My icons & logos.** A per-user asset library keyed by NTID
+  (`aippt.user_assets`; `GET/POST /api/assets`, `GET /api/assets/{id}/file`,
+  `DELETE /api/assets/{id}`), with a panel on the create form. The user's icons
+  are matched alongside the bank (`my-*` ids, winning ties; an item label equal
+  to an icon's name or tag always picks it), and an optional
+  partner logo (`cobrand_logo` form field) is drawn as an AMD | partner lockup
+  on the title and closing slides of pptxgenjs decks. The app passes both to
+  the script through a `user-assets.json` sidecar.
+
 - **Deck Review mode in the web chat interface.** A new ★ Review radio button
   alongside Ask / Edit sends the full deck through a structured visual-QA pass:
   each slide is reviewed against a rubric (layout variety, text overflow, visual
@@ -162,6 +190,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **`IMAGE:` lines pointing at attached images now render.** Files attached on
+  the create form are saved under `uploads/assets/jobs/<job>/` and the outline's
+  `IMAGE:` lines are rewritten to their absolute paths (PNG, JPG, GIF, SVG; 10 MB
+  max). Uploaded SVGs are cleaned (`aippt.svg_clean`: scripts, event handlers
+  and external references removed) before use.
+- **Attached images were stretched to fill their box.** pptxgenjs `contain`
+  sizing needs the picture's real size, which the helpers never passed. The
+  helpers now read it (`imageSize`) and fit or crop each image without
+  distortion. Uploaded phone photos are turned upright (EXIF), CMYK JPEGs
+  become RGB and images over 4000 px are scaled down (`aippt.raster`); PNG
+  files must really be PNG, and so on. The PNG copy of an SVG for older viewers
+  is drawn at 200 px per inch of its size on the slide instead of 512 px.
+- **Competitive chart labels dropped decimals** (1.3 shown as 1). The value
+  format now keeps the decimals the data has.
 - **Portable fast-test baseline.** Route tests select full mode explicitly,
   template-merge tests use generated PPTX fixtures, and theme/master assertions
   verify legacy input and content branding without relying on developer

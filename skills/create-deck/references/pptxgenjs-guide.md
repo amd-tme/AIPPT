@@ -31,9 +31,9 @@ Scripts are ES modules (`.mjs`) that import from the helper library:
 import {
   createDeck, addTitleSlide, addBulletSlide, addImageSlide,
   addImageBulletsSlide, addProcessFlow, addTwoColumn, addCardGrid,
-  addStatCallout, addCodeSlide, addIconRowsSlide, addSectionDivider,
-  addClosingSlide, addFooter, renderIconSvg, iconToBase64,
-  preRenderIcons, cardShadow, SW, SH,
+  addStatCallout, addCodeSlide, addIconRowsSlide, addLogoGridSlide,
+  addSectionDivider, addClosingSlide, addFooter, renderIconSvg,
+  iconToBase64, preRenderIcons, cardShadow, SW, SH,
 } from '../lib/pptxgenjs-helpers.mjs';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
@@ -52,7 +52,8 @@ async function buildDeck() {
   addBulletSlide(deck, "Overview", ["Point 1", "Point 2"], sn++);
   addClosingSlide(deck, sn);
 
-  await deck.save('output/deck.pptx');
+  const outDir = process.env.AIPPT_PREVIEW_OUT || 'output';
+  await deck.save(`${outDir}/deck.pptx`);
 }
 
 buildDeck().catch(console.error);
@@ -74,7 +75,7 @@ These cause **silent file corruption** — PowerPoint will try to repair or refu
 |---------|-------|---------|
 | Hex color prefix | `"#00B4D8"` | `"00B4D8"` |
 | 8-char hex (opacity) | `"00B4D880"` | Use `opacity` property instead |
-| Reusing shadow objects | `const s = {...}; shape1({shadow: s}); shape2({shadow: s})` | Use `cardShadow()` factory from helpers |
+| Reusing shadow objects | `const s = {...}; shape1({shadow: s}); shape2({shadow: s})` | Use the `cardShadow(deck.theme)` factory from helpers |
 | Rounded rect + borders | `ROUNDED_RECTANGLE` with accent border | Use `RECTANGLE` instead |
 
 ### Additional Gotchas
@@ -91,13 +92,13 @@ These cause **silent file corruption** — PowerPoint will try to repair or refu
 |---------|---------|-------------|
 | `rotate` on text | Rotation doesn't render reliably across LibreOffice and PowerPoint — vertical text becomes garbled or mispositioned | Use a thin rect shape or dot row for vertical decoration; keep all text horizontal |
 | All-white SI icons | Simple Icons are designed with brand colors — white versions lose recognition value entirely | Use the actual hex brand color from simpleicons.org |
-| Reusing `cardShadow` objects | Still a corruption risk even with named pattern | Always use the `cardShadow()` factory function from the helper library |
+| Reusing `cardShadow` objects | Still a corruption risk even with named pattern | Always use the `cardShadow(deck.theme)` factory function from the helper library |
 
 ## Helper Library API
 
 All slide builders accept a `deck` object returned by `createDeck()`. The deck bundles `pptx`, `theme`, and `layout` so callers don't juggle multiple arguments.
 
-### createDeck(themePath)
+### createDeck(themePath, opts?)
 
 Creates a new deck with theme and layout computed from a YAML file.
 
@@ -108,6 +109,10 @@ const deck = createDeck('themes/amd.yaml');
 // deck.layout — computed geometry: { M, CONTENT_W, CONTENT_Y, FOOTER_Y, CONTENT_H, RIGHT_EDGE }
 // deck.save(outputPath) — async, writes file and prints size
 ```
+
+- `opts.useSlideMaster` — render on the theme's slide masters (default `false`)
+- `opts.userAssets` — `{ icons: { "my-…": path }, cobrand: { path, width, height } | null }`. Defaults to `user-assets.json` next to the running script (the web app writes it from the user's **My icons & logos** library), else none. `my-*` icon ids then work in `loadIcons` and the brand helpers; a `cobrand` logo is drawn on the title-slide variants and `addClosingSlide`.
+- Themes: `amd` (default), `instinct`, `default`, and the AMD corporate `corp_black` / `corp_white`.
 
 **Theme colors available via `deck.theme.colors`:**
 
@@ -173,6 +178,12 @@ addBulletSlide(deck, "Overview", [
 ], sn++);
 ```
 
+### Icon + Text Rows
+
+Row height divides the full content area evenly (`CONTENT_H / items.length`), preventing the 30–40% blank space that comes from fixed row heights. Icons are vertically centered within each row. Separator lines between rows break up the space without adding visual noise.
+
+**No-icon fallback:** When no icon image is available for a row, render an accent-colored left bar (0.06" × 0.7") instead of an empty circle. This avoids plain solid circles that look like decorative blobs.
+
 ### addIconRowsSlide(deck, title, items, iconImages, slideNum, notes?)
 
 Rows with icon circles (or accent bars if no icon) and label/description.
@@ -180,7 +191,79 @@ Rows with icon circles (or accent bars if no icon) and label/description.
 - `items` — Array of `{ label, desc }` objects
 - `iconImages` — Array of base64 data URIs (or null entries for accent-bar fallback)
 - `notes` — Optional speaker notes string
-- Row height adapts: >3 items → 1.1", ≤3 items → 1.4"
+- Row height divides full content area evenly: `CONTENT_H / items.length` — no fixed heights
+
+**Internal implementation reference:**
+
+```javascript
+function addIconRows(pptx, title, items, iconImages, theme) {
+  const C = theme.colors;
+  const slide = pptx.addSlide();
+  slide.background = { color: C.background };
+
+  slide.addText(title, {
+    x: M, y: 0.3, w: CONTENT_W, h: 0.7,
+    fontSize: 28, fontFace: theme.fonts.heading,
+    color: C.text_primary, bold: true,
+  });
+
+  // Divide full content height evenly — prevents 30-40% blank space
+  const rowH = CONTENT_H / items.length;
+
+  items.forEach((item, i) => {
+    const y = CONTENT_Y + i * rowH;
+
+    // Vertically center icon within the row
+    const circleSize = 0.7;
+    const circleY = y + rowH / 2 - circleSize / 2;
+
+    // No-icon fallback: accent bar instead of empty circle
+    if (!iconImages || !iconImages[i]) {
+      slide.addShape(pptx.ShapeType.rect, {
+        x: M + 0.56, y: circleY, w: 0.06, h: circleSize,
+        fill: { color: C.accent },
+      });
+    } else {
+      // Icon circle
+      slide.addShape(pptx.ShapeType.ellipse, {
+        x: M + 0.56, y: circleY, w: circleSize, h: circleSize,
+        fill: { color: C.accent },
+      });
+      // Icon image
+      slide.addImage({
+        data: iconImages[i],
+        x: M + 0.68, y: circleY + 0.12, w: 0.46, h: 0.46,
+      });
+    }
+
+    // Label — vertically centered in top portion of row
+    slide.addText(item.label, {
+      x: M + 1.56, y: y + rowH * 0.15, w: CONTENT_W - 1.56, h: 0.4,
+      fontSize: 20, fontFace: theme.fonts.heading,
+      color: C.text_primary, bold: true,
+    });
+
+    // Description — below label
+    slide.addText(item.description, {
+      x: M + 1.56, y: y + rowH * 0.15 + 0.4, w: CONTENT_W - 1.56,
+      h: rowH * 0.55,
+      fontSize: 14, fontFace: theme.fonts.body,
+      color: C.text_body,
+    });
+
+    // Separator line between rows (not after last item)
+    if (i < items.length - 1) {
+      slide.addShape(pptx.ShapeType.rect, {
+        x: M + 1.56, y: y + rowH - 0.01, w: CONTENT_W - 1.56, h: 0.01,
+        fill: { color: C.surface },
+      });
+    }
+  });
+
+  addFooter(slide, slideNum, theme);
+  return slide;
+}
+```
 
 ### addProcessFlow(deck, title, steps, slideNum, notes?)
 
@@ -202,11 +285,79 @@ Two-column layout with headers and vertical divider.
 - Automatic vertical divider line between columns (surface color)
 - Column widths: left 5.70", gutter 0.36", right fills remainder
 
+#### Column Headers with Logos
+
+When each column represents a named tool or technology, add the tool's logo to the column header for a purposeful layout instead of "two lists next to each other."
+
+```javascript
+function addTwoColumnWithLogos(pptx, title, leftHeader, rightHeader, leftContent, rightContent, leftIcon, rightIcon, theme) {
+  const C = theme.colors;
+  const slide = pptx.addSlide();
+  slide.background = { color: C.background };
+
+  slide.addText(title, {
+    x: M, y: 0.3, w: CONTENT_W, h: 0.7,
+    fontSize: 28, fontFace: theme.fonts.heading,
+    color: C.text_primary, bold: true,
+  });
+
+  const col1W = 5.70;
+  const gutter = 0.36;
+  const col2X = M + col1W + gutter;
+  const col2W = CONTENT_W - col1W - gutter;
+  const headerH = 0.48;
+
+  function addColumnHeader(x, w, header, iconData) {
+    slide.addShape(pptx.ShapeType.rect, {
+      x, y: CONTENT_Y, w, h: headerH,
+      fill: { color: C.surface },
+    });
+    slide.addShape(pptx.ShapeType.rect, {
+      x, y: CONTENT_Y, w, h: 0.05,
+      fill: { color: C.accent },
+    });
+    if (iconData) {
+      slide.addImage({ data: iconData, x: x + 0.1, y: CONTENT_Y + 0.07, w: 0.34, h: 0.34 });
+    }
+    const textX = iconData ? x + 0.55 : x + 0.15;
+    slide.addText(header, {
+      x: textX, y: CONTENT_Y + 0.02, w: w - (textX - x) - 0.1, h: headerH - 0.04,
+      fontSize: 18, fontFace: theme.fonts.heading,
+      color: C.text_primary, bold: true, valign: "middle",
+    });
+  }
+
+  if (leftHeader) addColumnHeader(M, col1W, leftHeader, leftIcon);
+  if (rightHeader) addColumnHeader(col2X, col2W, rightHeader, rightIcon);
+
+  slide.addShape(pptx.ShapeType.rect, {
+    x: M + col1W + gutter / 2 - 0.01, y: CONTENT_Y, w: 0.02, h: CONTENT_H,
+    fill: { color: C.surface },
+  });
+
+  const bodyY = CONTENT_Y + headerH + 0.15;
+  const bodyH = CONTENT_H - headerH - 0.15;
+
+  slide.addText(leftContent.map(item => ({
+    text: item, options: { fontSize: 16, fontFace: theme.fonts.body, color: C.text_body, bullet: true, breakLine: true, paraSpaceAfter: 8 },
+  })), { x: M, y: bodyY, w: col1W, h: bodyH, valign: "top" });
+
+  slide.addText(rightContent.map(item => ({
+    text: item, options: { fontSize: 16, fontFace: theme.fonts.body, color: C.text_body, bullet: true, breakLine: true, paraSpaceAfter: 8 },
+  })), { x: col2X, y: bodyY, w: col2W, h: bodyH, valign: "top" });
+
+  addFooter(slide, slideNum, theme);
+  return slide;
+}
+```
+
+**When to use:** Both columns represent named technologies or products with recognizable logos. Falls back to `addTwoColumn` when columns are generic concepts (e.g., "Pros" vs "Cons").
+
 ### addCardGrid(deck, title, cards, slideNum, notes?)
 
 2x2 or 2x3 card grid with accent bars and optional icons.
 
-- `cards` — Array of `{ title, body, iconImg? }` objects
+- `cards` — Array of `{ title, body, accent?, iconImg? }` objects (`accent` = hex colour for the bar)
 - `notes` — Optional speaker notes string
 - ≤4 cards → 2-column layout; 5-6 → 3-column layout
 - Each card has surface background, left accent bar (rotating colors), shadow
@@ -216,7 +367,7 @@ Two-column layout with headers and vertical divider.
 
 Large colored numbers with labels.
 
-- `stats` — Array of `{ value, label, desc? }` objects
+- `stats` — Array of `{ value, label, desc?, color? }` objects (1-4)
 - `notes` — Optional speaker notes string
 - `value` renders at 48pt in accent color
 - Columns auto-calculate width: `CONTENT_W / stats.length`
@@ -236,7 +387,8 @@ Full-image slide. Image fills the content area with aspect ratio preserved.
 
 - `imagePath` — File path string or base64 data URI (prefix `"image/png;base64,..."`)
 - `notes` — Optional speaker notes string
-- Image uses `sizing: { type: 'contain' }` — fits within CONTENT_W × CONTENT_H without distortion
+- The image's own size is read from the file (PNG, JPEG, GIF, SVG), so it fits within CONTENT_W × CONTENT_H, centred, without distortion; a small raster is never enlarged past 72 px per inch
+- Calling `slide.addImage` yourself? pptxgenjs `sizing: { type: 'contain' }` needs the image's real w/h; passing the box size stretches the picture. Use `imageSize(path)` (exported) to get them
 - Data URIs (starting with `"image/"`) are passed as `data:` to pptxgenjs
 - Missing files show a gray placeholder with `[Image: <path>]` text
 
@@ -276,6 +428,137 @@ Numbered panel on left, title on right (rich mode only).
 
 **Corporate-match mode (AMD default):** Skip section dividers entirely — do not render a slide for section headings with no content.
 
+**Conservative snazz variant** — for corporate themes that want minimal section markers without the numbered panel:
+
+```javascript
+function addSectionDividerConservative(pptx, title, theme, slideNum) {
+  const C = theme.colors;
+  const slide = pptx.addSlide();
+  slide.background = { color: C.background };
+
+  // Full-width accent bar at top
+  slide.addShape(pptx.ShapeType.rect, {
+    x: 0, y: 0, w: SW, h: 0.08,
+    fill: { color: C.accent },
+  });
+
+  // Section title — vertically centered
+  slide.addText(title.toUpperCase(), {
+    x: M, y: 0, w: CONTENT_W, h: SH,
+    fontSize: 36, fontFace: theme.fonts.heading,
+    color: C.text_primary, bold: true,
+    charSpacing: 4,
+    valign: "middle",
+  });
+
+  addFooter(slide, slideNum, theme);
+  return slide;
+}
+```
+
+### startSection(deck, title)
+
+Starts a PowerPoint section (visible in PowerPoint's slide sorter); every slide
+added afterwards belongs to it until the next `startSection`. Used for 30-3-30
+decks: `Intro`, `30 Seconds`, `3 Minutes`, `30 Minutes`, `Appendix`.
+
+### addTierDivider(deck, title, subtitle, slideNum, notes?)
+
+Centred divider for a 30-3-30 tier: bold title, accent bar and an optional
+italic accent subtitle (the deck title). Titles: `Executive Overview (30 Sec)`,
+`Overview (3 Minute)`, `Deep Dive (30 Minute)`, `Appendix`.
+
+### Corporate layouts (AMD template matches)
+
+Argument order matters — several of these differ from the helpers above.
+
+| Helper | Arguments |
+|---|---|
+| `addTitleAlt(deck, title, subtitle, slideNum)` | Clean title card, wordmark right; no notes arg (chain `.addNotes()`) |
+| `addSectionContent(deck, sectionTitle, bullets, slideNum, notes?)` | `bullets` — `string[]` (never a plain string) |
+| `addTwoColNumbered(deck, sectionTitle, items, slideNum, notes?)` | `items` — `string[]`; the helper numbers them |
+| `addThreeColContent(deck, title, columns, slideNum, notes?)` | `columns` — exactly 3 `{ heading, body }` |
+| `addThreeColImageText(deck, title, columns, slideNum, notes?)` | `columns` — 3 `{ heading, imagePath?, body }` |
+| `addPictureCaption(deck, title, imagePath, caption, slideNum, notes?)` | `caption` — string |
+| `addTwoImageGallery(deck, title, items, slideNum, notes?)` | `items` — exactly 2 `{ imagePath?, caption }` |
+| `addThreeImageGallery(deck, title, items, slideNum, notes?)` | `items` — 3 `{ imagePath?, caption }` |
+| `addFourImageGallery(deck, title, items, slideNum, notes?)` | `items` — exactly 4 `{ imagePath?, caption }` |
+| `addCinematicSlide(deck, title, imagePath, slideNum, notes?)` | No subtitle argument |
+| `addSplitImageContent(deck, title, bullets, imagePath, slideNum, notes?)` | `bullets` comes **before** `imagePath` |
+| `addTitleWithImage(deck, title, subtitle, imagePath, slideNum)` | No notes arg (chain `.addNotes()`) |
+
+### Shared slide patterns
+
+Additive helpers used by both the LLM engine and the no-LLM engine. A
+*takeaway* is the slide's one-line key message, drawn in the accent colour
+under the title (the 30-3-30 "so what").
+
+### addTakeawaySlide(deck, title, takeaway, points, slideNum, notes?)
+
+- `takeaway` — One sentence (outline: a `> ` line)
+- `points` — Array of strings or `{ text, subs: string[] }`; `**Lead** — rest` bolds the lead-in
+
+### addTableSlide(deck, title, header, rows, slideNum, notes?, opts?)
+
+- `header` — `string[]` or `null`; `rows` — `string[][]`
+- `opts.takeaway` — Line above the table; `opts.source` — footnote (e.g. `'Source: AMD spec sheets'`)
+- First column bold; numeric columns right-aligned; font shrinks with row count (best ≤10 rows, ≤6 columns)
+
+### addAgendaSlide(deck, title, items, slideNum, notes?, opts?)
+
+- `items` — Up to 10 strings, numbered `01`, `02`, …
+- `opts.current` — 1-based index to highlight (others dimmed) when reusing the agenda between sections
+- `opts.image` — Photo variant: image on the left fading into the list (`''` = the bundled photo); use in brand decks
+- `opts.label` — Deck label drawn on the photo (usually the deck title)
+
+### addQuoteSlide(deck, quote, attribution, slideNum, notes?)
+
+- `attribution` — Without a leading dash (`'Jane Doe, CTO'`); the helper adds `— `
+- Quote font shrinks for long quotes
+
+### addRoadmapSlide(deck, title, columns, slideNum, notes?, opts?)
+
+- `columns` — 2-6 `{ heading, items: string[] }` (heading = `Q1`, `2026`, `Phase 1`)
+- `opts.takeaway` — Optional line under the title
+
+### addDisclaimerSlide(deck, title, text, slideNum, notes?)
+
+- `text` — Legal / notice text (use `\n` between paragraphs); sized to fill the slide (18pt for short notices, shrinking for long text, two columns when that keeps it larger)
+
+### Brand slides (AMD exec / product deck styles)
+
+Opt-in layouts modelled on AMD's exec-pitch and product-performance decks. All images fall back to bundled assets in `themes/assets/`. See **Choosing the Title Slide** in `SKILL.md` for when to use the brand titles.
+
+#### addHeroTitleSlide(deck, title, subtitle, slideNum, opts?)
+
+- Full-height photo on the left fading to black, title + subtitle right, "together we advance" lockup
+- `opts.image` — Photo path (default: blue particle wave); `opts.date` — e.g. `'June 2026'`; `opts.footnote` — 7pt legal line along the bottom edge
+
+#### addProductTitleSlide(deck, title, subtitle, slideNum, opts?)
+
+- Streak background, large product render top left, product lockup, title right; 'Lead – Main' or 'Lead: Main' titles draw a smaller lead line over a large main line
+- `opts.product` — `'ROCm'` uses the ROCm lockup; other names draw the AMD wordmark + product text
+- `opts.presenter`, `opts.image` (product render), `opts.background`
+
+#### addSectionIntroSlide(deck, title, body, slideNum, notes?, opts?)
+
+- Title + 1-3 lines of body left, photo right fading from the left; `opts.image`
+
+#### addStatementSlide(deck, headline, subline, evidence, slideNum, notes?)
+
+- Accent `headline` + white `subline` (right-aligned, left half), divider, evidence on the right
+- `evidence` — 1-4 `{ text, source? }`
+
+#### addProofPointSlide(deck, headline, subline, proof, slideNum, notes?, opts?)
+
+- `proof` — `{ before: { value, label }, after: { value, label }, multiple?, caption? }`; bar heights from the numbers in `value`
+- `opts.label` — Small label at the top (default `'Key Takeaway'`)
+
+#### addFeatureListSlide(deck, title, tagline, features, slideNum, notes?, opts?)
+
+- Product lockup + vertical rule + title + accent tagline, then 2-4 `{ heading, lines: string[] }` with underlined headings
+- `opts.product`, `opts.image`
+
 ### addClosingSlide(deck, slideNum, notes?)
 
 Centered wordmark, no footer.
@@ -292,12 +575,96 @@ Add slide number and logo to a slide. Called automatically by all slide builders
 - `opts.suppressNumber` — Omit slide number (default: false)
 - Use both suppress flags on the closing slide
 
-### cardShadow()
+### cardShadow(theme)
 
 Factory function returning a fresh shadow object. **Never reuse shadow objects** — pptxgenjs mutates them in place.
 
 ```javascript
-slide.addShape(pptx.ShapeType.rect, { shadow: cardShadow() });
+slide.addShape(pptx.ShapeType.rect, { shadow: cardShadow(deck.theme) });
+```
+
+## Brand layouts (AMD asset bank)
+
+Content layouts from the AMD brand reference. Each one is a recipe in
+`aippt/brand/recipes.json` (when to use it, when not, capacity); the No-LLM web
+engine picks them by itself on `corp_black` / `corp_white`. They work on every
+theme. Icons sit on the slide with no circle or card behind them.
+
+Common options: `opts.takeaway` (accent line at the bottom), `opts.source`
+(small `Source: …` line), `opts.endnote` (id or ids → "See endnote …" pointer,
+same as `addEndnoteRef`).
+
+### loadIcons(ids, color?)
+
+Loads icons from the AMD icon bank (`themes/assets/icons/amd/`, 239 SVGs) or
+the user's `my-*` icons, recoloured to `color` (default `FFFFFF`; use `000000`
+on light themes). Returns `{ id: dataUri }` for `iconImg` / `iconImages`;
+unknown ids are skipped with a warning. Find ids with
+`venv/bin/python -c "from aippt import icons; print(icons.search('secure data'))"`.
+The grid and tile helpers also take an id directly as `icon`.
+
+### addIconFeatureGrid(deck, title, items, slideNum, notes?, opts?)
+
+- 3-6 `{ icon?, label, desc?, highlight? }` — icon over a short bold label and one line
+- Up to 4 in a row; 5 as 3 + 2; 6 as 3 × 2
+
+### addKpiTiles(deck, title, tiles, slideNum, notes?, opts?)
+
+- 2-4 `{ value, label, context?, icon?, highlight? }` — flat tiles; highlight one value, not all
+
+### addHeroNumber(deck, value, label, slideNum, notes?, opts?)
+
+- One very large statistic + label; `opts.title`, `opts.context` (baseline line)
+
+### addMetricTable(deck, title, rows, slideNum, notes?, opts?)
+
+- Up to 6 `{ label, value, why? }` — grey metric, large accent value (`1.3x`), "why it matters"
+- `opts.header` — three headings, e.g. `['Metric', 'MI355X vs. B200', 'Why it matters']`; `opts.image` — product image on the left
+
+### addSpecTable(deck, title, header, rows, slideNum, notes?, opts?)
+
+- `header` — `['Spec', 'MI355X', 'B200']` (1-3 products); `rows` — up to 12 string arrays
+- AMD column highlighted (first AMD-looking header, or `opts.highlight` index; `false` for none)
+
+### addCompetitiveChart(deck, title, categories, series, slideNum, notes?, opts?)
+
+- Native, editable column chart: up to 8 `categories`, 1-4 `{ name, values, amd? }` series
+- AMD series in the accent colour, competitors grey, values on the bars, `1.3×` ratio labels over the AMD bars
+- `opts.ratios` (`false` or one label per category), `opts.lowerIsBetter`, `opts.metric` (unit note, e.g. `'Tokens/s (higher is better)'`), `opts.date`, `opts.valueFormat` (Excel format; decimals are kept by default)
+
+### addCheckMatrix(deck, title, header, rows, slideNum, notes?, opts?)
+
+- `header` — `['Capability', 'AMD Instinct MI355X', 'H200']` (1-4 products)
+- Up to 14 `{ label, values, group? }`; values `check`/`yes`/`✓`, `partial`/`◐`, `none`/`no`/`✗`, or text; `group` starts a section
+- `opts.highlight` as in `addSpecTable`
+
+### addTimeline(deck, title, milestones, slideNum, notes?, opts?)
+
+- 3-7 `{ date, label, desc?, current? }` — dots on a rule, current one ringed; 6-7 alternate above/below
+- `opts.caveat` — `true` for "Roadmap subject to change.", or custom text
+
+### addStageFlow(deck, title, stages, slideNum, notes?, opts?)
+
+- 3-4 `{ title, image?, subhead?, bullets? }` — header tiles joined by arrows; `opts.closing` line at the bottom
+
+### addEndnotesSlide(deck, title, endnotes, slideNum, notes?)
+
+- `endnotes` — strings or `{ id, text }`; sized to fit (16pt down to 8pt), two columns when that keeps it larger
+
+### addEndnoteRef(deck, slide, ref)
+
+- "See endnote PERF-01" at the bottom right of any slide; `ref` — id, ids, or full text starting with "See"
+
+```javascript
+addIconFeatureGrid(deck, 'Why MI355X', [
+  { icon: 'gpu', label: 'Memory', desc: '288 GB HBM3E per GPU' },
+  { icon: 'security', label: 'Security', desc: 'Protect data at every layer' },
+  { icon: 'my-partner-cloud', label: 'Partner Cloud', desc: 'Burst capacity on demand' },  // user icon, needs user-assets.json
+], 2);
+addCompetitiveChart(deck, 'Inference throughput', ['Llama 3.1 70B', 'DeepSeek R1'],
+  [{ name: 'MI355X', values: [1.3, 1.2], amd: true }, { name: 'B200', values: [1.0, 1.0] }],
+  3, '', { metric: 'Relative throughput (higher is better)', endnote: 'PERF-01' });
+addEndnotesSlide(deck, 'Endnotes', [{ id: 'PERF-01', text: 'Testing by AMD …' }], 4);
 ```
 
 ## Icon Integration
@@ -419,6 +786,81 @@ const {
 
 ## Advanced: Custom Layouts Beyond Helpers
 
+For layouts not covered by the helper library, access the raw `deck.pptx` and `deck.theme` directly. The patterns below are ready-to-use implementations of the most common custom layouts.
+
+### Logo Grid (Technology Stack)
+
+A grid of named technologies with brand logos. Use when a slide lists 4–8 named products/tools. Each cell shows the tool's logo circle, name, and a one-line description. Use `addLogoGridSlide` from the helper library — no boilerplate needed.
+
+**Corporate-match mode (AMD default):** Use plain icon+text rows or bullets instead — card surfaces and shadows violate the no-decorative-shapes rule. Logo grid is rich-mode only.
+
+**Trigger signals (rich mode):** Slide title contains "Stack", "Tools", "Platform", "Services", or "Components" AND content is a list of 4–8 named product names.
+
+**Grid sizing:** `cols = n <= 4 ? n : (n <= 6 ? 3 : 4)`
+
+### addLogoGridSlide(deck, title, items, iconImages, brandColors, slideNum, notes?)
+
+- `items` — Array of `{ name, description }` objects
+- `iconImages` — Array of base64 data URIs from `preRenderIcons` (or null for no icon)
+- `brandColors` — Array of hex color strings (no `#`) — used for the brand accent bar per card
+- `notes` — Optional speaker notes string
+
+**Usage with Simple Icons:**
+
+```javascript
+const { SiNomad, SiConsul, SiTerraform, SiDocker, SiTraefikproxy, SiMinio } = require("react-icons/si");
+
+const tools = [
+  { name: "Nomad",     description: "Workload orchestration",       icon: SiNomad,        color: "00CA8E" },
+  { name: "Consul",    description: "Service discovery & mesh",     icon: SiConsul,       color: "F24C53" },
+  { name: "Terraform", description: "Infrastructure as code",       icon: SiTerraform,    color: "844FBA" },
+  { name: "Docker",    description: "Container runtime",            icon: SiDocker,       color: "2496ED" },
+  { name: "Traefik",   description: "Edge routing & load balancing",icon: SiTraefikproxy, color: "24A1C1" },
+  { name: "MinIO",     description: "S3-compatible object storage", icon: SiMinio,        color: "C72E49" },
+];
+
+const icons = await preRenderIcons(
+  Object.fromEntries(tools.map(t => [t.name, { component: t.icon, color: t.color }]))
+);
+const iconImages = tools.map(t => icons[t.name]);
+const brandColors = tools.map(t => t.color);
+
+addLogoGridSlide(deck, "Platform Stack", tools, iconImages, brandColors, sn++);
+```
+
+---
+
+### Brand Badge
+
+When a slide is specifically about a vendor product (e.g., "AMD MI300X Performance"), add a small badge in the top-right corner. Low-effort, high-impact — signals "this slide is about [product]" without changing the content structure.
+
+```javascript
+function addBrandBadge(slide, pptx, vendorLogo, productName, theme) {
+  const C = theme.colors;
+  const badgeW = 1.8;
+  const badgeX = RIGHT_EDGE - badgeW;
+  const badgeY = 0.2;
+
+  slide.addShape(pptx.ShapeType.rect, {
+    x: badgeX, y: badgeY, w: badgeW, h: 0.8,
+    fill: { color: C.surface }, rectRadius: 0.05,
+  });
+  if (vendorLogo) {
+    slide.addImage({ data: vendorLogo, x: badgeX + 0.1, y: badgeY + 0.08, w: 0.64, h: 0.64 });
+  }
+  slide.addText(productName, {
+    x: badgeX + 0.82, y: badgeY + 0.15, w: badgeW - 0.92, h: 0.5,
+    fontSize: 14, fontFace: theme.fonts.heading, color: C.text_primary, bold: true, valign: "middle",
+  });
+}
+```
+
+**When to use:** Slides about specific vendor hardware (GPUs, CPUs), named cloud services, or branded product lines. Call `addBrandBadge(slide, pptx, logo, "MI300X", theme)` after building the slide with any helper.
+
+**When NOT to use:** Generic concept slides, section dividers, title/closing slides, or slides comparing multiple vendors.
+
+---
+
 For layouts not covered by the helper library (e.g., logo grid, three-column cards, brand badges), access the raw `deck.pptx` and `deck.theme` directly:
 
 ```javascript
@@ -448,8 +890,8 @@ This works seamlessly with helper-built slides in the same deck. Use the theme c
 import {
   createDeck, addTitleSlide, addBulletSlide, addImageSlide,
   addImageBulletsSlide, addProcessFlow, addTwoColumn, addCardGrid,
-  addCodeSlide, addClosingSlide, renderIconSvg, iconToBase64,
-  preRenderIcons,
+  addStatCallout, addCodeSlide, addIconRowsSlide, addLogoGridSlide,
+  addClosingSlide, renderIconSvg, iconToBase64, preRenderIcons, cardShadow,
 } from '../lib/pptxgenjs-helpers.mjs';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
@@ -512,7 +954,8 @@ async function buildDeck() {
   // Closing
   addClosingSlide(deck, sn);
 
-  await deck.save('output/infra-overview.pptx');
+  const outDir = process.env.AIPPT_PREVIEW_OUT || 'output';
+  await deck.save(`${outDir}/infra-overview.pptx`);
 }
 
 buildDeck().catch(console.error);

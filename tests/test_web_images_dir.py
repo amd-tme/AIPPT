@@ -202,8 +202,10 @@ class TestRoutesPassImagesDirToIngest:
 
         monkeypatch.setattr("aippt.web.routes._make_llm_client", lambda *args, **kwargs: object())
 
-        def generate_script(**kwargs):
-            Path(kwargs["output_script_path"]).write_text("// generated test script\n", encoding="utf-8")
+        def generate_script(*args, **kwargs):
+            # generate_and_render calls this positionally (outline, script path, ...)
+            path = kwargs.get("output_script_path") or args[1]
+            Path(path).write_text("// generated test script\n", encoding="utf-8")
 
         monkeypatch.setattr("aippt.pptxgenjs_gen.generate_script", generate_script)
         monkeypatch.setattr(

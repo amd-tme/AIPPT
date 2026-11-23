@@ -15,6 +15,20 @@ from aippt.cli import cmd_export_images, cmd_analyze
 logger = logging.getLogger(__name__)
 
 
+def _images_dir_if_populated(images_dir: Optional[str]) -> Optional[str]:
+    """Return images_dir if it contains at least one image file, else None.
+
+    Used after a failed MS Graph export so pre-generated images (e.g. from
+    LibreOffice) are not discarded before catalog_deck runs.
+    """
+    if not images_dir or not os.path.isdir(images_dir):
+        return None
+    for fname in os.listdir(images_dir):
+        if fname.lower().endswith((".png", ".jpg", ".jpeg")):
+            return images_dir
+    return None
+
+
 def ingest_deck(
     deck_path: str,
     db_path: str = "slides.db",
@@ -93,7 +107,7 @@ def ingest_deck(
         else:
             logger.warning("Image export failed (PowerShell/PowerPoint unavailable). Cataloging without images.")
             _progress("export_images_skipped", "Image export unavailable, continuing without images")
-            images_dir = None
+            images_dir = _images_dir_if_populated(images_dir)
     except RuntimeError:
         raise
     except graph.GraphError as exc:
@@ -106,13 +120,13 @@ def ingest_deck(
             raise
         logger.warning(f"Microsoft Graph error during image export: {exc}. Cataloging without images.")
         _progress("export_images_skipped", "Image export unavailable, continuing without images")
-        images_dir = None
+        images_dir = _images_dir_if_populated(images_dir)
     except Exception as exc:
         if require_images:
             raise RuntimeError(f"Image export error: {exc}") from exc
         logger.warning(f"Image export error: {exc}. Cataloging without images.")
         _progress("export_images_skipped", "Image export unavailable, continuing without images")
-        images_dir = None
+        images_dir = _images_dir_if_populated(images_dir)
 
     # --- Step 2: Catalog ---
     _progress("catalog", "Cataloging deck...")

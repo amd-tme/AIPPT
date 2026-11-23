@@ -1,0 +1,4778 @@
+{
+ "name": "AMD Brand Icon Collection",
+ "version": "V5 1Q2026",
+ "viewBox": "0 0 792 792",
+ "rules": {
+  "colour": "White on dark backgrounds, black on light. One colour for every icon in a set; the accent colour only to highlight one item.",
+  "size_in": {
+   "min": 0.35,
+   "min_with_text": 0.5,
+   "bullet": [
+    0.35,
+    0.5
+   ],
+   "grid": [
+    0.6,
+    0.9
+   ],
+   "hero": [
+    1.2,
+    2.0
+   ],
+   "max": 2.5
+  },
+  "use": "Icons support a label, never replace it. Use them on feature, KPI and story slides; never as decoration. Keep every icon in a row the same size.",
+  "has_text": "Icons with lettering in the artwork need at least 0.5 in.",
+  "duplicate_of": "Same artwork as another icon; prefer the one named."
+ },
+ "categories": [
+  {
+   "id": "ai",
+   "name": "AI & Machine Learning"
+  },
+  {
+   "id": "silicon",
+   "name": "Processors & Chips"
+  },
+  {
+   "id": "hardware",
+   "name": "Boards, Memory & Interconnect"
+  },
+  {
+   "id": "devices",
+   "name": "PCs & Devices"
+  },
+  {
+   "id": "cloud_dc",
+   "name": "Cloud, Data Center & Infrastructure"
+  },
+  {
+   "id": "networking",
+   "name": "Networking, Wireless & RF"
+  },
+  {
+   "id": "data",
+   "name": "Data & Analytics"
+  },
+  {
+   "id": "software",
+   "name": "Software & Development"
+  },
+  {
+   "id": "security",
+   "name": "Security & Trust"
+  },
+  {
+   "id": "performance",
+   "name": "Performance, Power & Efficiency"
+  },
+  {
+   "id": "vision_sensing",
+   "name": "Vision, Sensors & Robotics"
+  },
+  {
+   "id": "automotive",
+   "name": "Automotive"
+  },
+  {
+   "id": "industries",
+   "name": "Industries & Markets"
+  },
+  {
+   "id": "people",
+   "name": "People & Roles"
+  },
+  {
+   "id": "business",
+   "name": "Business, Finance & Achievement"
+  },
+  {
+   "id": "content",
+   "name": "Documents, Media & Communication"
+  },
+  {
+   "id": "ui",
+   "name": "UI Actions & Status"
+  }
+ ],
+ "icons": [
+  {
+   "id": "10gig-e-vision-camera",
+   "name": "10Gig E Vision Camera",
+   "category": "vision_sensing",
+   "description": "Square camera module/sensor board with a central lens and pin rows",
+   "tags": [
+    "10GigE",
+    "machine vision camera",
+    "industrial camera",
+    "image sensor",
+    "GigE Vision",
+    "camera interface",
+    "vision IP",
+    "frame grabber"
+   ],
+   "uses": [
+    "machine-vision connectivity IP",
+    "industrial camera pipelines"
+   ]
+  },
+  {
+   "id": "3d",
+   "name": "3D",
+   "category": "software",
+   "description": "Wireframe cube in perspective",
+   "tags": [
+    "3D",
+    "modeling",
+    "rendering",
+    "graphics",
+    "CAD",
+    "geometry",
+    "digital twin",
+    "visualization"
+   ],
+   "uses": [
+    "3D graphics/rendering workloads",
+    "design & simulation"
+   ]
+  },
+  {
+   "id": "3rd-party-tools",
+   "name": "3rd Party Tools",
+   "category": "software",
+   "description": "Hierarchy/org chart of three connected boxes",
+   "tags": [
+    "third-party tools",
+    "ecosystem tools",
+    "partner tools",
+    "integrations",
+    "hierarchy",
+    "toolchain",
+    "plug-ins",
+    "org chart"
+   ],
+   "uses": [
+    "ecosystem & partner tool support",
+    "toolchain integration",
+    "hierarchy/structure"
+   ]
+  },
+  {
+   "id": "4k-monitor",
+   "name": "4K Monitor",
+   "category": "devices",
+   "description": "Desktop monitor with '4K' on the screen",
+   "tags": [
+    "4K",
+    "monitor",
+    "display",
+    "UHD",
+    "resolution",
+    "screen",
+    "visual quality",
+    "media playback"
+   ],
+   "uses": [
+    "display/resolution capability",
+    "graphics quality claims"
+   ],
+   "has_text": true
+  },
+  {
+   "id": "5g",
+   "name": "5G",
+   "category": "networking",
+   "description": "'5G' text with signal waves above",
+   "tags": [
+    "5G",
+    "cellular",
+    "mobile network",
+    "wireless",
+    "telecom",
+    "RAN",
+    "connectivity",
+    "carrier"
+   ],
+   "uses": [
+    "5G/telecom solutions",
+    "mobile connectivity"
+   ],
+   "has_text": true
+  },
+  {
+   "id": "accomplish-1",
+   "name": "Accomplish 1",
+   "category": "business",
+   "description": "Award ribbon medal with numeral I (first place)",
+   "tags": [
+    "first place",
+    "#1",
+    "winner",
+    "rank 1",
+    "lesson 1",
+    "step 1",
+    "leader",
+    "top"
+   ],
+   "uses": [
+    "ranking/leadership claims",
+    "first step or lesson in a sequence"
+   ]
+  },
+  {
+   "id": "accomplish-2",
+   "name": "Accomplish 2",
+   "category": "business",
+   "description": "Award ribbon medal with numeral II (second place)",
+   "tags": [
+    "second place",
+    "#2",
+    "rank 2",
+    "lesson 2",
+    "step 2",
+    "runner-up",
+    "milestone"
+   ],
+   "uses": [
+    "second step/lesson in a numbered sequence"
+   ]
+  },
+  {
+   "id": "accomplish-3",
+   "name": "Accomplish 3",
+   "category": "business",
+   "description": "Award ribbon medal with numeral III (third place)",
+   "tags": [
+    "third place",
+    "#3",
+    "rank 3",
+    "lesson 3",
+    "step 3",
+    "milestone"
+   ],
+   "uses": [
+    "third step/lesson in a numbered sequence"
+   ]
+  },
+  {
+   "id": "accomplishment",
+   "name": "Accomplishment",
+   "category": "ui",
+   "description": "Check mark inside a circle",
+   "tags": [
+    "accomplishment",
+    "done",
+    "complete",
+    "finished",
+    "approved",
+    "success",
+    "check",
+    "verified",
+    "good",
+    "yes",
+    "secure"
+   ],
+   "uses": [
+    "completed items",
+    "benefits checklist",
+    "'what you get' bullets"
+   ]
+  },
+  {
+   "id": "action-plans",
+   "name": "Action Plans",
+   "category": "business",
+   "description": "Check mark inside a framed bracketed board/document",
+   "tags": [
+    "action plan",
+    "checklist",
+    "tasks",
+    "complete",
+    "to-do",
+    "multitask",
+    "deliverables",
+    "plan",
+    "next steps"
+   ],
+   "uses": [
+    "next steps / action items slide",
+    "project plan"
+   ]
+  },
+  {
+   "id": "adaptive-soc",
+   "name": "Adaptive SoC",
+   "category": "silicon",
+   "description": "Chip floorplan with blocks (adaptive SoC layout)",
+   "tags": [
+    "adaptive SoC",
+    "Versal",
+    "system on chip",
+    "heterogeneous compute",
+    "programmable logic",
+    "floorplan",
+    "architecture"
+   ],
+   "uses": [
+    "adaptive computing (Versal/Zynq) product slides",
+    "architecture block"
+   ]
+  },
+  {
+   "id": "adas-systems-and-sensors",
+   "name": "ADAS Systems and Sensors",
+   "category": "automotive",
+   "description": "Car front view inside sensing arcs above and below",
+   "tags": [
+    "ADAS",
+    "driver assistance",
+    "automotive sensors",
+    "safety",
+    "radar",
+    "perception",
+    "collision avoidance",
+    "lidar"
+   ],
+   "uses": [
+    "automotive ADAS solutions",
+    "sensor fusion"
+   ]
+  },
+  {
+   "id": "adopt-odm-product",
+   "name": "Adopt ODM Product",
+   "category": "hardware",
+   "description": "Square board/module with corner nodes and central lens/target",
+   "tags": [
+    "ODM",
+    "original design manufacturer",
+    "partner product",
+    "reference design",
+    "adopt",
+    "platform",
+    "board",
+    "system"
+   ],
+   "uses": [
+    "ODM/partner platforms",
+    "adopt reference design"
+   ]
+  },
+  {
+   "id": "advanced-compute-rdna",
+   "name": "Advanced Compute RDNA",
+   "category": "silicon",
+   "description": "Framed chip with segmented die (RDNA graphics core)",
+   "tags": [
+    "RDNA",
+    "graphics architecture",
+    "advanced compute",
+    "GPU core",
+    "Radeon",
+    "IP block",
+    "adaptable FOC"
+   ],
+   "uses": [
+    "RDNA graphics/compute architecture",
+    "integrated graphics"
+   ]
+  },
+  {
+   "id": "aerospace-and-defense",
+   "name": "Aerospace and Defense",
+   "category": "industries",
+   "description": "Fighter jet / airplane silhouette",
+   "tags": [
+    "aerospace",
+    "defense",
+    "aviation",
+    "aircraft",
+    "military",
+    "avionics",
+    "space",
+    "government"
+   ],
+   "uses": [
+    "A&D market slides",
+    "mission-critical systems"
+   ]
+  },
+  {
+   "id": "ai-advantages",
+   "name": "AI Advantages",
+   "category": "ai",
+   "description": "'AI' screen over connected nodes network",
+   "tags": [
+    "AI advantages",
+    "AI benefits",
+    "AI platform",
+    "AI applications",
+    "AI network",
+    "AI value",
+    "AI solutions"
+   ],
+   "uses": [
+    "why-AI / AI value proposition",
+    "AI platform overview"
+   ],
+   "has_text": true
+  },
+  {
+   "id": "ai-box",
+   "name": "AI Box",
+   "category": "ai",
+   "description": "'AI' surrounded by a grid of boxes",
+   "tags": [
+    "AI box",
+    "distributed compute",
+    "edge AI",
+    "AI applications",
+    "cluster",
+    "multi-node",
+    "parallel",
+    "scale-out",
+    "distributed",
+    "compute"
+   ],
+   "uses": [
+    "distributed AI inference",
+    "edge AI appliance"
+   ],
+   "has_text": true
+  },
+  {
+   "id": "ai-box-reid",
+   "name": "AI Box ReID",
+   "category": "vision_sensing",
+   "description": "Person figure inside camera-frame corners (detection box)",
+   "tags": [
+    "person re-identification",
+    "ReID",
+    "person detection",
+    "tracking",
+    "surveillance",
+    "video analytics",
+    "people counting",
+    "bounding box"
+   ],
+   "uses": [
+    "video analytics / smart retail / security camera AI"
+   ]
+  },
+  {
+   "id": "ai-nic",
+   "name": "AI NIC",
+   "category": "hardware",
+   "description": "Chip with 'AI NIC' text",
+   "tags": [
+    "AI NIC",
+    "network interface card",
+    "Pensando",
+    "SmartNIC",
+    "AI networking",
+    "scale-out",
+    "Pollara",
+    "RDMA",
+    "Ethernet"
+   ],
+   "uses": [
+    "AI cluster networking",
+    "NIC products"
+   ],
+   "has_text": true
+  },
+  {
+   "id": "ai-pcs",
+   "name": "AI PCs",
+   "category": "silicon",
+   "description": "Chip package with 'AI' on the die",
+   "tags": [
+    "AI PC",
+    "Ryzen AI",
+    "AI chip",
+    "AI processor",
+    "ready-to-run",
+    "silicon architecture",
+    "on-device AI",
+    "AI accelerator"
+   ],
+   "uses": [
+    "AI PC / AI silicon slides",
+    "generic 'AI chip'"
+   ],
+   "has_text": true
+  },
+  {
+   "id": "ai-personal-assistant",
+   "name": "AI Personal Assistant",
+   "category": "ai",
+   "description": "Speech bubble with 'AI'",
+   "tags": [
+    "AI assistant",
+    "chatbot",
+    "copilot",
+    "conversational AI",
+    "LLM chat",
+    "virtual assistant",
+    "generative AI",
+    "agent"
+   ],
+   "uses": [
+    "chatbot/assistant demos",
+    "generative AI use cases"
+   ],
+   "has_text": true
+  },
+  {
+   "id": "ai-engine",
+   "name": "AI Engine",
+   "category": "ai",
+   "description": "Chip with circuit traces fanning out to nodes",
+   "tags": [
+    "AI Engine",
+    "neural network",
+    "adaptable hardware",
+    "compute density",
+    "AI accelerator",
+    "DSP",
+    "multiple design",
+    "adaptable",
+    "hardware",
+    "multiple deisgn"
+   ],
+   "uses": [
+    "AI Engine (Versal) tiles",
+    "AI acceleration"
+   ]
+  },
+  {
+   "id": "aims-amd-inference-microservices",
+   "name": "AIMs AMD Inference Microservices",
+   "category": "ai",
+   "description": "Isometric cube inside a hexagon with three connected nodes",
+   "tags": [
+    "AIM",
+    "AMD Inference Microservices",
+    "inference",
+    "microservices",
+    "containers",
+    "flexible deployment",
+    "secure runtime",
+    "version control",
+    "model serving",
+    "amd support"
+   ],
+   "uses": [
+    "AMD Inference Microservices",
+    "model serving/deployment"
+   ]
+  },
+  {
+   "id": "alveo-accelerator",
+   "name": "Alveo Accelerator",
+   "category": "hardware",
+   "description": "PCIe add-in accelerator card with label lines",
+   "tags": [
+    "Alveo",
+    "accelerator card",
+    "PCIe card",
+    "adapter",
+    "data center accelerator",
+    "FPGA card",
+    "industrial PC",
+    "add-in board",
+    "synergies"
+   ],
+   "uses": [
+    "accelerator card products",
+    "server add-in"
+   ]
+  },
+  {
+   "id": "secure-processor",
+   "name": "Secure Processor",
+   "category": "security",
+   "description": "Shield containing a chip",
+   "tags": [
+    "secure processor",
+    "hardware security",
+    "root of trust",
+    "multi-level security",
+    "platform security",
+    "firmware security",
+    "AMD PSP",
+    "multi-level",
+    "security"
+   ],
+   "uses": [
+    "platform security features",
+    "hardware root of trust"
+   ]
+  },
+  {
+   "id": "analog-power",
+   "name": "Analog Power",
+   "category": "ui",
+   "description": "Power symbol (circle with vertical line)",
+   "tags": [
+    "power on",
+    "on/off",
+    "power button",
+    "start",
+    "analog power",
+    "turn on",
+    "boot",
+    "standby",
+    "on"
+   ],
+   "uses": [
+    "power on/start",
+    "analog power solutions"
+   ]
+  },
+  {
+   "id": "application",
+   "name": "Application",
+   "category": "software",
+   "description": "Browser/app window with </> code symbol",
+   "tags": [
+    "application",
+    "coding",
+    "programming",
+    "software",
+    "web app",
+    "development",
+    "source code",
+    "developer"
+   ],
+   "uses": [
+    "software development",
+    "apps and code"
+   ]
+  },
+  {
+   "id": "applications",
+   "name": "Applications",
+   "category": "software",
+   "description": "3x3 grid of squares (app grid)",
+   "tags": [
+    "applications",
+    "apps",
+    "portfolio",
+    "products",
+    "options",
+    "multiples",
+    "modular",
+    "catalog",
+    "ROS2 multi-node",
+    "control"
+   ],
+   "uses": [
+    "application portfolio",
+    "options/product range"
+   ]
+  },
+  {
+   "id": "audio",
+   "name": "Audio",
+   "category": "content",
+   "description": "Speaker emitting sound waves",
+   "tags": [
+    "audio",
+    "sound",
+    "volume",
+    "speaker",
+    "voice",
+    "music",
+    "acoustic",
+    "listen"
+   ],
+   "uses": [
+    "audio/voice features",
+    "volume"
+   ]
+  },
+  {
+   "id": "auto-park-assist",
+   "name": "Auto Park Assist",
+   "category": "automotive",
+   "description": "Car between parking lines with sensing arcs",
+   "tags": [
+    "auto park assist",
+    "parking",
+    "automotive sensors",
+    "ultrasonic",
+    "parking assistance",
+    "ADAS",
+    "maneuvering",
+    "sensors"
+   ],
+   "uses": [
+    "parking assist / ADAS features"
+   ]
+  },
+  {
+   "id": "automated-easy-flow",
+   "name": "Automated Easy Flow",
+   "category": "software",
+   "description": "Gear inside circular refresh arrows",
+   "tags": [
+    "automation",
+    "automated workflow",
+    "process",
+    "continuous",
+    "cycle",
+    "CI/CD",
+    "easy flow",
+    "orchestration",
+    "DevOps"
+   ],
+   "uses": [
+    "automated workflows",
+    "continuous processes",
+    "MLOps cycle"
+   ]
+  },
+  {
+   "id": "automotive-1",
+   "name": "Automotive 1",
+   "category": "automotive",
+   "description": "Car front view",
+   "tags": [
+    "automotive",
+    "car",
+    "vehicle",
+    "transportation",
+    "mobility",
+    "auto industry",
+    "fleet"
+   ],
+   "uses": [
+    "automotive market",
+    "vehicle solutions"
+   ]
+  },
+  {
+   "id": "automotive-2",
+   "name": "Automotive 2",
+   "category": "automotive",
+   "description": "Steering wheel",
+   "tags": [
+    "steering wheel",
+    "driving",
+    "direction",
+    "driver",
+    "cockpit",
+    "vehicle control",
+    "automotive",
+    "steering"
+   ],
+   "uses": [
+    "driver/cockpit experience",
+    "vehicle control"
+   ]
+  },
+  {
+   "id": "autonomous-driving",
+   "name": "Autonomous Driving",
+   "category": "automotive",
+   "description": "Car with wireless signal waves above",
+   "tags": [
+    "autonomous driving",
+    "self-driving",
+    "connected car",
+    "V2X",
+    "robotaxi",
+    "smart vehicle",
+    "automated driving"
+   ],
+   "uses": [
+    "autonomous/connected vehicle slides"
+   ]
+  },
+  {
+   "id": "award",
+   "name": "Award",
+   "category": "business",
+   "description": "Ribbon medal (blank)",
+   "tags": [
+    "award",
+    "goal",
+    "success",
+    "recognition",
+    "achievement",
+    "prize",
+    "excellence",
+    "winner",
+    "best-in-class"
+   ],
+   "uses": [
+    "awards & recognition",
+    "achievements"
+   ]
+  },
+  {
+   "id": "award-with-checkmark",
+   "name": "Award with Checkmark",
+   "category": "business",
+   "description": "Ribbon medal with a check mark",
+   "tags": [
+    "certified",
+    "verified",
+    "approved",
+    "award",
+    "quality",
+    "secure",
+    "accredited",
+    "validated",
+    "qualified"
+   ],
+   "uses": [
+    "certification/validation",
+    "qualified platforms"
+   ]
+  },
+  {
+   "id": "bandwidth",
+   "name": "Bandwidth",
+   "category": "networking",
+   "description": "Wi-Fi style signal arcs with a dot",
+   "tags": [
+    "bandwidth",
+    "Wi-Fi",
+    "wireless signal",
+    "throughput",
+    "connectivity",
+    "network",
+    "signal strength",
+    "internet",
+    "wifi"
+   ],
+   "uses": [
+    "bandwidth/throughput claims",
+    "wireless"
+   ]
+  },
+  {
+   "id": "bar-chart",
+   "name": "Bar Chart",
+   "category": "data",
+   "description": "Three vertical bars",
+   "tags": [
+    "bar chart",
+    "performance",
+    "benchmark",
+    "comparison",
+    "statistics",
+    "metrics",
+    "results",
+    "KPIs"
+   ],
+   "uses": [
+    "benchmark results",
+    "performance comparison"
+   ]
+  },
+  {
+   "id": "battery",
+   "name": "Battery",
+   "category": "performance",
+   "description": "Horizontal battery with charge cells",
+   "tags": [
+    "battery",
+    "charging",
+    "battery life",
+    "power",
+    "energy",
+    "mobile",
+    "all-day"
+   ],
+   "uses": [
+    "battery life claims",
+    "mobile power"
+   ]
+  },
+  {
+   "id": "battery-w-up-arrow",
+   "name": "Battery w/Up Arrow",
+   "category": "performance",
+   "description": "Vertical battery with up arrow",
+   "tags": [
+    "battery life up",
+    "charging",
+    "increase",
+    "more battery",
+    "longer runtime",
+    "power boost"
+   ],
+   "uses": [
+    "longer battery life",
+    "power increase"
+   ]
+  },
+  {
+   "id": "benefits-1",
+   "name": "Benefits 1",
+   "category": "business",
+   "description": "Bulleted list with square bullets",
+   "tags": [
+    "list",
+    "benefits",
+    "options",
+    "needs",
+    "features",
+    "checklist",
+    "agenda",
+    "bullets",
+    "need"
+   ],
+   "uses": [
+    "benefits/features lists",
+    "agenda"
+   ]
+  },
+  {
+   "id": "benefits-2",
+   "name": "Benefits 2",
+   "category": "content",
+   "description": "Stacked pages with a plus sign",
+   "tags": [
+    "updates",
+    "add",
+    "multiple materials",
+    "courses",
+    "new content",
+    "more resources",
+    "add document",
+    "multiple material"
+   ],
+   "uses": [
+    "updates/new materials",
+    "course content"
+   ]
+  },
+  {
+   "id": "benefits-3",
+   "name": "Benefits 3",
+   "category": "business",
+   "description": "Star above horizontal lines (podium/rating)",
+   "tags": [
+    "benefits",
+    "star",
+    "featured",
+    "premium",
+    "highlight",
+    "quality",
+    "rating",
+    "value",
+    "updates"
+   ],
+   "uses": [
+    "key benefits",
+    "highlights",
+    "premium value"
+   ]
+  },
+  {
+   "id": "benefits-4",
+   "name": "Benefits 4",
+   "category": "business",
+   "description": "Open hand receiving sparkles/plus signs",
+   "tags": [
+    "benefits",
+    "gain",
+    "value",
+    "offer",
+    "give",
+    "rewards",
+    "advantages",
+    "perks",
+    "service"
+   ],
+   "uses": [
+    "customer benefits",
+    "value delivered"
+   ]
+  },
+  {
+   "id": "bluetooth",
+   "name": "Bluetooth",
+   "category": "networking",
+   "description": "Bluetooth rune symbol",
+   "tags": [
+    "Bluetooth",
+    "wireless",
+    "pairing",
+    "short-range",
+    "IoT connectivity",
+    "peripherals"
+   ],
+   "uses": [
+    "Bluetooth connectivity"
+   ]
+  },
+  {
+   "id": "briefcase",
+   "name": "Briefcase",
+   "category": "business",
+   "description": "Briefcase",
+   "tags": [
+    "business",
+    "briefcase",
+    "on-the-go",
+    "enterprise",
+    "work",
+    "professional",
+    "commercial",
+    "jobs",
+    "portfolio"
+   ],
+   "uses": [
+    "enterprise/business users",
+    "commercial"
+   ]
+  },
+  {
+   "id": "broadcasting",
+   "name": "Broadcasting",
+   "category": "industries",
+   "description": "Microphone on a stand",
+   "tags": [
+    "broadcasting",
+    "live streaming",
+    "podcasting",
+    "microphone",
+    "media",
+    "broadcast",
+    "pro AV",
+    "recording",
+    "live",
+    "streaming"
+   ],
+   "uses": [
+    "broadcast & pro AV",
+    "live streaming",
+    "podcast"
+   ]
+  },
+  {
+   "id": "bug",
+   "name": "Bug",
+   "category": "software",
+   "description": "Bug/insect",
+   "tags": [
+    "bug",
+    "defect",
+    "error",
+    "issue",
+    "software bug",
+    "malware",
+    "problem"
+   ],
+   "uses": [
+    "software defects",
+    "issue tracking"
+   ]
+  },
+  {
+   "id": "bug-fix",
+   "name": "Bug Fix",
+   "category": "software",
+   "description": "Bug with an X (bug eliminated)",
+   "tags": [
+    "bug fix",
+    "patch",
+    "fixed",
+    "resolved",
+    "debugging",
+    "remediation",
+    "error fixed"
+   ],
+   "uses": [
+    "fixes/patch release notes",
+    "resolved issues"
+   ]
+  },
+  {
+   "id": "bug-identified",
+   "name": "Bug Identified",
+   "category": "software",
+   "description": "Bug inside scan/target frame corners",
+   "tags": [
+    "bug identified",
+    "detection",
+    "issue found",
+    "diagnostics",
+    "scanning",
+    "error detection",
+    "testing"
+   ],
+   "uses": [
+    "issue detection",
+    "testing/QA"
+   ]
+  },
+  {
+   "id": "bullseye",
+   "name": "Bullseye",
+   "category": "business",
+   "description": "Target with an arrow in the center",
+   "tags": [
+    "target",
+    "goal",
+    "objective",
+    "focus",
+    "accuracy",
+    "aim",
+    "strategy",
+    "precision",
+    "mission"
+   ],
+   "uses": [
+    "objectives/goals",
+    "targeted solutions"
+   ]
+  },
+  {
+   "id": "bundled-on-demand-training",
+   "name": "Bundled On-Demand Training",
+   "category": "content",
+   "description": "Stacked documents with a grid of squares (library/course bundle)",
+   "tags": [
+    "on-demand training",
+    "courses",
+    "e-learning",
+    "library",
+    "bundle",
+    "training catalog",
+    "learning resources"
+   ],
+   "uses": [
+    "training offerings",
+    "learning library"
+   ]
+  },
+  {
+   "id": "buy-cart",
+   "name": "Buy Cart",
+   "category": "business",
+   "description": "Shopping cart with a check mark",
+   "tags": [
+    "buy",
+    "shopping cart",
+    "purchase",
+    "checkout",
+    "secure purchase",
+    "pre-approved",
+    "e-commerce",
+    "order",
+    "verified",
+    "secure"
+   ],
+   "uses": [
+    "how to buy",
+    "ordering",
+    "e-commerce"
+   ]
+  },
+  {
+   "id": "buy-sign",
+   "name": "Buy Sign",
+   "category": "business",
+   "description": "Rectangular sign reading 'BUY'",
+   "tags": [
+    "buy",
+    "purchase",
+    "sales",
+    "call to action",
+    "order now",
+    "store",
+    "shop"
+   ],
+   "uses": [
+    "purchase CTA",
+    "sales channels"
+   ],
+   "has_text": true
+  },
+  {
+   "id": "calendar",
+   "name": "Calendar",
+   "category": "content",
+   "description": "Calendar page",
+   "tags": [
+    "calendar",
+    "schedule",
+    "date",
+    "timeline",
+    "roadmap",
+    "launch date",
+    "availability",
+    "event",
+    "planning",
+    "deadline",
+    "productivity",
+    "scheduling"
+   ],
+   "uses": [
+    "timelines/roadmaps",
+    "availability dates",
+    "events"
+   ]
+  },
+  {
+   "id": "camera",
+   "name": "Camera",
+   "category": "vision_sensing",
+   "description": "Camera lens/aperture inside a circle",
+   "tags": [
+    "camera",
+    "photography",
+    "lens",
+    "aperture",
+    "imaging",
+    "sensorless FOC",
+    "capture",
+    "photo"
+   ],
+   "uses": [
+    "imaging/camera features",
+    "photography"
+   ]
+  },
+  {
+   "id": "chat",
+   "name": "Chat",
+   "category": "content",
+   "description": "Speech bubble with text lines",
+   "tags": [
+    "chat",
+    "message",
+    "comments",
+    "social post",
+    "conversation",
+    "messaging",
+    "feedback",
+    "communication"
+   ],
+   "uses": [
+    "communications",
+    "feedback",
+    "chat features"
+   ]
+  },
+  {
+   "id": "chip-down-adaptive-soc",
+   "name": "Chip-Down Adaptive SoC",
+   "category": "silicon",
+   "description": "Framed board with chip grid and check mark",
+   "tags": [
+    "chip-down design",
+    "adaptive SoC",
+    "custom board",
+    "board design",
+    "integration",
+    "embedded design"
+   ],
+   "uses": [
+    "chip-down vs SOM design choice",
+    "embedded design"
+   ]
+  },
+  {
+   "id": "clicking",
+   "name": "Clicking",
+   "category": "ui",
+   "description": "Finger tapping with click rays",
+   "tags": [
+    "click",
+    "tap",
+    "select",
+    "interact",
+    "call to action",
+    "touch",
+    "press",
+    "user input"
+   ],
+   "uses": [
+    "interaction/click-through",
+    "CTA",
+    "UI demos"
+   ]
+  },
+  {
+   "id": "clock",
+   "name": "Clock",
+   "category": "content",
+   "description": "Clock face",
+   "tags": [
+    "clock",
+    "time",
+    "hours",
+    "real-time",
+    "schedule",
+    "duration",
+    "wait time",
+    "time-to-market",
+    "deadline"
+   ],
+   "uses": [
+    "time savings",
+    "time-to-market",
+    "schedules"
+   ]
+  },
+  {
+   "id": "cloud",
+   "name": "Cloud",
+   "category": "cloud_dc",
+   "description": "Cloud outline",
+   "tags": [
+    "cloud",
+    "cloud computing",
+    "SaaS",
+    "hosted",
+    "online",
+    "internet",
+    "public cloud",
+    "CSP"
+   ],
+   "uses": [
+    "cloud services",
+    "cloud deployments"
+   ]
+  },
+  {
+   "id": "cloud-framework",
+   "name": "Cloud Framework",
+   "category": "cloud_dc",
+   "description": "Cloud with a node/keyhole connected to a dotted base line",
+   "tags": [
+    "cloud framework",
+    "cloud computing",
+    "cloud platform",
+    "cloud infrastructure",
+    "connected cloud",
+    "cloud-native",
+    "computing"
+   ],
+   "uses": [
+    "cloud platform architecture",
+    "cloud-connected"
+   ]
+  },
+  {
+   "id": "cloud-computing",
+   "name": "Cloud Computing",
+   "category": "cloud_dc",
+   "description": "Cloud with a node connected to a dotted base line (identical to Cloud Framework)",
+   "tags": [
+    "cloud computing",
+    "cloud framework",
+    "cloud platform",
+    "hosted compute"
+   ],
+   "uses": [
+    "use Cloud Framework instead (identical artwork)"
+   ],
+   "duplicate_of": "cloud-framework"
+  },
+  {
+   "id": "compile-integrate",
+   "name": "Compile Integrate",
+   "category": "software",
+   "description": "Small squares merging into a tall grid block",
+   "tags": [
+    "compile",
+    "integrate",
+    "merge",
+    "build",
+    "combine",
+    "consolidate",
+    "integration",
+    "merging"
+   ],
+   "uses": [
+    "build/compile step",
+    "integration of components"
+   ]
+  },
+  {
+   "id": "configuration",
+   "name": "Configuration",
+   "category": "software",
+   "description": "Three horizontal sliders",
+   "tags": [
+    "configuration",
+    "settings",
+    "tuning",
+    "parameters",
+    "adjust",
+    "controls",
+    "customize",
+    "signal processing",
+    "options"
+   ],
+   "uses": [
+    "configuration options",
+    "customization",
+    "tuning"
+   ]
+  },
+  {
+   "id": "connectivity",
+   "name": "Connectivity",
+   "category": "networking",
+   "description": "Concentric broadcast circles around a node",
+   "tags": [
+    "connectivity",
+    "signal",
+    "broadcast",
+    "hotspot",
+    "wireless",
+    "transmission",
+    "IoT",
+    "antenna"
+   ],
+   "uses": [
+    "connectivity features",
+    "IoT"
+   ]
+  },
+  {
+   "id": "cpu",
+   "name": "CPU",
+   "category": "silicon",
+   "description": "Square chip outline (generic die)",
+   "tags": [
+    "CPU",
+    "processor",
+    "chip",
+    "die",
+    "silicon",
+    "compute",
+    "core"
+   ],
+   "uses": [
+    "generic processor/chip slides"
+   ]
+  },
+  {
+   "id": "cpu-2",
+   "name": "CPU 2",
+   "category": "silicon",
+   "description": "Chip package with 'CPU' text",
+   "tags": [
+    "CPU",
+    "processor",
+    "EPYC",
+    "Ryzen",
+    "central processing unit",
+    "compute",
+    "x86",
+    "cores"
+   ],
+   "uses": [
+    "CPU products",
+    "general-purpose compute"
+   ],
+   "has_text": true
+  },
+  {
+   "id": "custom-workload",
+   "name": "Custom Workload",
+   "category": "cloud_dc",
+   "description": "Gear on a hierarchy of connected boxes",
+   "tags": [
+    "custom workload",
+    "workload",
+    "application stack",
+    "configuration",
+    "orchestration",
+    "tailored",
+    "process",
+    "system"
+   ],
+   "uses": [
+    "workload optimization",
+    "custom solutions"
+   ]
+  },
+  {
+   "id": "customers",
+   "name": "Customers",
+   "category": "people",
+   "description": "Three people connected (group/team)",
+   "tags": [
+    "customers",
+    "users",
+    "team",
+    "group",
+    "community",
+    "audience",
+    "collaboration",
+    "people",
+    "partners"
+   ],
+   "uses": [
+    "customers/community",
+    "teams"
+   ]
+  },
+  {
+   "id": "data",
+   "name": "Data",
+   "category": "data",
+   "description": "Database cylinder",
+   "tags": [
+    "data",
+    "database",
+    "storage",
+    "records",
+    "datasets",
+    "SQL",
+    "data lake",
+    "repository"
+   ],
+   "uses": [
+    "databases",
+    "data storage",
+    "data sets"
+   ]
+  },
+  {
+   "id": "data-analytics",
+   "name": "Data Analytics",
+   "category": "data",
+   "description": "Magnifier over data bars inside scan frame",
+   "tags": [
+    "data analytics",
+    "insights",
+    "analysis",
+    "search data",
+    "business intelligence",
+    "discovery",
+    "query"
+   ],
+   "uses": [
+    "analytics workloads",
+    "insights"
+   ]
+  },
+  {
+   "id": "data-preparation-1",
+   "name": "Data Preparation 1",
+   "category": "ai",
+   "description": "Two-way arrow above a data card/server block",
+   "tags": [
+    "data preparation",
+    "data share",
+    "data transfer",
+    "ETL",
+    "data exchange",
+    "AIMs",
+    "data movement",
+    "sync"
+   ],
+   "uses": [
+    "data preparation/sharing step in AI pipeline"
+   ]
+  },
+  {
+   "id": "data-preparation-2",
+   "name": "Data Preparation 2",
+   "category": "ai",
+   "description": "Three down arrows into a disk/platform",
+   "tags": [
+    "data ingestion",
+    "data preparation",
+    "import",
+    "collect",
+    "load data",
+    "AIMs",
+    "upload",
+    "aggregation"
+   ],
+   "uses": [
+    "data ingestion step",
+    "collecting training data"
+   ]
+  },
+  {
+   "id": "data-preparation-3",
+   "name": "Data Preparation 3",
+   "category": "ai",
+   "description": "Stack of layers (identical to HBM)",
+   "tags": [
+    "layers",
+    "stack",
+    "data layers",
+    "datasets",
+    "AIMs",
+    "data preparation",
+    "model layers"
+   ],
+   "uses": [
+    "layered stack",
+    "data preparation (same art as HBM)"
+   ]
+  },
+  {
+   "id": "data-scientist",
+   "name": "Data Scientist",
+   "category": "people",
+   "description": "Person in a pentagon frame",
+   "tags": [
+    "data scientist",
+    "analyst",
+    "researcher",
+    "avatar",
+    "profile",
+    "persona",
+    "AI developer",
+    "ML engineer"
+   ],
+   "uses": [
+    "personas: data scientist",
+    "target audience"
+   ]
+  },
+  {
+   "id": "data-security",
+   "name": "Data Security",
+   "category": "security",
+   "description": "Shield with horizontal lines (secured data)",
+   "tags": [
+    "data security",
+    "data protection",
+    "privacy",
+    "secure",
+    "verified",
+    "encryption",
+    "compliance",
+    "confidential"
+   ],
+   "uses": [
+    "data protection",
+    "confidential computing"
+   ]
+  },
+  {
+   "id": "data-analytics-down",
+   "name": "Data Analytics (Down)",
+   "category": "data",
+   "description": "Descending bars with downward diagonal arrow",
+   "tags": [
+    "decrease",
+    "decline",
+    "lower",
+    "reduction",
+    "down trend",
+    "cost reduction",
+    "fewer",
+    "savings",
+    "less"
+   ],
+   "uses": [
+    "reductions (cost, power, latency)",
+    "downward trend"
+   ]
+  },
+  {
+   "id": "data-analytics-up",
+   "name": "Data Analytics (Up)",
+   "category": "data",
+   "description": "Rising bars with upward diagonal arrow",
+   "tags": [
+    "increase",
+    "growth",
+    "higher",
+    "incline",
+    "up trend",
+    "improvement",
+    "gains",
+    "uplift",
+    "ROI"
+   ],
+   "uses": [
+    "growth/uplift claims",
+    "performance gains"
+   ]
+  },
+  {
+   "id": "data-center",
+   "name": "Data Center",
+   "category": "cloud_dc",
+   "description": "Server rack cabinet with rows",
+   "tags": [
+    "data center",
+    "server rack",
+    "management",
+    "infrastructure",
+    "hyperscale",
+    "enterprise IT",
+    "compute cluster"
+   ],
+   "uses": [
+    "data center solutions",
+    "infrastructure"
+   ]
+  },
+  {
+   "id": "ddr-memory",
+   "name": "DDR Memory",
+   "category": "hardware",
+   "description": "Memory module (DIMM) with chips",
+   "tags": [
+    "DDR",
+    "memory",
+    "RAM",
+    "DIMM",
+    "block RAM",
+    "distributed RAM",
+    "DRAM",
+    "memory bandwidth"
+   ],
+   "uses": [
+    "memory specs",
+    "DDR support"
+   ]
+  },
+  {
+   "id": "debug",
+   "name": "Debug",
+   "category": "software",
+   "description": "Magnifier over a bug",
+   "tags": [
+    "debug",
+    "inspect",
+    "investigate",
+    "troubleshooting",
+    "find bugs",
+    "analysis",
+    "diagnostics"
+   ],
+   "uses": [
+    "debugging tools",
+    "troubleshooting"
+   ]
+  },
+  {
+   "id": "debug-cores",
+   "name": "Debug Cores",
+   "category": "software",
+   "description": "Binary digits with a bug in a circle",
+   "tags": [
+    "debug cores",
+    "code debugging",
+    "binary",
+    "firmware debug",
+    "hardware debug",
+    "embedded debug"
+   ],
+   "uses": [
+    "hardware/firmware debug cores"
+   ]
+  },
+  {
+   "id": "defect-detection",
+   "name": "Defect Detection",
+   "category": "vision_sensing",
+   "description": "Warning triangle with exclamation mark",
+   "tags": [
+    "defect detection",
+    "warning",
+    "alert",
+    "caution",
+    "risk",
+    "error",
+    "quality inspection",
+    "anomaly",
+    "issue"
+   ],
+   "uses": [
+    "warnings/risks",
+    "quality inspection AI",
+    "caution"
+   ]
+  },
+  {
+   "id": "deployment",
+   "name": "Deployment",
+   "category": "cloud_dc",
+   "description": "Box branching to connected nodes (tree)",
+   "tags": [
+    "deployment",
+    "processing system",
+    "distribute",
+    "rollout",
+    "network topology",
+    "hierarchy",
+    "deploy"
+   ],
+   "uses": [
+    "deployment architecture",
+    "rollout"
+   ]
+  },
+  {
+   "id": "desktop",
+   "name": "Desktop",
+   "category": "devices",
+   "description": "PC tower case",
+   "tags": [
+    "desktop",
+    "PC tower",
+    "workstation",
+    "computer",
+    "gaming PC",
+    "client"
+   ],
+   "uses": [
+    "desktop/workstation products"
+   ]
+  },
+  {
+   "id": "dft",
+   "name": "DFT",
+   "category": "silicon",
+   "description": "Stacked chip pages with 'DFT' text",
+   "tags": [
+    "DFT",
+    "design for test",
+    "testing",
+    "test IP",
+    "verification",
+    "silicon test"
+   ],
+   "uses": [
+    "design-for-test features"
+   ],
+   "has_text": true
+  },
+  {
+   "id": "dfx-accelerators",
+   "name": "DFX Accelerators",
+   "category": "hardware",
+   "description": "Gear inside framing corners (identical to Tool Training)",
+   "tags": [
+    "DFX",
+    "dynamic function exchange",
+    "partial reconfiguration",
+    "accelerators",
+    "configurable",
+    "adaptable"
+   ],
+   "uses": [
+    "dynamic function exchange",
+    "reconfigurable accelerators"
+   ]
+  },
+  {
+   "id": "digital-pre-distortion",
+   "name": "Digital Pre Distortion",
+   "category": "networking",
+   "description": "Signal waveform between nodes inside a frame",
+   "tags": [
+    "digital pre-distortion",
+    "DPD",
+    "RF",
+    "signal linearization",
+    "radio",
+    "power amplifier",
+    "signal processing"
+   ],
+   "uses": [
+    "RF front-end / radio DPD"
+   ]
+  },
+  {
+   "id": "direct-rf-dacs-adcs",
+   "name": "Direct RF DACs ADCs",
+   "category": "networking",
+   "description": "Two arrows labelled 'DAC' and 'ADC'",
+   "tags": [
+    "DAC",
+    "ADC",
+    "data converters",
+    "direct RF",
+    "analog-to-digital",
+    "digital-to-analog",
+    "RF sampling",
+    "mixed signal"
+   ],
+   "uses": [
+    "RF data converters (RFSoC)"
+   ],
+   "has_text": true
+  },
+  {
+   "id": "document",
+   "name": "Document",
+   "category": "content",
+   "description": "Page with a bookmark ribbon",
+   "tags": [
+    "document",
+    "certificate",
+    "guide",
+    "paper",
+    "report",
+    "whitepaper",
+    "file",
+    "manual",
+    "documentation"
+   ],
+   "uses": [
+    "documentation",
+    "whitepapers",
+    "guides"
+   ]
+  },
+  {
+   "id": "dollar",
+   "name": "Dollar",
+   "category": "business",
+   "description": "Banknote with a portrait",
+   "tags": [
+    "dollar",
+    "money",
+    "cash",
+    "cost",
+    "price",
+    "payment",
+    "banknote",
+    "finance",
+    "budget",
+    "savings",
+    "currency"
+   ],
+   "uses": [
+    "cost/TCO",
+    "pricing",
+    "savings"
+   ]
+  },
+  {
+   "id": "download",
+   "name": "Download",
+   "category": "ui",
+   "description": "Download arrow into a tray",
+   "tags": [
+    "download",
+    "call to action",
+    "CTA",
+    "get started",
+    "install",
+    "save",
+    "export",
+    "get it"
+   ],
+   "uses": [
+    "download/CTA",
+    "resources available"
+   ]
+  },
+  {
+   "id": "dpu",
+   "name": "DPU",
+   "category": "silicon",
+   "description": "Chip package with 'DPU' text",
+   "tags": [
+    "DPU",
+    "data processing unit",
+    "SmartNIC",
+    "infrastructure offload",
+    "Pensando",
+    "network processor",
+    "DPU PYNQ"
+   ],
+   "uses": [
+    "DPU products",
+    "infrastructure offload"
+   ],
+   "has_text": true
+  },
+  {
+   "id": "duc-ddc",
+   "name": "DUC DDC",
+   "category": "networking",
+   "description": "Vertical waveform/frequency bars",
+   "tags": [
+    "DUC",
+    "DDC",
+    "up conversion",
+    "down conversion",
+    "frequency",
+    "radio",
+    "waveform",
+    "spectrum"
+   ],
+   "uses": [
+    "digital up/down conversion",
+    "radio IP"
+   ]
+  },
+  {
+   "id": "dynamically-adaptable-silicon",
+   "name": "Dynamically Adaptable Silicon",
+   "category": "silicon",
+   "description": "Two blocks with arrows swapping places",
+   "tags": [
+    "dynamically adaptable silicon",
+    "reconfigurable",
+    "adaptable",
+    "form factors",
+    "develop ASIC",
+    "flexible hardware",
+    "swap"
+   ],
+   "uses": [
+    "adaptive/reconfigurable silicon",
+    "ASIC alternatives"
+   ]
+  },
+  {
+   "id": "embedded-sw",
+   "name": "Embedded SW",
+   "category": "software",
+   "description": "</> code over stacked layers",
+   "tags": [
+    "embedded software",
+    "mixed criticality",
+    "software stack",
+    "layers",
+    "RTOS",
+    "safety-critical",
+    "embedded SW",
+    "mixed criricality"
+   ],
+   "uses": [
+    "embedded software stacks",
+    "mixed-criticality"
+   ]
+  },
+  {
+   "id": "embedded-vision",
+   "name": "Embedded Vision",
+   "category": "vision_sensing",
+   "description": "Eye inside scan frame corners",
+   "tags": [
+    "embedded vision",
+    "eye",
+    "sensory",
+    "HDR",
+    "ISP",
+    "vision",
+    "visibility",
+    "monitoring",
+    "smarter control",
+    "observe",
+    "hdr isp",
+    "embedded"
+   ],
+   "uses": [
+    "embedded vision",
+    "visibility/observability"
+   ]
+  },
+  {
+   "id": "energy-efficient",
+   "name": "Energy Efficient",
+   "category": "performance",
+   "description": "Leaf",
+   "tags": [
+    "energy efficient",
+    "green",
+    "sustainability",
+    "climate",
+    "eco",
+    "low power",
+    "ESG",
+    "carbon"
+   ],
+   "uses": [
+    "sustainability/efficiency claims",
+    "perf-per-watt"
+   ]
+  },
+  {
+   "id": "euro",
+   "name": "Euro",
+   "category": "business",
+   "description": "Euro symbol in a circle",
+   "tags": [
+    "euro",
+    "EUR",
+    "currency",
+    "money",
+    "cost",
+    "price",
+    "Europe",
+    "finance"
+   ],
+   "uses": [
+    "pricing/costs in EUR",
+    "Europe"
+   ]
+  },
+  {
+   "id": "expand",
+   "name": "Expand",
+   "category": "ui",
+   "description": "Four arrows pointing outward to corners",
+   "tags": [
+    "expand",
+    "scalable",
+    "grow",
+    "enlarge",
+    "full screen",
+    "extend",
+    "scale out",
+    "maximize"
+   ],
+   "uses": [
+    "scalability/growth",
+    "expansion"
+   ]
+  },
+  {
+   "id": "explore",
+   "name": "Explore",
+   "category": "ui",
+   "description": "Magnifier over a block/text pattern",
+   "tags": [
+    "explore",
+    "search",
+    "discover",
+    "browse",
+    "research",
+    "investigate",
+    "learn more",
+    "find"
+   ],
+   "uses": [
+    "explore/learn more",
+    "search"
+   ]
+  },
+  {
+   "id": "fast-accurate",
+   "name": "Fast & Accurate",
+   "category": "performance",
+   "description": "Speedometer with needle pointing up-right",
+   "tags": [
+    "fast",
+    "accurate",
+    "speed",
+    "performance",
+    "leading",
+    "high performance",
+    "quick",
+    "efficient"
+   ],
+   "uses": [
+    "performance leadership",
+    "fast and accurate results"
+   ]
+  },
+  {
+   "id": "fine-tuning-1",
+   "name": "Fine Tuning 1",
+   "category": "ai",
+   "description": "Hexagon with two sliders and connected nodes",
+   "tags": [
+    "fine-tuning",
+    "model tuning",
+    "AIMs",
+    "customization",
+    "parameters",
+    "training",
+    "adapt model",
+    "optimization"
+   ],
+   "uses": [
+    "LLM fine-tuning",
+    "model customization"
+   ]
+  },
+  {
+   "id": "fine-tuning-2",
+   "name": "Fine Tuning 2",
+   "category": "ai",
+   "description": "Hexagon with three sliders and connected nodes",
+   "tags": [
+    "fine-tuning",
+    "hyperparameters",
+    "AIMs",
+    "model optimization",
+    "tuning",
+    "configuration",
+    "calibration"
+   ],
+   "uses": [
+    "fine-tuning workflows (alt.)"
+   ]
+  },
+  {
+   "id": "foc",
+   "name": "FOC",
+   "category": "silicon",
+   "description": "Framed chip with segmented die (identical to Advanced Compute RDNA)",
+   "tags": [
+    "FOC",
+    "field oriented control",
+    "motor control",
+    "adaptable FOC",
+    "drives",
+    "embedded control"
+   ],
+   "uses": [
+    "motor control (field-oriented control)"
+   ]
+  },
+  {
+   "id": "folder-1",
+   "name": "Folder 1",
+   "category": "content",
+   "description": "Open folder",
+   "tags": [
+    "folder",
+    "open",
+    "files",
+    "directory",
+    "project",
+    "resources",
+    "assets"
+   ],
+   "uses": [
+    "resources",
+    "open project files"
+   ]
+  },
+  {
+   "id": "folder-2",
+   "name": "Folder 2",
+   "category": "content",
+   "description": "Closed folder",
+   "tags": [
+    "folder",
+    "files",
+    "archive",
+    "directory",
+    "storage",
+    "collection"
+   ],
+   "uses": [
+    "file storage",
+    "collections"
+   ]
+  },
+  {
+   "id": "folder-3",
+   "name": "Folder 3",
+   "category": "content",
+   "description": "Folder with document lines",
+   "tags": [
+    "folder",
+    "documents",
+    "records",
+    "files",
+    "reports",
+    "collection",
+    "archive"
+   ],
+   "uses": [
+    "documentation sets",
+    "records"
+   ]
+  },
+  {
+   "id": "folder-4",
+   "name": "Folder 4",
+   "category": "content",
+   "description": "Open folder with documents",
+   "tags": [
+    "folder",
+    "collection",
+    "browse",
+    "documents",
+    "resources",
+    "library",
+    "content"
+   ],
+   "uses": [
+    "content collections",
+    "browse resources"
+   ]
+  },
+  {
+   "id": "fpga",
+   "name": "FPGA",
+   "category": "silicon",
+   "description": "Chip package with square die (FPGA architecture)",
+   "tags": [
+    "FPGA",
+    "architectural blocks",
+    "device",
+    "silicon",
+    "programmable logic",
+    "chip",
+    "adaptive",
+    "architectural",
+    "blocks"
+   ],
+   "uses": [
+    "FPGA devices",
+    "silicon"
+   ]
+  },
+  {
+   "id": "fpga-2",
+   "name": "FPGA 2",
+   "category": "silicon",
+   "description": "Chip package with 'FPGA' text",
+   "tags": [
+    "FPGA",
+    "field programmable gate array",
+    "programmable logic",
+    "Virtex",
+    "Kintex",
+    "Artix",
+    "Spartan",
+    "adaptive"
+   ],
+   "uses": [
+    "FPGA products"
+   ],
+   "has_text": true
+  },
+  {
+   "id": "gaming",
+   "name": "Gaming",
+   "category": "industries",
+   "description": "Game controller",
+   "tags": [
+    "gaming",
+    "game controller",
+    "gamepad",
+    "esports",
+    "play",
+    "entertainment",
+    "Radeon",
+    "console",
+    "controller"
+   ],
+   "uses": [
+    "gaming market",
+    "entertainment"
+   ]
+  },
+  {
+   "id": "globe",
+   "name": "Globe",
+   "category": "networking",
+   "description": "Globe with meridians",
+   "tags": [
+    "globe",
+    "internet",
+    "worldwide",
+    "global",
+    "ecosystem",
+    "international",
+    "web",
+    "world"
+   ],
+   "uses": [
+    "global presence",
+    "ecosystem",
+    "internet"
+   ]
+  },
+  {
+   "id": "gpu",
+   "name": "GPU",
+   "category": "silicon",
+   "description": "Chip package with 'GPU' text",
+   "tags": [
+    "GPU",
+    "graphics processor",
+    "Instinct",
+    "Radeon",
+    "accelerator",
+    "parallel compute",
+    "AI accelerator"
+   ],
+   "uses": [
+    "GPU products",
+    "acceleration"
+   ],
+   "has_text": true
+  },
+  {
+   "id": "gpu-with-fans",
+   "name": "GPU (with fans)",
+   "category": "hardware",
+   "description": "Graphics card with two fans",
+   "tags": [
+    "graphics card",
+    "GPU board",
+    "Radeon",
+    "add-in board",
+    "gaming GPU",
+    "discrete graphics",
+    "cooling"
+   ],
+   "uses": [
+    "discrete graphics cards",
+    "workstation/gaming GPUs"
+   ]
+  },
+  {
+   "id": "gpu-without-fans",
+   "name": "GPU (without fans)",
+   "category": "hardware",
+   "description": "Blank add-in card outline (passively cooled)",
+   "tags": [
+    "add-in card",
+    "accelerator card",
+    "passive GPU",
+    "data center GPU",
+    "PCIe card",
+    "board"
+   ],
+   "uses": [
+    "passive data center accelerator cards"
+   ]
+  },
+  {
+   "id": "graph-c-code",
+   "name": "Graph C-Code",
+   "category": "software",
+   "description": "Code </> symbol with nodes/traces above",
+   "tags": [
+    "C code",
+    "graph",
+    "high-level synthesis",
+    "HLS",
+    "code to hardware",
+    "programming",
+    "compiler",
+    "dataflow"
+   ],
+   "uses": [
+    "HLS / C-to-hardware",
+    "graph programming"
+   ]
+  },
+  {
+   "id": "guardrails",
+   "name": "Guardrails",
+   "category": "ai",
+   "description": "Shield with a gear",
+   "tags": [
+    "guardrails",
+    "AI safety",
+    "responsible AI",
+    "policy",
+    "protection",
+    "AIMs",
+    "compliance",
+    "governance",
+    "secure settings"
+   ],
+   "uses": [
+    "AI guardrails",
+    "safety controls",
+    "governance"
+   ]
+  },
+  {
+   "id": "gyroscope",
+   "name": "Gyroscope",
+   "category": "vision_sensing",
+   "description": "Gyroscope rings around a center",
+   "tags": [
+    "gyroscope",
+    "IMU",
+    "orientation",
+    "motion sensor",
+    "rotation",
+    "navigation",
+    "stabilization"
+   ],
+   "uses": [
+    "sensor/IMU features"
+   ]
+  },
+  {
+   "id": "hand",
+   "name": "Hand",
+   "category": "ui",
+   "description": "Pointing hand/finger (touch)",
+   "tags": [
+    "hand",
+    "touch",
+    "tap",
+    "point",
+    "select",
+    "interact",
+    "manual",
+    "gesture"
+   ],
+   "uses": [
+    "interaction",
+    "hands-on",
+    "touch"
+   ]
+  },
+  {
+   "id": "hand-swipe",
+   "name": "Hand Swipe",
+   "category": "ui",
+   "description": "Pointing hand with left/right arrows (swipe)",
+   "tags": [
+    "swipe",
+    "gesture",
+    "scroll",
+    "navigate",
+    "touch",
+    "interactive",
+    "slide"
+   ],
+   "uses": [
+    "swipe/gesture UI",
+    "navigation"
+   ]
+  },
+  {
+   "id": "hardware-software",
+   "name": "Hardware-Software",
+   "category": "software",
+   "description": "Chip outline containing </> code (HW+SW)",
+   "tags": [
+    "hardware software co-design",
+    "firmware",
+    "embedded software",
+    "full stack",
+    "HW/SW",
+    "platform",
+    "drivers"
+   ],
+   "uses": [
+    "HW/SW co-design",
+    "full-stack platforms"
+   ]
+  },
+  {
+   "id": "hbm",
+   "name": "HBM",
+   "category": "hardware",
+   "description": "Stack of layers (stacked memory)",
+   "tags": [
+    "HBM",
+    "high bandwidth memory",
+    "stacked memory",
+    "SDRAM",
+    "memory capacity",
+    "3D stacking",
+    "layers"
+   ],
+   "uses": [
+    "HBM capacity/bandwidth (Instinct GPUs)",
+    "stacks"
+   ]
+  },
+  {
+   "id": "healthcare",
+   "name": "Healthcare",
+   "category": "industries",
+   "description": "Medical cross in a circle",
+   "tags": [
+    "healthcare",
+    "medical",
+    "hospital",
+    "health",
+    "life sciences",
+    "medical imaging",
+    "clinical",
+    "first aid",
+    "general medical"
+   ],
+   "uses": [
+    "healthcare market",
+    "medical devices"
+   ]
+  },
+  {
+   "id": "high-speed-rf-tester",
+   "name": "High Speed RF Tester",
+   "category": "networking",
+   "description": "Test instrument box with display and knobs",
+   "tags": [
+    "RF tester",
+    "test equipment",
+    "instrument",
+    "oscilloscope",
+    "measurement",
+    "T&M",
+    "lab"
+   ],
+   "uses": [
+    "test & measurement market"
+   ]
+  },
+  {
+   "id": "hmi",
+   "name": "HMI",
+   "category": "industries",
+   "description": "Thermometer (official artwork for HMI)",
+   "tags": [
+    "HMI",
+    "human machine interface",
+    "control",
+    "thermometer",
+    "temperature",
+    "gauge",
+    "industrial control"
+   ],
+   "uses": [
+    "HMI/control (note: artwork is a thermometer — also works for temperature)"
+   ]
+  },
+  {
+   "id": "hw-developer",
+   "name": "HW Developer",
+   "category": "people",
+   "description": "Person inside a square chip frame (hardware developer avatar)",
+   "tags": [
+    "hardware developer",
+    "engineer",
+    "avatar",
+    "profile",
+    "persona",
+    "hardware designer",
+    "FPGA developer",
+    "hardware"
+   ],
+   "uses": [
+    "personas: hardware developer"
+   ]
+  },
+  {
+   "id": "image",
+   "name": "Image",
+   "category": "content",
+   "description": "Picture frame with mountains and sun",
+   "tags": [
+    "image",
+    "photo",
+    "picture",
+    "photograph",
+    "gallery",
+    "visual",
+    "media"
+   ],
+   "uses": [
+    "images/media",
+    "photo features"
+   ]
+  },
+  {
+   "id": "image-library",
+   "name": "Image Library",
+   "category": "content",
+   "description": "Folder with mountains (photo folder)",
+   "tags": [
+    "image library",
+    "photo gallery",
+    "media library",
+    "assets",
+    "pictures",
+    "collection"
+   ],
+   "uses": [
+    "media libraries",
+    "asset collections"
+   ]
+  },
+  {
+   "id": "implementing-flow",
+   "name": "Implementing Flow",
+   "category": "software",
+   "description": "Gear inside a framed board with corner nodes",
+   "tags": [
+    "implementation",
+    "flow",
+    "processing",
+    "design flow",
+    "build",
+    "engineering process",
+    "toolflow"
+   ],
+   "uses": [
+    "implementation/design flow"
+   ]
+  },
+  {
+   "id": "in-cabin-monitoring",
+   "name": "In-Cabin Monitoring",
+   "category": "automotive",
+   "description": "Driver above a seat inside scan corners",
+   "tags": [
+    "in-cabin monitoring",
+    "driver monitoring",
+    "DMS",
+    "occupant monitoring",
+    "cabin sensing",
+    "passenger safety"
+   ],
+   "uses": [
+    "in-cabin/driver monitoring"
+   ]
+  },
+  {
+   "id": "industrial",
+   "name": "Industrial",
+   "category": "industries",
+   "description": "Robotic arm",
+   "tags": [
+    "industrial",
+    "robotics",
+    "robot arm",
+    "manufacturing",
+    "factory",
+    "automation",
+    "ROS motion coordination",
+    "Industry 4.0",
+    "ros motion",
+    "coordination"
+   ],
+   "uses": [
+    "industrial/manufacturing market",
+    "robotics"
+   ]
+  },
+  {
+   "id": "integrate-som",
+   "name": "Integrate SOM",
+   "category": "hardware",
+   "description": "Chip on a framed grid (system-on-module)",
+   "tags": [
+    "SOM",
+    "system on module",
+    "Kria",
+    "integrate",
+    "module",
+    "carrier board",
+    "embedded module"
+   ],
+   "uses": [
+    "SOM products",
+    "module integration"
+   ]
+  },
+  {
+   "id": "keyboard",
+   "name": "Keyboard",
+   "category": "devices",
+   "description": "Keyboard",
+   "tags": [
+    "keyboard",
+    "input",
+    "typing",
+    "PC peripheral",
+    "client",
+    "user input"
+   ],
+   "uses": [
+    "PC peripherals",
+    "typing/input"
+   ]
+  },
+  {
+   "id": "laptop-blank",
+   "name": "Laptop (Blank)",
+   "category": "devices",
+   "description": "Laptop (blank screen)",
+   "tags": [
+    "laptop",
+    "notebook PC",
+    "mobile computing",
+    "client",
+    "AI PC",
+    "Ryzen laptop",
+    "portable"
+   ],
+   "uses": [
+    "laptop/mobile PCs",
+    "client computing"
+   ]
+  },
+  {
+   "id": "laptop-programming",
+   "name": "Laptop (Programming)",
+   "category": "devices",
+   "description": "Laptop with UI element on screen",
+   "tags": [
+    "laptop programming",
+    "UX",
+    "development laptop",
+    "software on PC",
+    "interface",
+    "app"
+   ],
+   "uses": [
+    "PC software experience",
+    "UX"
+   ]
+  },
+  {
+   "id": "laptop-social-media-app",
+   "name": "Laptop (Social Media/App)",
+   "category": "devices",
+   "description": "Laptop with text/block layout on screen",
+   "tags": [
+    "laptop",
+    "social media",
+    "app",
+    "UI",
+    "web page",
+    "DPU PYNQ",
+    "dashboard",
+    "content"
+   ],
+   "uses": [
+    "apps/UI on PC",
+    "web dashboards"
+   ]
+  },
+  {
+   "id": "laptop-image",
+   "name": "Laptop (Image)",
+   "category": "devices",
+   "description": "Laptop showing an image",
+   "tags": [
+    "laptop",
+    "streaming",
+    "movie",
+    "media",
+    "content creation",
+    "photo editing",
+    "entertainment",
+    "streaming movie"
+   ],
+   "uses": [
+    "content creation",
+    "streaming on PC"
+   ]
+  },
+  {
+   "id": "lesion-detection-and-localization-1",
+   "name": "Lesion Detection and Localization 1",
+   "category": "industries",
+   "description": "Framed medical scan with a body/organ shape",
+   "tags": [
+    "lesion detection",
+    "localization",
+    "medical imaging",
+    "radiology",
+    "scan",
+    "diagnosis",
+    "AI healthcare"
+   ],
+   "uses": [
+    "medical imaging AI demos"
+   ]
+  },
+  {
+   "id": "lesion-detection-and-localization-2",
+   "name": "Lesion Detection and Localization 2",
+   "category": "industries",
+   "description": "Framed scan with a hand (X-ray style)",
+   "tags": [
+    "lesion detection",
+    "localization",
+    "X-ray",
+    "medical imaging",
+    "radiology",
+    "diagnostics",
+    "AI healthcare"
+   ],
+   "uses": [
+    "medical imaging AI demos (alt.)"
+   ]
+  },
+  {
+   "id": "libraries",
+   "name": "Libraries",
+   "category": "software",
+   "description": "Stacked pages with grid of squares (library)",
+   "tags": [
+    "libraries",
+    "collection",
+    "software libraries",
+    "SDK",
+    "resources",
+    "catalog",
+    "packages"
+   ],
+   "uses": [
+    "software libraries/SDKs",
+    "resource catalog"
+   ]
+  },
+  {
+   "id": "light-bulb",
+   "name": "Light bulb",
+   "category": "ui",
+   "description": "Light bulb with rays",
+   "tags": [
+    "idea",
+    "innovation",
+    "insight",
+    "smart",
+    "tip",
+    "inspiration",
+    "creativity",
+    "solution",
+    "best practice"
+   ],
+   "uses": [
+    "ideas/innovation",
+    "tips",
+    "key insight"
+   ]
+  },
+  {
+   "id": "line-chart",
+   "name": "Line Chart",
+   "category": "data",
+   "description": "Line graph with nodes",
+   "tags": [
+    "line chart",
+    "benchmark",
+    "statistics",
+    "trend",
+    "metrics",
+    "analytics",
+    "growth",
+    "performance over time"
+   ],
+   "uses": [
+    "trends",
+    "benchmark results"
+   ]
+  },
+  {
+   "id": "linear-algebra",
+   "name": "Linear Algebra",
+   "category": "ai",
+   "description": "Math operators + − × = inside frame corners",
+   "tags": [
+    "linear algebra",
+    "math",
+    "calculations",
+    "operations",
+    "compute kernels",
+    "BLAS",
+    "system testing",
+    "matrix math"
+   ],
+   "uses": [
+    "math libraries",
+    "compute kernels"
+   ]
+  },
+  {
+   "id": "link",
+   "name": "Link",
+   "category": "ui",
+   "description": "Chain link",
+   "tags": [
+    "link",
+    "hyperlink",
+    "connect",
+    "URL",
+    "chain",
+    "integration",
+    "relationship",
+    "attach"
+   ],
+   "uses": [
+    "links/resources",
+    "connections"
+   ]
+  },
+  {
+   "id": "location",
+   "name": "Location",
+   "category": "ui",
+   "description": "Map pin",
+   "tags": [
+    "location",
+    "destination",
+    "goal",
+    "map",
+    "place",
+    "region",
+    "site",
+    "where",
+    "geography"
+   ],
+   "uses": [
+    "locations/regions",
+    "events",
+    "destination"
+   ]
+  },
+  {
+   "id": "low-latency",
+   "name": "Low Latency",
+   "category": "performance",
+   "description": "Stopwatch with needle",
+   "tags": [
+    "low latency",
+    "real-time",
+    "response time",
+    "precision time",
+    "fast",
+    "deterministic",
+    "timing"
+   ],
+   "uses": [
+    "latency claims",
+    "real-time"
+   ]
+  },
+  {
+   "id": "machine-learning",
+   "name": "Machine Learning",
+   "category": "ai",
+   "description": "Brain with circuit nodes",
+   "tags": [
+    "machine learning",
+    "AI",
+    "smart model",
+    "edge AI",
+    "deep learning",
+    "intelligence",
+    "smart devices",
+    "memory monitor",
+    "cognition",
+    "select coordination"
+   ],
+   "uses": [
+    "AI/ML generic",
+    "edge AI"
+   ]
+  },
+  {
+   "id": "magnetometer",
+   "name": "Magnetometer",
+   "category": "vision_sensing",
+   "description": "Horseshoe magnet",
+   "tags": [
+    "magnetometer",
+    "magnet",
+    "magnetic sensor",
+    "compass",
+    "IMU",
+    "attraction"
+   ],
+   "uses": [
+    "sensors",
+    "(also metaphor for attract/retain)"
+   ]
+  },
+  {
+   "id": "make",
+   "name": "Make",
+   "category": "hardware",
+   "description": "3D box/cube with face details",
+   "tags": [
+    "make",
+    "generate",
+    "build",
+    "product",
+    "package",
+    "box",
+    "manufacture",
+    "create"
+   ],
+   "uses": [
+    "build/make step",
+    "product packaging"
+   ]
+  },
+  {
+   "id": "massive-mimo-macrocell-tower",
+   "name": "Massive Mimo Macrocell Tower",
+   "category": "networking",
+   "description": "Antenna array with signal waves",
+   "tags": [
+    "massive MIMO",
+    "macrocell",
+    "cell tower",
+    "radio unit",
+    "DUC",
+    "DDC",
+    "CFR",
+    "DPD",
+    "5G RAN",
+    "duc, ddc, cfr, dpd"
+   ],
+   "uses": [
+    "radio/RAN infrastructure"
+   ]
+  },
+  {
+   "id": "massive-mimo",
+   "name": "Massive MIMO",
+   "category": "networking",
+   "description": "Dense grid antenna array",
+   "tags": [
+    "massive MIMO",
+    "antenna array",
+    "beamforming",
+    "embedded",
+    "5G radio",
+    "RAN"
+   ],
+   "uses": [
+    "MIMO/beamforming"
+   ]
+  },
+  {
+   "id": "microcontroller-1",
+   "name": "Microcontroller 1",
+   "category": "silicon",
+   "description": "Chip with '=' lines on die",
+   "tags": [
+    "microcontroller",
+    "MCU",
+    "embedded processor",
+    "integrated circuit",
+    "chip",
+    "IC"
+   ],
+   "uses": [
+    "embedded/MCU slides"
+   ]
+  },
+  {
+   "id": "microcontroller-2",
+   "name": "Microcontroller 2",
+   "category": "silicon",
+   "description": "Chip with inner square and corner dots",
+   "tags": [
+    "microcontroller",
+    "adaptable logic",
+    "integrated circuit",
+    "chip",
+    "IC",
+    "embedded"
+   ],
+   "uses": [
+    "embedded/MCU slides (alt.)"
+   ]
+  },
+  {
+   "id": "mipi-receiver",
+   "name": "MIPI Receiver",
+   "category": "vision_sensing",
+   "description": "Video camera body",
+   "tags": [
+    "MIPI",
+    "camera interface",
+    "CSI",
+    "video camera",
+    "receiver",
+    "image sensor interface",
+    "camera",
+    "interface"
+   ],
+   "uses": [
+    "camera interface IP",
+    "video capture"
+   ]
+  },
+  {
+   "id": "mmwave-tower",
+   "name": "mmWAVE Tower",
+   "category": "networking",
+   "description": "Stacked radio units between signal arcs",
+   "tags": [
+    "mmWave",
+    "millimeter wave",
+    "5G tower",
+    "radio",
+    "small cell",
+    "high frequency"
+   ],
+   "uses": [
+    "mmWave/5G radio"
+   ]
+  },
+  {
+   "id": "monitor",
+   "name": "Monitor",
+   "category": "devices",
+   "description": "Desktop monitor",
+   "tags": [
+    "monitor",
+    "display",
+    "screen",
+    "desktop",
+    "visualization",
+    "dashboard"
+   ],
+   "uses": [
+    "displays",
+    "dashboards"
+   ]
+  },
+  {
+   "id": "mpsoc",
+   "name": "MPSoC",
+   "category": "silicon",
+   "description": "Framed chip with I/O dots (multiprocessor SoC)",
+   "tags": [
+    "MPSoC",
+    "Zynq UltraScale+",
+    "multiprocessor",
+    "system on chip",
+    "heterogeneous"
+   ],
+   "uses": [
+    "MPSoC products"
+   ]
+  },
+  {
+   "id": "multi-stream-facial-recognition-1",
+   "name": "Multi-Stream Facial Recognition 1",
+   "category": "vision_sensing",
+   "description": "Three faces inside scan frame corners",
+   "tags": [
+    "facial recognition",
+    "multi-stream",
+    "face detection",
+    "crowd analytics",
+    "biometrics",
+    "video analytics",
+    "people"
+   ],
+   "uses": [
+    "multi-stream video AI",
+    "face recognition"
+   ]
+  },
+  {
+   "id": "multi-stream-facial-recognition-2",
+   "name": "Multi-Stream Facial Recognition 2",
+   "category": "vision_sensing",
+   "description": "Face/sphere inside scan frame corners",
+   "tags": [
+    "facial recognition",
+    "face scan",
+    "biometrics",
+    "identity",
+    "detection",
+    "vision AI"
+   ],
+   "uses": [
+    "face recognition demos"
+   ]
+  },
+  {
+   "id": "multitasking-1",
+   "name": "Multitasking 1",
+   "category": "business",
+   "description": "Check mark in a framed board (identical to Action Plans)",
+   "tags": [
+    "multitasking",
+    "action plans",
+    "complete",
+    "tasks",
+    "checklist",
+    "done"
+   ],
+   "uses": [
+    "use Action Plans (identical artwork)"
+   ],
+   "duplicate_of": "action-plans"
+  },
+  {
+   "id": "multitasking-2",
+   "name": "Multitasking 2",
+   "category": "software",
+   "description": "Branching connector with nodes",
+   "tags": [
+    "multitasking",
+    "deploy",
+    "branching",
+    "parallel",
+    "distribute",
+    "fan-out",
+    "pipeline"
+   ],
+   "uses": [
+    "parallel tasks",
+    "deployment fan-out"
+   ]
+  },
+  {
+   "id": "multitasking-3",
+   "name": "Multitasking 3",
+   "category": "performance",
+   "description": "Central chip with arrows out to four corners",
+   "tags": [
+    "multitasking",
+    "distribute",
+    "update",
+    "multiple",
+    "scale",
+    "broadcast",
+    "parallel compute"
+   ],
+   "uses": [
+    "distribute updates",
+    "parallel processing"
+   ]
+  },
+  {
+   "id": "mute",
+   "name": "Mute",
+   "category": "ui",
+   "description": "Speaker with an X",
+   "tags": [
+    "mute",
+    "silent",
+    "no sound",
+    "quiet",
+    "noise cancellation",
+    "audio off"
+   ],
+   "uses": [
+    "mute/noise suppression features"
+   ]
+  },
+  {
+   "id": "networking-ip-protocol",
+   "name": "Networking IP Protocol",
+   "category": "networking",
+   "description": "Two opposing arrows (bidirectional exchange)",
+   "tags": [
+    "networking IP",
+    "protocol engines",
+    "bidirectional",
+    "transfer",
+    "exchange",
+    "send/receive",
+    "data flow",
+    "traffic",
+    "engines"
+   ],
+   "uses": [
+    "networking IP",
+    "data exchange",
+    "two-way flow"
+   ]
+  },
+  {
+   "id": "neural-network",
+   "name": "Neural Network",
+   "category": "ai",
+   "description": "Chip with traces to nodes (identical to AIEngine)",
+   "tags": [
+    "neural network",
+    "AI engine",
+    "multiple connectivity",
+    "adaptability",
+    "DSP",
+    "deep learning",
+    "multiple",
+    "connectivity"
+   ],
+   "uses": [
+    "neural networks (same art as AIEngine)"
+   ]
+  },
+  {
+   "id": "note",
+   "name": "Note",
+   "category": "content",
+   "description": "Blank page with folded corner",
+   "tags": [
+    "note",
+    "page",
+    "memo",
+    "file",
+    "blank document",
+    "productivity"
+   ],
+   "uses": [
+    "notes",
+    "documents"
+   ]
+  },
+  {
+   "id": "notebook",
+   "name": "Notebook",
+   "category": "content",
+   "description": "Notebook with binding tabs",
+   "tags": [
+    "notebook",
+    "notes",
+    "journal",
+    "productivity",
+    "Jupyter",
+    "documentation",
+    "log"
+   ],
+   "uses": [
+    "notebooks (incl. Jupyter)",
+    "note-taking"
+   ]
+  },
+  {
+   "id": "npu",
+   "name": "NPU",
+   "category": "silicon",
+   "description": "Chip package with 'NPU' text",
+   "tags": [
+    "NPU",
+    "neural processing unit",
+    "AI processor",
+    "XDNA",
+    "Ryzen AI",
+    "AI engine",
+    "on-device AI"
+   ],
+   "uses": [
+    "NPU / Ryzen AI slides"
+   ],
+   "has_text": true
+  },
+  {
+   "id": "on-demand-training",
+   "name": "On-Demand Training",
+   "category": "content",
+   "description": "Stacked pages with grid (identical to Libraries)",
+   "tags": [
+    "on-demand training",
+    "courses",
+    "library",
+    "e-learning",
+    "on-demand"
+   ],
+   "uses": [
+    "use Bundled On-Demand Training or Libraries (identical artwork)"
+   ],
+   "duplicate_of": "bundled-on-demand-training"
+  },
+  {
+   "id": "onload",
+   "name": "Onload",
+   "category": "software",
+   "description": "Grid of squares funneling into a bar (install/load)",
+   "tags": [
+    "onload",
+    "install",
+    "load",
+    "ingest",
+    "import",
+    "deploy to device",
+    "setup"
+   ],
+   "uses": [
+    "install/load step"
+   ]
+  },
+  {
+   "id": "partner-libraries",
+   "name": "Partner Libraries",
+   "category": "software",
+   "description": "Stacked pages with 'P'",
+   "tags": [
+    "partner libraries",
+    "partner",
+    "collection",
+    "on-demand",
+    "ecosystem",
+    "third-party libraries"
+   ],
+   "uses": [
+    "partner ecosystem libraries"
+   ],
+   "has_text": true
+  },
+  {
+   "id": "pcie",
+   "name": "PCIe",
+   "category": "hardware",
+   "description": "Expansion card with slot connector",
+   "tags": [
+    "PCIe",
+    "expansion card",
+    "interconnect",
+    "bus",
+    "add-in card",
+    "Gen5",
+    "I/O"
+   ],
+   "uses": [
+    "PCIe interface",
+    "add-in cards"
+   ]
+  },
+  {
+   "id": "percent",
+   "name": "Percent",
+   "category": "data",
+   "description": "Percent sign with square dots",
+   "tags": [
+    "percent",
+    "percentage",
+    "ratio",
+    "discount",
+    "rate",
+    "improvement",
+    "share",
+    "uplift"
+   ],
+   "uses": [
+    "percentage stats",
+    "discounts",
+    "uplift"
+   ]
+  },
+  {
+   "id": "phased-array-radar-tower",
+   "name": "Phased Array Radar Tower",
+   "category": "networking",
+   "description": "Dome with lattice (radar radome)",
+   "tags": [
+    "phased array",
+    "radar",
+    "beamforming",
+    "defense radar",
+    "radome",
+    "sensing",
+    "aerospace"
+   ],
+   "uses": [
+    "radar systems",
+    "A&D"
+   ]
+  },
+  {
+   "id": "pie-chart",
+   "name": "Pie Chart",
+   "category": "data",
+   "description": "Pie chart with a slice",
+   "tags": [
+    "pie chart",
+    "market share",
+    "proportion",
+    "breakdown",
+    "distribution",
+    "statistics",
+    "segment"
+   ],
+   "uses": [
+    "market share",
+    "breakdowns"
+   ]
+  },
+  {
+   "id": "pound",
+   "name": "Pound",
+   "category": "business",
+   "description": "Pound sterling symbol in a circle",
+   "tags": [
+    "pound",
+    "GBP",
+    "currency",
+    "money",
+    "UK",
+    "cost",
+    "price",
+    "finance"
+   ],
+   "uses": [
+    "pricing/costs in GBP",
+    "UK"
+   ]
+  },
+  {
+   "id": "power",
+   "name": "Power",
+   "category": "performance",
+   "description": "Lightning bolt",
+   "tags": [
+    "power",
+    "energy",
+    "electricity",
+    "boost",
+    "fast",
+    "charge",
+    "performance",
+    "turbo"
+   ],
+   "uses": [
+    "power/energy",
+    "boost"
+   ]
+  },
+  {
+   "id": "power-reduction",
+   "name": "Power Reduction",
+   "category": "performance",
+   "description": "Vertical battery with down arrow",
+   "tags": [
+    "power reduction",
+    "efficiency",
+    "lower power",
+    "save energy",
+    "battery saving",
+    "reduced consumption"
+   ],
+   "uses": [
+    "power savings",
+    "efficiency"
+   ]
+  },
+  {
+   "id": "precision-time",
+   "name": "Precision Time",
+   "category": "performance",
+   "description": "Stopwatch with needle (identical to Low Latency)",
+   "tags": [
+    "precision time",
+    "PTP",
+    "timing",
+    "synchronization",
+    "clock sync",
+    "time-sensitive networking"
+   ],
+   "uses": [
+    "timing/sync IP"
+   ]
+  },
+  {
+   "id": "prime",
+   "name": "Prime",
+   "category": "ui",
+   "description": "Large arrow pointing to top-right block (launch/prime)",
+   "tags": [
+    "prime",
+    "launch",
+    "go",
+    "upgrade",
+    "move up",
+    "scale up",
+    "external link",
+    "transform",
+    "migrate"
+   ],
+   "uses": [
+    "launch/upgrade",
+    "migration",
+    "external link"
+   ]
+  },
+  {
+   "id": "processing-engines",
+   "name": "Processing Engines",
+   "category": "silicon",
+   "description": "Box with dots feeding two sub-blocks",
+   "tags": [
+    "processing engine",
+    "compute engine",
+    "pipeline",
+    "processing system",
+    "hierarchy",
+    "block diagram"
+   ],
+   "uses": [
+    "processing engines",
+    "system block"
+   ]
+  },
+  {
+   "id": "productivity",
+   "name": "Productivity",
+   "category": "performance",
+   "description": "Gauge with three upward arrows",
+   "tags": [
+    "productivity",
+    "performance",
+    "efficiency",
+    "boost",
+    "output",
+    "throughput",
+    "acceleration",
+    "improvement"
+   ],
+   "uses": [
+    "productivity gains",
+    "throughput"
+   ]
+  },
+  {
+   "id": "programmable-engine",
+   "name": "Programmable Engine",
+   "category": "software",
+   "description": "Laptop showing a gear",
+   "tags": [
+    "programmable engine",
+    "software configuration",
+    "settings",
+    "engineering",
+    "development",
+    "customization"
+   ],
+   "uses": [
+    "programmability",
+    "software-defined"
+   ]
+  },
+  {
+   "id": "programmable-io",
+   "name": "Programmable IO",
+   "category": "hardware",
+   "description": "Gear inside dotted square (I/O pins)",
+   "tags": [
+    "programmable I/O",
+    "PIO",
+    "interfaces",
+    "pins",
+    "configurable I/O",
+    "GPIO"
+   ],
+   "uses": [
+    "flexible I/O"
+   ]
+  },
+  {
+   "id": "question",
+   "name": "Question",
+   "category": "ui",
+   "description": "Question mark",
+   "tags": [
+    "question",
+    "FAQ",
+    "help",
+    "Q&A",
+    "ask",
+    "unknown",
+    "support",
+    "inquiry"
+   ],
+   "uses": [
+    "Q&A slide",
+    "FAQs",
+    "help"
+   ]
+  },
+  {
+   "id": "ready-to-run-ai-pcs",
+   "name": "Ready-To-Run AI PCs",
+   "category": "silicon",
+   "description": "Chip package with 'AI' (identical to AI PCs Ready-To-Run)",
+   "tags": [
+    "AI PC",
+    "ready-to-run",
+    "Ryzen AI",
+    "AI chip"
+   ],
+   "uses": [
+    "use AI PCs Ready-To-Run (identical artwork)"
+   ],
+   "has_text": true,
+   "duplicate_of": "ai-pcs"
+  },
+  {
+   "id": "remote",
+   "name": "Remote",
+   "category": "devices",
+   "description": "Headset with microphone",
+   "tags": [
+    "headset",
+    "remote work",
+    "support",
+    "call center",
+    "customer service",
+    "conferencing",
+    "audio",
+    "help desk"
+   ],
+   "uses": [
+    "support/contact",
+    "remote collaboration"
+   ]
+  },
+  {
+   "id": "restart",
+   "name": "Restart",
+   "category": "ui",
+   "description": "Two circular arrows (refresh)",
+   "tags": [
+    "restart",
+    "redo",
+    "recycle",
+    "refresh",
+    "lifecycle",
+    "reset",
+    "sync",
+    "update",
+    "iterate",
+    "reuse",
+    "lifcycle"
+   ],
+   "uses": [
+    "lifecycle/iteration",
+    "refresh",
+    "recycle"
+   ]
+  },
+  {
+   "id": "rf",
+   "name": "RF",
+   "category": "networking",
+   "description": "Circuit/signal line with nodes (RF)",
+   "tags": [
+    "RF",
+    "radio frequency",
+    "signal",
+    "antenna",
+    "wireless",
+    "radio"
+   ],
+   "uses": [
+    "RF solutions"
+   ]
+  },
+  {
+   "id": "rf-sampling",
+   "name": "RF Sampling",
+   "category": "networking",
+   "description": "Single sharp waveform/pulse",
+   "tags": [
+    "RF sampling",
+    "waveform",
+    "signal",
+    "frequency",
+    "natural language processing",
+    "pulse",
+    "oscilloscope",
+    "natural language",
+    "processing"
+   ],
+   "uses": [
+    "RF sampling",
+    "signal processing"
+   ]
+  },
+  {
+   "id": "rfsoc",
+   "name": "RFSoC",
+   "category": "silicon",
+   "description": "Framed chip with I/O dots (RF SoC)",
+   "tags": [
+    "RFSoC",
+    "Zynq RFSoC",
+    "RF system on chip",
+    "radio",
+    "data converters",
+    "SoC"
+   ],
+   "uses": [
+    "RFSoC products"
+   ]
+  },
+  {
+   "id": "ros-perception-node",
+   "name": "ROS Perception Node",
+   "category": "vision_sensing",
+   "description": "Three people/nodes connected inside a frame",
+   "tags": [
+    "ROS",
+    "perception node",
+    "robotics",
+    "presenting",
+    "Teams",
+    "video chat",
+    "multi-node",
+    "group",
+    "teams video chat"
+   ],
+   "uses": [
+    "robotics perception",
+    "group video meetings"
+   ]
+  },
+  {
+   "id": "rupee",
+   "name": "Rupee",
+   "category": "business",
+   "description": "Rupee symbol in a circle",
+   "tags": [
+    "rupee",
+    "INR",
+    "currency",
+    "India",
+    "money",
+    "cost",
+    "price",
+    "finance"
+   ],
+   "uses": [
+    "pricing/costs in INR",
+    "India"
+   ]
+  },
+  {
+   "id": "satellite",
+   "name": "Satellite",
+   "category": "networking",
+   "description": "Satellite with solar panels",
+   "tags": [
+    "satellite",
+    "space",
+    "orbit",
+    "aerospace",
+    "space-grade",
+    "communications",
+    "rad-hard"
+   ],
+   "uses": [
+    "space/satellite market"
+   ]
+  },
+  {
+   "id": "satellite-communication",
+   "name": "Satellite Communication",
+   "category": "networking",
+   "description": "Satellite dish antenna on a stand",
+   "tags": [
+    "satellite communication",
+    "dish",
+    "ground station",
+    "uplink",
+    "broadcast",
+    "satcom",
+    "antenna"
+   ],
+   "uses": [
+    "satcom",
+    "ground stations"
+   ]
+  },
+  {
+   "id": "scalability",
+   "name": "Scalability",
+   "category": "performance",
+   "description": "Small box to large box with diagonal arrows (scale up)",
+   "tags": [
+    "scalability",
+    "scale up",
+    "grow",
+    "expand",
+    "resize",
+    "flexible",
+    "elastic"
+   ],
+   "uses": [
+    "scalability claims",
+    "scale-up/scale-out"
+   ]
+  },
+  {
+   "id": "scalar-engines",
+   "name": "Scalar Engines",
+   "category": "silicon",
+   "description": "Hierarchy of blocks with diamond and nodes",
+   "tags": [
+    "scalar engines",
+    "Versal AI",
+    "platform control",
+    "edge compute",
+    "processing system",
+    "Arm cores"
+   ],
+   "uses": [
+    "Versal scalar engines",
+    "platform control"
+   ]
+  },
+  {
+   "id": "security",
+   "name": "Security",
+   "category": "security",
+   "description": "Shield with check mark",
+   "tags": [
+    "security",
+    "functional safety",
+    "cybersecurity",
+    "protection",
+    "trusted",
+    "proven",
+    "complete",
+    "secure",
+    "safe"
+   ],
+   "uses": [
+    "security & trust",
+    "safety certification"
+   ]
+  },
+  {
+   "id": "sensor",
+   "name": "Sensor",
+   "category": "vision_sensing",
+   "description": "Sensor head emitting waves downward",
+   "tags": [
+    "sensor",
+    "sensing",
+    "detection",
+    "sensor-based FOC",
+    "IoT sensor",
+    "proximity",
+    "signal",
+    "sensor based foc"
+   ],
+   "uses": [
+    "sensor solutions",
+    "IoT sensing"
+   ]
+  },
+  {
+   "id": "server",
+   "name": "Server",
+   "category": "cloud_dc",
+   "description": "Rack server units stacked",
+   "tags": [
+    "server",
+    "rack",
+    "data center",
+    "healthcare IoT",
+    "compute node",
+    "infrastructure",
+    "EPYC server",
+    "hosting"
+   ],
+   "uses": [
+    "server products",
+    "on-prem infrastructure"
+   ]
+  },
+  {
+   "id": "signal-processing-ip",
+   "name": "Signal Processing IP",
+   "category": "networking",
+   "description": "Dense waveform signal",
+   "tags": [
+    "signal processing",
+    "DSP",
+    "IP",
+    "waveform",
+    "audio signal",
+    "RF",
+    "filtering"
+   ],
+   "uses": [
+    "DSP/signal processing IP"
+   ]
+  },
+  {
+   "id": "signature-1",
+   "name": "Signature 1",
+   "category": "content",
+   "description": "Handwritten signature inside frame corners",
+   "tags": [
+    "signature",
+    "sign",
+    "email signature",
+    "agreement",
+    "approval",
+    "contract",
+    "authorization",
+    "email"
+   ],
+   "uses": [
+    "sign-off/approvals",
+    "agreements"
+   ]
+  },
+  {
+   "id": "signature-2",
+   "name": "Signature 2",
+   "category": "content",
+   "description": "Pen writing a signature",
+   "tags": [
+    "signature",
+    "sign",
+    "documents",
+    "contract",
+    "approval",
+    "write",
+    "agreement",
+    "e-sign"
+   ],
+   "uses": [
+    "contracts",
+    "approvals"
+   ]
+  },
+  {
+   "id": "smart-camera",
+   "name": "Smart Camera",
+   "category": "vision_sensing",
+   "description": "Dome security camera with wireless signal",
+   "tags": [
+    "smart camera",
+    "IP camera",
+    "security camera",
+    "surveillance",
+    "video analytics",
+    "edge AI camera",
+    "connected"
+   ],
+   "uses": [
+    "smart camera / video security"
+   ]
+  },
+  {
+   "id": "smart-cities",
+   "name": "Smart Cities",
+   "category": "industries",
+   "description": "City buildings with wireless signal",
+   "tags": [
+    "smart city",
+    "urban",
+    "connected infrastructure",
+    "IoT",
+    "buildings",
+    "municipal",
+    "traffic"
+   ],
+   "uses": [
+    "smart city solutions"
+   ]
+  },
+  {
+   "id": "smart-home",
+   "name": "Smart Home",
+   "category": "industries",
+   "description": "House with wireless signal",
+   "tags": [
+    "smart home",
+    "connected home",
+    "IoT",
+    "consumer",
+    "home automation",
+    "residential"
+   ],
+   "uses": [
+    "smart home / consumer IoT"
+   ]
+  },
+  {
+   "id": "soc",
+   "name": "SoC",
+   "category": "silicon",
+   "description": "Framed chip with die and I/O dots",
+   "tags": [
+    "SoC",
+    "system on chip",
+    "integrated",
+    "embedded processor",
+    "silicon"
+   ],
+   "uses": [
+    "SoC products"
+   ]
+  },
+  {
+   "id": "social-post",
+   "name": "Social Post",
+   "category": "content",
+   "description": "Speech bubble containing a person",
+   "tags": [
+    "social post",
+    "social media",
+    "comments",
+    "community",
+    "profile post",
+    "everyone's social",
+    "share",
+    "everyones soxial"
+   ],
+   "uses": [
+    "social media",
+    "community engagement"
+   ]
+  },
+  {
+   "id": "software-stability",
+   "name": "Software Stability",
+   "category": "software",
+   "description": "Stacked app windows with </> code",
+   "tags": [
+    "software stability",
+    "reliable software",
+    "mature stack",
+    "drivers",
+    "ROCm",
+    "software ecosystem",
+    "robust"
+   ],
+   "uses": [
+    "software maturity/stability claims"
+   ]
+  },
+  {
+   "id": "speed",
+   "name": "Speed",
+   "category": "performance",
+   "description": "Speedometer with needle",
+   "tags": [
+    "speed",
+    "performance",
+    "fast",
+    "accurate",
+    "velocity",
+    "acceleration",
+    "throughput",
+    "fast, accurate"
+   ],
+   "uses": [
+    "performance/speed claims"
+   ]
+  },
+  {
+   "id": "storage-compression",
+   "name": "Storage Compression",
+   "category": "cloud_dc",
+   "description": "Four arrows pointing inward to a center",
+   "tags": [
+    "storage compression",
+    "compress",
+    "reduce size",
+    "consolidate",
+    "shrink",
+    "data reduction",
+    "consolidation"
+   ],
+   "uses": [
+    "compression",
+    "server consolidation"
+   ]
+  },
+  {
+   "id": "surround-view",
+   "name": "Surround View",
+   "category": "automotive",
+   "description": "'360' with circular arrows",
+   "tags": [
+    "surround view",
+    "360 degree",
+    "360 camera",
+    "all-around",
+    "panoramic",
+    "full visibility",
+    "holistic"
+   ],
+   "uses": [
+    "360 view / surround camera",
+    "holistic view"
+   ],
+   "has_text": true
+  },
+  {
+   "id": "sw-developer",
+   "name": "SW Developer",
+   "category": "people",
+   "description": "Person in a circle (software developer avatar)",
+   "tags": [
+    "software developer",
+    "programmer",
+    "avatar",
+    "profile",
+    "persona",
+    "coder",
+    "engineer",
+    "user"
+   ],
+   "uses": [
+    "personas: software developer"
+   ]
+  },
+  {
+   "id": "system-preferences",
+   "name": "System Preferences",
+   "category": "software",
+   "description": "Gear",
+   "tags": [
+    "settings",
+    "system preferences",
+    "configuration",
+    "testing",
+    "embedded SW",
+    "engineering",
+    "setup",
+    "options"
+   ],
+   "uses": [
+    "settings/configuration",
+    "engineering"
+   ]
+  },
+  {
+   "id": "thermal-conditions",
+   "name": "Thermal Conditions",
+   "category": "performance",
+   "description": "Thermometer with warning exclamation",
+   "tags": [
+    "thermal",
+    "temperature",
+    "heat",
+    "overheating",
+    "warning",
+    "cooling",
+    "thermal management",
+    "conditions"
+   ],
+   "uses": [
+    "thermal management/cooling"
+   ]
+  },
+  {
+   "id": "tool-design",
+   "name": "Tool Design",
+   "category": "software",
+   "description": "Fountain pen nib (design)",
+   "tags": [
+    "design",
+    "tool design",
+    "end-to-end",
+    "create",
+    "draw",
+    "creative",
+    "authoring",
+    "pen"
+   ],
+   "uses": [
+    "design tools",
+    "end-to-end design"
+   ]
+  },
+  {
+   "id": "tool-training",
+   "name": "Tool Training",
+   "category": "content",
+   "description": "Gear inside frame corners (identical to DFX Accelerators)",
+   "tags": [
+    "tool training",
+    "learn",
+    "training",
+    "skills",
+    "how-to",
+    "workshop",
+    "enablement"
+   ],
+   "uses": [
+    "tool training/enablement"
+   ]
+  },
+  {
+   "id": "tools",
+   "name": "Tools",
+   "category": "software",
+   "description": "Wrench",
+   "tags": [
+    "tools",
+    "software tools",
+    "repair",
+    "maintenance",
+    "fix",
+    "service",
+    "utilities",
+    "support",
+    "software"
+   ],
+   "uses": [
+    "tooling",
+    "maintenance/service"
+   ]
+  },
+  {
+   "id": "touch-screen",
+   "name": "Touch Screen",
+   "category": "devices",
+   "description": "Finger tapping (touch screen)",
+   "tags": [
+    "touch screen",
+    "HMI",
+    "tap",
+    "touch",
+    "interactive display",
+    "user interface",
+    "kiosk"
+   ],
+   "uses": [
+    "touch HMI",
+    "interactive displays"
+   ]
+  },
+  {
+   "id": "turtlebot",
+   "name": "Turtlebot",
+   "category": "vision_sensing",
+   "description": "Small robot vehicle with wireless signal",
+   "tags": [
+    "Turtlebot",
+    "mobile robot",
+    "AMR",
+    "robotics",
+    "ROS",
+    "autonomous robot",
+    "rover"
+   ],
+   "uses": [
+    "robotics demos",
+    "AMRs"
+   ]
+  },
+  {
+   "id": "ultra-ram",
+   "name": "Ultra Ram",
+   "category": "hardware",
+   "description": "Memory chip with 'ULTRA RAM' text",
+   "tags": [
+    "UltraRAM",
+    "SRAM",
+    "on-chip memory",
+    "URAM",
+    "embedded memory",
+    "memory blocks"
+   ],
+   "uses": [
+    "on-chip memory features"
+   ],
+   "has_text": true
+  },
+  {
+   "id": "ultrasound-image-roi",
+   "name": "Ultrasound Image ROI",
+   "category": "industries",
+   "description": "Ultrasound probe emitting waves",
+   "tags": [
+    "ultrasound",
+    "medical imaging",
+    "region of interest",
+    "ROI",
+    "probe",
+    "diagnostics",
+    "healthcare"
+   ],
+   "uses": [
+    "medical ultrasound solutions"
+   ]
+  },
+  {
+   "id": "usd",
+   "name": "USD",
+   "category": "business",
+   "description": "Dollar sign in a circle",
+   "tags": [
+    "USD",
+    "dollar",
+    "currency",
+    "money",
+    "cost",
+    "price",
+    "finance",
+    "revenue",
+    "TCO",
+    "savings",
+    "fianance",
+    "costs"
+   ],
+   "uses": [
+    "costs/pricing/TCO",
+    "revenue"
+   ]
+  },
+  {
+   "id": "user",
+   "name": "User",
+   "category": "people",
+   "description": "Single person",
+   "tags": [
+    "user",
+    "person",
+    "individual",
+    "account",
+    "profile",
+    "customer",
+    "end user",
+    "persona"
+   ],
+   "uses": [
+    "end user",
+    "profile",
+    "persona"
+   ]
+  },
+  {
+   "id": "users",
+   "name": "Users",
+   "category": "people",
+   "description": "Three people connected (identical to Customers)",
+   "tags": [
+    "users",
+    "customers",
+    "team",
+    "group",
+    "people",
+    "community"
+   ],
+   "uses": [
+    "use Customers (identical artwork) or here for 'users'"
+   ],
+   "duplicate_of": "customers"
+  },
+  {
+   "id": "video",
+   "name": "Video",
+   "category": "content",
+   "description": "Bracketed blocks with a play/forward chevron (video stream)",
+   "tags": [
+    "video",
+    "movie",
+    "streaming",
+    "ROS2 multi-node communication",
+    "frames",
+    "playback",
+    "transcoding",
+    "ros2 multi-node",
+    "comm"
+   ],
+   "uses": [
+    "video streaming",
+    "media pipelines"
+   ]
+  },
+  {
+   "id": "video-decoder",
+   "name": "Video Decoder",
+   "category": "content",
+   "description": "Stacked frames with play button",
+   "tags": [
+    "video decoder",
+    "decode",
+    "playback",
+    "media engine",
+    "codec",
+    "VCN",
+    "video player",
+    "transcode"
+   ],
+   "uses": [
+    "video codec/decoder",
+    "media playback"
+   ]
+  },
+  {
+   "id": "video-image-processing",
+   "name": "Video & Image Processing",
+   "category": "vision_sensing",
+   "description": "Video chevron and image overlapping (video & image processing)",
+   "tags": [
+    "video processing",
+    "image processing",
+    "VI processing",
+    "ISP",
+    "media pipeline",
+    "vision"
+   ],
+   "uses": [
+    "video & image processing pipelines"
+   ]
+  },
+  {
+   "id": "virtualization",
+   "name": "Virtualization",
+   "category": "cloud_dc",
+   "description": "Cloud on top of a server unit",
+   "tags": [
+    "virtualization",
+    "cloud BU",
+    "VMs",
+    "hybrid cloud",
+    "hypervisor",
+    "cloud server",
+    "private cloud"
+   ],
+   "uses": [
+    "virtualization",
+    "hybrid cloud"
+   ]
+  },
+  {
+   "id": "vision-ai-sensorless-foc",
+   "name": "Vision AI Sensorless FOC",
+   "category": "vision_sensing",
+   "description": "Lens/aperture inside scan corners",
+   "tags": [
+    "vision AI",
+    "sensorless FOC",
+    "camera vision",
+    "motor control",
+    "aperture",
+    "scan"
+   ],
+   "uses": [
+    "vision AI",
+    "sensorless motor control"
+   ]
+  },
+  {
+   "id": "vision-subsystem",
+   "name": "Vision Subsystem",
+   "category": "vision_sensing",
+   "description": "Two blocks connected to a camera node (hierarchy)",
+   "tags": [
+    "vision subsystem",
+    "camera pipeline",
+    "vision architecture",
+    "block diagram",
+    "image pipeline"
+   ],
+   "uses": [
+    "vision subsystem architecture"
+   ]
+  },
+  {
+   "id": "wired",
+   "name": "Wired",
+   "category": "networking",
+   "description": "Cable with plugs at both ends",
+   "tags": [
+    "wired",
+    "serial",
+    "cable",
+    "Ethernet",
+    "connector",
+    "wired connection",
+    "interface"
+   ],
+   "uses": [
+    "wired connectivity",
+    "interfaces"
+   ]
+  },
+  {
+   "id": "wireless-connectivity",
+   "name": "Wireless Connectivity",
+   "category": "networking",
+   "description": "Antenna mast with radiating waves",
+   "tags": [
+    "wireless",
+    "connectivity",
+    "network",
+    "antenna",
+    "radio",
+    "broadcast",
+    "transmit"
+   ],
+   "uses": [
+    "wireless connectivity"
+   ]
+  },
+  {
+   "id": "wireless-wi-fi",
+   "name": "Wireless (Wi-Fi)",
+   "category": "networking",
+   "description": "'WiFi' text with signal arcs",
+   "tags": [
+    "Wi-Fi",
+    "WiFi",
+    "wireless LAN",
+    "WLAN",
+    "internet",
+    "wireless",
+    "hotspot"
+   ],
+   "uses": [
+    "Wi-Fi connectivity"
+   ],
+   "has_text": true
+  },
+  {
+   "id": "wireless-tower",
+   "name": "Wireless Tower",
+   "category": "networking",
+   "description": "Cell tower radiating concentric waves",
+   "tags": [
+    "wireless tower",
+    "macrocell",
+    "4G LTE",
+    "cell tower",
+    "internet",
+    "wireless",
+    "telecom",
+    "base station"
+   ],
+   "uses": [
+    "telecom infrastructure"
+   ]
+  },
+  {
+   "id": "x",
+   "name": "X",
+   "category": "ui",
+   "description": "X inside a circle",
+   "tags": [
+    "close",
+    "X",
+    "cancel",
+    "no",
+    "bad",
+    "wrong",
+    "error",
+    "reject",
+    "don't",
+    "fail"
+   ],
+   "uses": [
+    "do/don't comparisons",
+    "problems/pain points"
+   ]
+  },
+  {
+   "id": "yen-yuan",
+   "name": "Yen-Yuan",
+   "category": "business",
+   "description": "Yen/Yuan symbol in a circle",
+   "tags": [
+    "yen",
+    "yuan",
+    "JPY",
+    "CNY",
+    "currency",
+    "Japan",
+    "China",
+    "money",
+    "cost",
+    "price"
+   ],
+   "uses": [
+    "pricing/costs in JPY/CNY",
+    "APAC"
+   ]
+  }
+ ]
+}

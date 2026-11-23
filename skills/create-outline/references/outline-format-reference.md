@@ -206,6 +206,104 @@ When an image is present with `diagram` or `two_column` layout, it occupies the 
 - Invalid layout types log a warning and fall back to `basic`
 - Supported image formats: PNG, JPG, JPEG, GIF, BMP, TIFF, SVG
 
+**In the web UI:** attach the files with **Attach images** and write just the
+file name (`IMAGE: diagram.png`). Uploads must be PNG, JPG, GIF or SVG (up to
+10 MB). The server saves them in a folder for that job and rewrites each
+matching `IMAGE:` line to the saved file's absolute path, so the outline stored
+with the deck shows server paths instead of the names you wrote.
+
+### Brand layouts (AMD corporate themes)
+
+The pptxgenjs engines have extra AMD-brand layouts. Name one with a `LAYOUT:`
+line, or shape the slide as shown and let the engine choose: the No-LLM engine
+picks these by itself only on the **AMD Corporate Black / White** themes; the
+AI engines may use them on any theme.
+
+| `LAYOUT:` | Use for | Slide content |
+|---|---|---|
+| `icon_grid` | 3-6 parallel features or benefits | `- **Label** — one-line description` (each label should match an icon) |
+| `kpi_tiles` | 2-4 headline numbers | `- 3x — faster training (vs. prior gen)` |
+| `hero_number` | the one number a section hinges on | one item: `- 40% — lower cost per token (vs. prior gen)` |
+| `metric_table` | AMD vs. competitor metrics, up to 6 | `\| Metric \| MI355X vs. B200 \| Why it matters \|` table, or `- **Metric** — 1.3x — why` |
+| `spec_table` | specs down, 1-3 products across | `\| Spec \| MI355X \| B200 \|` table (the AMD column is highlighted) |
+| `competitive_chart` | performance per model or workload | all-numeric `\| Model \| MI355X \| B200 \|` table; optional `Metric: Tokens/s (higher is better)` and `Date: …` lines |
+| `check_matrix` | feature support across 1-4 products | table whose cells are ✓ / ✗ / partial; a row with only its first cell starts a group |
+| `timeline` | 3-7 dated milestones | `**Q1 2025**` then `- Label` and an optional `- description`; `**2025 (now)**` marks the current one |
+| `stage_flow` | a 3-4 stage process | `**Stage**` then an optional `- **Sub-head**` and bullets; a `> ` line becomes the closing line |
+| `endnotes` | back-matter list of endnotes | slide titled `Endnotes`, items `- **PERF-01** — endnote text` |
+
+On these layouts two extra lines are understood (and kept off the slide body):
+`Source: …` adds a source line under the content, and `Endnote: PERF-01` adds a
+"See endnote PERF-01" pointer at the bottom right. A `> ` line is the slide's
+takeaway.
+
+```markdown
+## Why MI355X
+- **Memory** — 288 GB HBM3E per GPU
+- **Security** — data protected at every layer
+- **Efficiency** — more tokens per watt
+
+## Inference throughput
+> Faster on every model we tested
+Metric: Tokens/s (higher is better)
+| Model | MI355X | B200 |
+|---|---|---|
+| Llama 3.1 405B | 1250 | 1000 |
+| DeepSeek R1 | 980 | 820 |
+Endnote: PERF-01
+
+## Endnotes
+- **PERF-01** — Testing by AMD Performance Labs as of …
+```
+
+**Icons.** Icons come from the AMD icon bank (`themes/assets/icons/amd/`,
+239 icons) and are picked by matching the label and description, so a short,
+concrete label ("Security", "Memory", "Cloud") gets a better icon. In the web
+UI you can also upload your own icons under **My icons & logos**; they are
+matched by their name and tags and win a tie with the bank. A partner logo
+uploaded there can be put on the title and closing slides with the
+**Co-brand logo** picker. Neither needs anything in the outline.
+
+### 30-3-30 decks (one deck, three talk lengths)
+
+Use the tier names as `#` sections to build one deck that can be presented in
+30 seconds, 3 minutes or 30 minutes:
+
+```markdown
+# Widget Platform
+
+## Widget Platform
+A short tour
+
+# 30 Seconds
+
+## Widgets in one slide
+- Reliability — fewer outages
+
+# 3 Minutes
+
+## How it works
+- Pilot with two teams
+
+# 30 Minutes
+
+## Architecture
+- Control plane
+
+## Thank you
+
+# Appendix
+
+## Resources
+- Docs: example.com
+```
+
+- Tier headings are recognised loosely (`# 30 Sec`, `# 3-Minute Version`, `# 30 Min Deep Dive`); `# Appendix` / `# Backup` holds backup slides. At least two timed tiers turn the mode on.
+- Each tier gets a PowerPoint section, a divider slide ("Executive Overview (30 Sec)", "Overview (3 Minute)", "Deep Dive (30 Minute)", "Appendix") and a closing slide (unless it already ends with a thank-you slide).
+- Earlier tiers repeat automatically: the 3-minute section re-shows the 30-second slides, the 30-minute section re-shows both. So each tier lists only its **new** slides. Add `TIER: no-repeat` under a tier heading to skip the repeats for that tier.
+- Guideline: 30 seconds = 1-2 slides, 3 minutes = 2-5 slides, 30 minutes = the full detail.
+- The web UI's **Make it 30-3-30** button rewrites an ordinary outline into this format with AI (review it before creating the deck).
+
 ### Writing effective outlines
 
 These guidelines produce outlines that render well as slides — whether generated by hand or by an LLM from source material.

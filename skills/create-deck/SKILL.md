@@ -65,6 +65,7 @@ If the user mentions "template" or provides a `.pptx` template path, auto-select
 - **`amd`** — Corporate/executive presentations matching the official AMD template. Black backgrounds, minimal chrome.
 - **`instinct`** — Technical marketing, benchmark, and engineering-audience decks. Teal-on-dark Instinct design system with eyebrow rules and glow-line dividers. Best with `--slide-master`.
 - **`default`** — Unbranded dark theme for general-purpose decks.
+- **`corp_black`** / **`corp_white`** — AMD corporate template (2024) on black or white: Arial, cyan accent, grey ramp. Opt-in; `amd` stays the default. Pick these for decks that should use the brand layouts (icon grids, KPI tiles, competitive charts, timelines — see the Layout Decision Strategy).
 
 **If python-pptx:** Scan `templates/` for `.pptx` files. Present choices.
 
@@ -87,7 +88,8 @@ Read the [pptxgenjs guide](references/pptxgenjs-guide.md) for complete API refer
 3. **Decide layouts** — For each slide, analyze content and choose a layout using the Layout Decision Strategy (see below). Apply the **variety rule**: never repeat the same layout on consecutive slides.
 
 4. **Generate script** — Write a Node.js ES module (`.mjs`) that imports from the helper library:
-   - `import { createDeck, addTitleSlide, addBulletSlide, addImageSlide, addImageBulletsSlide, addProcessFlow, addTwoColumn, addCardGrid, addStatCallout, addCodeSlide, addIconRowsSlide, addSectionDivider, addClosingSlide, addFooter, renderIconSvg, iconToBase64, preRenderIcons, cardShadow, SW, SH, addTitleAlt, addSectionContent, addTwoColNumbered, addPictureCaption, addFourImageGallery, addThreeColContent, addThreeColImageText, addThreeImageGallery, addTwoImageGallery, addCinematicSlide, addSplitImageContent, addTitleWithImage } from '../lib/pptxgenjs-helpers.mjs';`
+   - `import { createDeck, addTitleSlide, addBulletSlide, addImageSlide, addImageBulletsSlide, addProcessFlow, addTwoColumn, addCardGrid, addStatCallout, addCodeSlide, addIconRowsSlide, addSectionDivider, addClosingSlide, addFooter, renderIconSvg, iconToBase64, preRenderIcons, cardShadow, SW, SH, addTitleAlt, addSectionContent, addTwoColNumbered, addPictureCaption, addFourImageGallery, addThreeColContent, addThreeColImageText, addThreeImageGallery, addTwoImageGallery, addCinematicSlide, addSplitImageContent, addTitleWithImage, addTakeawaySlide, addTableSlide, addAgendaSlide, addQuoteSlide, addRoadmapSlide, addDisclaimerSlide, addHeroTitleSlide, addProductTitleSlide, addSectionIntroSlide, addStatementSlide, addProofPointSlide, addFeatureListSlide } from '../lib/pptxgenjs-helpers.mjs';`
+   - Brand layouts are imported the same way: `loadIcons, addIconFeatureGrid, addKpiTiles, addHeroNumber, addMetricTable, addSpecTable, addCompetitiveChart, addCheckMatrix, addTimeline, addStageFlow, addEndnoteRef, addEndnotesSlide` (plus `startSection, addTierDivider` for 30-3-30). Signatures are in the [pptxgenjs guide](references/pptxgenjs-guide.md#brand-layouts-amd-asset-bank).
    - Call `createDeck('themes/<theme>.yaml')` — returns a `deck` object with `pptx`, `theme`, and `layout` already configured. When `--slide-master` is specified, use `createDeck('themes/<theme>.yaml', { useSlideMaster: true })` to enable slide masters (chrome inherited from master, not baked per-slide).
    - Use slide builder functions: `addBulletSlide(deck, title, bullets, slideNum, notes)`, `addProcessFlow(deck, title, steps, slideNum)`, etc.
    - Pre-render icons with `preRenderIcons({ name: { component, color } })` or individual `iconToBase64(renderIconSvg(Icon, 256, color))`
@@ -134,7 +136,7 @@ Matches the actual `corp.pptx` template output — extremely minimalist. Content
 - **Content fills the slide** — do NOT cap bullet height at 70% of content area. Let content determine height; pptxgenjs clips naturally.
 - **Footer** — plain slide number bottom-left, AMD wordmark bottom-right. No separator line. **Suppress the footer logo on the closing slide** — it already shows the large centered wordmark.
 - **Title slide** — AMD arrow logo (left half), title text (right), logo+tagline (bottom-right). **Logo asset must be transparent PNG or exact background color match** — JPGs with dark navy/blue backgrounds create a visible rectangle against pure black slides.
-- **Closing slide** — large centered AMD wordmark. Call `addFooter` with both logo and slide number suppressed: `addFooter(slide, slideNum, { suppressLogo: true, suppressNumber: true })`. No chrome on the closing card.
+- **Closing slide** — large centered AMD wordmark. Call `addFooter` with both logo and slide number suppressed: `addFooter(slide, slideNum, deck.theme, { suppressLogo: true, suppressNumber: true })`. No chrome on the closing card.
 - **Column headers** — white, bold, centered. NOT colored (no teal/gold headers).
 
 #### Rich Visual Mode (opt-in)
@@ -228,6 +230,38 @@ Analyze each slide's content for signals that map to layout types:
 | Dramatic section opener, quote, or transition | `addCinematicSlide()` — full-bleed image + centered title | N/A |
 | Hardware/product visual + bullet feature list | `addSplitImageContent()` — image left, bullets right | N/A |
 | Product name + image at equal visual weight | `addTitleWithImage()` — large title left, image right | N/A |
+| `> ` blockquote line + supporting points | `addTakeawaySlide()` — accent takeaway under the title, points below | N/A |
+| Markdown table / spec or feature comparison | `addTableSlide()` — native table; `opts.takeaway`, `opts.source` footnote | N/A |
+| Agenda / contents slide | `addAgendaSlide()` — numbered rows; `opts.current` highlights one section | N/A |
+| Customer or analyst quote (`> quote` + `— Name, Role`) | `addQuoteSlide()` — large quote + attribution | N/A |
+| Roadmap / timeline by quarter, year or phase | `addRoadmapSlide()` — milestones on a timeline; `opts.takeaway` | N/A |
+| Legal disclaimer / notices | `addDisclaimerSlide()` — legal text, auto-sized to fill the slide | N/A |
+| Brand deck: section opener with a short intro paragraph | `addSectionIntroSlide()` — photo right, title + body left | N/A |
+| Brand deck: one bold claim backed by cited evidence | `addStatementSlide()` — accent headline + subline left, 1-4 evidence items (with sources) right | N/A |
+| Brand deck: one before → after metric | `addProofPointSlide()` — "Key Takeaway" headline + two bars + `multiple` (e.g. `3.5X`) | N/A |
+| Brand deck: 2-4 product capabilities | `addFeatureListSlide()` — product lockup + title + tagline, underlined feature headings | N/A |
+| 3-6 parallel features, each a short label + one line | `addIconFeatureGrid()` — AMD icon over label + line, no circles | N/A |
+| 2-4 headline numbers | `addKpiTiles()` — flat tiles, highlight one value | N/A |
+| The one number a section hinges on | `addHeroNumber()` — very large stat + label + context | N/A |
+| AMD vs. competitor metrics with "why it matters" | `addMetricTable()` — grey metric, big accent value, why column | N/A |
+| Specs down, 1-3 products across | `addSpecTable()` — AMD column highlighted | N/A |
+| Performance numbers per model / workload | `addCompetitiveChart()` — native column chart, AMD in accent, ×-ratio labels | N/A |
+| Feature support across 1-4 products | `addCheckMatrix()` — ✓ / partial / ✗ marks, AMD column highlighted | N/A |
+| 3-7 dated milestones | `addTimeline()` — dots on a rule, current one ringed | N/A |
+| 3-4 stage process with a few points each | `addStageFlow()` — header tiles + arrows + bullets | N/A |
+| Endnotes behind performance claims | `addEndnotesSlide()` (+ `addEndnoteRef()` on the claim slide) | N/A |
+
+The brand-layout rows (icon grid → endnotes) are recipes in `aippt/brand/recipes.json`, which also lists when **not** to use each one and its capacity. The web No-LLM engine picks them by itself only on `corp_black` / `corp_white`; when writing a script, use them where the content fits on any theme.
+
+### Choosing the Title Slide
+
+The default `addTitleSlide()` stays the default. Only switch when the outline clearly calls for it — never just for variety:
+
+- **`addProductTitleSlide()`** — the deck is about one AMD product (ROCm, Instinct/MI3xx, EPYC, Radeon). Set `opts.product` and `opts.presenter`.
+- **`addHeroTitleSlide()`** — exec, strategy, vision, keynote or customer pitch. Set `opts.date`.
+- **`addTitleSlide()`** — everything else (training, technical deep dives, workshops, internal updates) or when unsure.
+
+A brand title sets the deck's style: follow it with the photo agenda (`addAgendaSlide(..., { image: '', label: deckTitle })`), section intros, and the brand content slides where the content fits.
 
 ### Layout Variety Rule
 
@@ -269,6 +303,29 @@ If the outline contains explicit directives, they override the auto-detection:
 - `LAYOUT: cinematic` → full-bleed image + centered title (`addCinematicSlide`)
 - `LAYOUT: split_image_content` → image left + bullets right (`addSplitImageContent`)
 - `LAYOUT: title_with_image` → large title left + image right (`addTitleWithImage`)
+- `LAYOUT: takeaway` → takeaway line + points (`addTakeawaySlide`)
+- `LAYOUT: table` → native table (`addTableSlide`)
+- `LAYOUT: agenda` → numbered agenda (`addAgendaSlide`)
+- `LAYOUT: quote` → large quote + attribution (`addQuoteSlide`)
+- `LAYOUT: roadmap` → timeline of milestones (`addRoadmapSlide`)
+- `LAYOUT: disclaimer` → legal text, auto-sized (`addDisclaimerSlide`)
+- `LAYOUT: hero_title` → photo hero title for exec / strategy decks (`addHeroTitleSlide`); a month-year line becomes the date
+- `LAYOUT: product_title` → product render + lockup title (`addProductTitleSlide`); product inferred from the title, `Presenter:` line → presenter
+- `LAYOUT: section_intro` → photo section opener with intro text (`addSectionIntroSlide`)
+- `LAYOUT: statement` → `> ` headline, first line = subline, items = evidence, a sub-bullet = its source (`addStatementSlide`)
+- `LAYOUT: proof_point` → `> ` headline, first/last `**Label** — value` items = before/after bars (`addProofPointSlide`)
+- `LAYOUT: feature_list` → `**Heading** — text` items (or groups) = features, `> ` = tagline (`addFeatureListSlide`)
+- `LAYOUT: icon_grid` / `kpi_tiles` / `hero_number` / `metric_table` / `spec_table` / `competitive_chart` / `check_matrix` / `timeline` / `stage_flow` / `endnotes` → the brand helper of the same recipe (outline shapes in the outline format reference, *Brand layouts*); `Source: …` → `opts.source`, `Endnote: PERF-01` → `opts.endnote`, `Metric: …` / `Date: …` → the chart's `opts.metric` / `opts.date`, `> ` → `opts.takeaway`
+
+### 30-3-30 Outlines
+
+When the outline's `#` sections are tiers (`30 Seconds`, `3 Minutes`, `30 Minutes`, optional `Appendix`), build one deck with three versions:
+
+1. Intro slides (title, optional agenda) under `startSection(deck, 'Intro')`.
+2. Per tier: `startSection(deck, '30 Seconds' | '3 Minutes' | '30 Minutes')`, then `addTierDivider(deck, 'Executive Overview (30 Sec)' | 'Overview (3 Minute)' | 'Deep Dive (30 Minute)', deckTitle, n)`, then the earlier tiers' slides again (skip for a tier marked `TIER: no-repeat`), then the tier's own slides, then `addClosingSlide(deck, n)` unless the tier ends with its own thank-you slide.
+3. `startSection(deck, 'Appendix')` + `addTierDivider(deck, 'Appendix', '', n)` + the appendix slides (no repeats).
+
+Slide numbers run through the whole deck. The web engines (AI, AI Fast, No-LLM) do this automatically.
 
 **Two-column header extraction (pptxgenjs):** When `LAYOUT: two_column | Left Header | Right Header` appears, parse the pipe-separated headers and pass them to `addTwoColumn()`:
 
@@ -316,6 +373,10 @@ This gives the user a concrete next step instead of a passive warning they might
 ### Icon Selection Strategy
 
 When generating pptxgenjs scripts that include icons:
+
+**AMD icon bank first (AMD themes).** `themes/assets/icons/amd/` holds 239 brand icons; `manifest.json` gives each id a name, description and tags. Find ids with `venv/bin/python -c "from aippt import icons; print(icons.search('secure data'))"` (or `icons.best_match(text, heading=label)`), then `const ic = loadIcons(['security', 'gpu'], 'FFFFFF')` (white on dark, `000000` on light) and pass `ic.security` as an `iconImg`, or give the id straight to `addIconFeatureGrid` / `addKpiTiles` (`{ icon: 'security', … }`). Use an id only when it plainly fits; unknown ids are dropped. Brand rule: icons sit on the slide with no circle or card behind them. The react-icons steps below are for the non-AMD themes and for named third-party technologies.
+
+**The user's own icons and co-brand logo.** If a `user-assets.json` sits next to the script, `createDeck()` loads it: `{"icons": {"my-partner-cloud": "/abs/path.svg"}, "cobrand": {"path": "/abs/logo.png", "width": 900, "height": 240} | null}`. Its `my-*` ids work anywhere a bank id does, and a `cobrand` logo is drawn automatically on every title-slide variant and on `addClosingSlide` (AMD | divider | partner). The web UI writes this file from the user's **My icons & logos** library; don't hand-place partner logos on those slides.
 
 1. **Named technologies first** → Check `react-icons/si` (Simple Icons) for brand logos. Use brand-accurate colors.
 2. **Generic concepts** → Use `react-icons/fa` (Font Awesome) in the theme's accent color (not white).

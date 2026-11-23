@@ -849,6 +849,37 @@ def _get_slide_image_path(slide_id: int, db_path: str, project_root: str = None,
 VIEW_ONLY_MSG = "LLM features are disabled in view-only mode"
 
 
+@router.post("/api/outline/30-3-30")
+async def make_30_3_30_endpoint(request: Request):
+    """API: Rewrite an outline into 30-3-30 tiers (30 sec / 3 min / 30 min)."""
+    if getattr(request.app.state, "view_only", False):
+        return JSONResponse({"error": VIEW_ONLY_MSG}, status_code=403)
+    import asyncio
+    from aippt.tierify import TierifyError, make_30_3_30
+
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    outline_text = (body.get("outline_text") or "").strip()
+    if not outline_text:
+        return JSONResponse({"error": "Provide an outline first"}, status_code=400)
+
+    user_ntid = _resolve_user_ntid(request, body)
+    try:
+        client = _make_llm_client(request, "enhance", body.get("model"), user_ntid=user_ntid)
+    except ValueError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=503)
+
+    try:
+        outline = await asyncio.to_thread(make_30_3_30, outline_text, client)
+    except TierifyError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=422)
+    except Exception as exc:
+        return JSONResponse({"error": f"30-3-30 rewrite failed: {exc}"}, status_code=500)
+    return {"outline": outline, "model": client.model}
+
+
 @router.post("/api/slides/{slide_id}/analyze")
 async def analyze_slide_endpoint(slide_id: int, request: Request):
     """API: Run feedback analysis on a single slide."""
@@ -1161,6 +1192,10 @@ def _stage_writable_script(script_path: str, deck_id: int, uploads_dir: str, pro
         dst = base / rel
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, dst)
+        # The user's icons / co-brand for this script travel with it
+        sidecar = src.parent / "user-assets.json"
+        if sidecar.is_file():
+            shutil.copy2(sidecar, dst.parent / sidecar.name)
 
         # Copy the repo lib/ so relative "../../lib/..." imports resolve.
         lib_src = root / "lib"
@@ -1213,6 +1248,63 @@ def _stage_render_workspace(uploads_dir: str, short_id: str, base_name: str, pro
         shutil.copytree(lib_src, job / "lib", dirs_exist_ok=True)
 
     return str(script_dir / f"{base_name}.mjs"), str(out_dir)
+
+
+def _export_images_libreoffice(pptx_path: str, images_dir: str) -> bool:
+    """Export PPTX slides to PNGs via LibreOffice + pdftoppm.
+
+    Falls back silently if either tool is missing or conversion fails.
+    Produces Slide1.png, Slide2.png, … matching catalog.py's naming convention.
+    Returns True if at least one image was written.
+    """
+    import shutil as _shutil
+    import subprocess
+    import tempfile
+    import glob as _glob
+
+    if not _shutil.which("libreoffice") or not _shutil.which("pdftoppm"):
+        return False
+
+    os.makedirs(images_dir, exist_ok=True)
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            # Step 1: PPTX → PDF
+            r = subprocess.run(
+                ["libreoffice", "--headless", "--convert-to", "pdf",
+                 "--outdir", tmp, pptx_path],
+                capture_output=True, timeout=120,
+            )
+            if r.returncode != 0:
+                logger.warning("LibreOffice PDF conversion failed: %s", r.stderr.decode()[:200])
+                return False
+
+            pdfs = _glob.glob(os.path.join(tmp, "*.pdf"))
+            if not pdfs:
+                return False
+            pdf_path = pdfs[0]
+
+            # Step 2: PDF → per-page PNGs (150 dpi ≈ 1600×900 for 16:9)
+            prefix = os.path.join(tmp, "slide")
+            r2 = subprocess.run(
+                ["pdftoppm", "-png", "-r", "150", pdf_path, prefix],
+                capture_output=True, timeout=120,
+            )
+            if r2.returncode != 0:
+                logger.warning("pdftoppm failed: %s", r2.stderr.decode()[:200])
+                return False
+
+            # Step 3: rename slide-1.png … slide-N.png → Slide1.png … SlideN.png
+            pages = sorted(_glob.glob(os.path.join(tmp, "slide-*.png")))
+            for idx, src in enumerate(pages, start=1):
+                dst = os.path.join(images_dir, f"Slide{idx}.png")
+                _shutil.copy2(src, dst)
+
+            written = len(pages)
+            logger.info("LibreOffice exported %d slide images to %s", written, images_dir)
+            return written > 0
+    except Exception as exc:
+        logger.warning("LibreOffice image export error: %s", exc)
+        return False
 
 
 def _per_deck_images_dir(request: Request, deck_path: str) -> str:
@@ -1708,35 +1800,106 @@ async def upload_deck(
     }
 
 
-def _save_image_uploads(md_text, outline_save_path, image_data):
-    """Save uploaded images to paths matching IMAGE: directives.
+# Image types an IMAGE: upload may be, and the most one file may weigh.
+# SVGs are cleaned (aippt.svg_clean) and have their own, smaller cap.
+_IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".gif", ".svg")
+_MAX_IMAGE_BYTES = 10 * 1024 * 1024
+_IMAGE_LINE_RE = re.compile(r'^IMAGE:\s*(.+)$', re.MULTILINE)
 
-    Parses IMAGE: directives from the outline to determine subdirectory
-    structure (e.g., ``IMAGE: memes/photo.jpg`` -> save as ``memes/photo.jpg``
-    relative to the outline). Falls back to saving with the original filename
-    if no matching directive is found.
+
+def _user_deck_assets(request: Request, ntid: str, cobrand_id: str):
+    """``(icon entries, co-brand logo, None)`` for a deck, or ``(.., .., 400)``.
+
+    The caller's own icons are always offered to the pptxgenjs engines; the
+    co-brand logo only when *cobrand_id* names one of their logos.
+    """
+    from aippt import user_assets
+
+    if not ntid:
+        if cobrand_id:
+            return [], None, JSONResponse(
+                {"error": "Set your NTID (top right) to use a co-brand logo."}, status_code=400)
+        return [], None, None
+    state = request.app.state
+    folder = user_assets.user_dir(state.uploads_dir, ntid)
+    materialize_file(state, user_assets.manifest_path(folder))
+    for entry in user_assets.list_assets(folder):
+        if entry["kind"] == "icon" or entry["id"] == cobrand_id:
+            materialize_file(state, user_assets.asset_path(folder, entry))
+    logo = None
+    if cobrand_id:
+        try:
+            logo = user_assets.cobrand_logo(folder, cobrand_id)
+        except user_assets.AssetError as exc:
+            return [], None, JSONResponse({"error": str(exc)}, status_code=400)
+    return user_assets.icon_entries(folder), logo, None
+
+
+def _check_image_uploads(image_data):
+    """Return ``(images, error)``: the uploads ready to save (SVGs cleaned,
+    rasters checked and turned upright), or a 400 message for the first
+    unusable one."""
+    from aippt import raster
+    from aippt.svg_clean import SvgError, clean_svg
+
+    checked = []
+    for filename, data in image_data:
+        if not filename.lower().endswith(_IMAGE_EXTS):
+            return [], f"Unsupported image type: {filename} (use {', '.join(_IMAGE_EXTS)})"
+        if len(data) > _MAX_IMAGE_BYTES:
+            return [], f"Image too large: {filename} (max {_MAX_IMAGE_BYTES // (1024 * 1024)} MB)"
+        if filename.lower().endswith(".svg"):
+            try:
+                data = clean_svg(data)
+            except SvgError as exc:
+                return [], f"{filename}: {exc}"
+        else:
+            try:
+                data = raster.prepare(filename, data)
+            except raster.RasterError as exc:
+                return [], str(exc)
+        checked.append((filename, data))
+    return checked, None
+
+
+def _stage_image_uploads(md_text, job_dir, image_data):
+    """Save uploaded images into *job_dir* and point IMAGE: lines at them.
+
+    Each upload is saved under its own file name only (no folders, so an
+    ``IMAGE: ../../x.png`` line cannot write outside the job), in a folder of
+    its own per job so two decks' ``logo.png`` never collide. Every IMAGE:
+    line whose file name matches an upload is rewritten to the saved file's
+    absolute path, which every engine (and a later regenerate) can open. A
+    bare ``IMAGE: photo.png`` used to resolve against the render's cwd (the
+    project root), so pptxgenjs decks showed a placeholder instead.
 
     Args:
         md_text: Raw markdown outline text.
-        outline_save_path: Path where the outline was saved on disk.
+        job_dir: Folder for this job's images (created here).
         image_data: List of (filename, bytes) tuples from uploaded images.
+
+    Returns:
+        The outline text with matching IMAGE: lines rewritten.
     """
-    outline_dir = os.path.dirname(outline_save_path)
-
-    # Build map: basename -> relative path from IMAGE: directives
-    image_map = {}
-    for match in re.finditer(r'^IMAGE:\s*(.+)$', md_text, re.MULTILINE):
-        path = match.group(1).strip()
-        basename = os.path.basename(path)
-        image_map[basename] = path
-
+    os.makedirs(job_dir, exist_ok=True)
+    saved = {}
     for filename, data in image_data:
-        # Look up full relative path from IMAGE: directives
-        rel_path = image_map.get(filename, filename)
-        save_path = os.path.join(outline_dir, rel_path)
-        os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        with open(save_path, 'wb') as f:
+        name = os.path.basename(filename.replace("\\", "/"))
+        safe = re.sub(r"[^\w.-]", "_", name).lstrip(".") or "image"
+        path = os.path.join(os.path.abspath(job_dir), safe)
+        with open(path, 'wb') as f:
             f.write(data)
+        saved[name] = path
+
+    def _point(match):
+        path = saved.get(os.path.basename(match.group(1).strip().replace("\\", "/")))
+        return f"IMAGE: {path}" if path else match.group(0)
+
+    return _IMAGE_LINE_RE.sub(_point, md_text)
+
+
+# Themes the pptxgenjs engines can render (themes/<name>.yaml); amd is the default.
+PPTXGENJS_THEMES = ("amd", "corp_black", "corp_white")
 
 
 @router.post('/api/decks/create')
@@ -1750,10 +1913,22 @@ async def create_deck_stream(
     title: str = Form(None),
     image_files: List[UploadFile] = File(default=[]),
     engine: str = Form("pptxgenjs"),
+    theme: str = Form("amd"),
+    cobrand_logo: str = Form(""),
 ):
-    """API: Create a deck from markdown outline, streaming progress as SSE."""
+    """API: Create a deck from markdown outline, streaming progress as SSE.
+
+    pptxgenjs engines also use the caller's own icons (asset library), and
+    ``cobrand_logo`` (one of their logo asset ids) puts that partner logo on
+    the title and closing slides.
+    """
     if getattr(request.app.state, "view_only", False):
         return JSONResponse({"error": VIEW_ONLY_MSG}, status_code=403)
+    if theme not in PPTXGENJS_THEMES:
+        return JSONResponse(
+            {"error": f"Unknown theme {theme!r}; choose one of {', '.join(PPTXGENJS_THEMES)}"},
+            status_code=400,
+        )
 
     ms_token = _extract_bearer_token(request)
     if not ms_token:
@@ -1810,13 +1985,11 @@ async def create_deck_stream(
     _short_id = uuid.uuid4().hex[:8]
     output_path = os.path.join(uploads_dir, f"{_short_id}_{_base_name}.pptx")
 
-    # Save outline to disk for IMAGE: directive resolution
-    outline_filename = outline_file.filename if (outline_file and outline_file.filename) else "outline.md"
-    outline_save_path = os.path.join(uploads_dir, f"{_short_id}_{outline_filename}")
-    with open(outline_save_path, 'w', encoding='utf-8') as f:
-        f.write(md_text)
+    user_icons, cobrand, bad = _user_deck_assets(request, ntid, cobrand_logo)
+    if bad is not None:
+        return bad
 
-    # Save uploaded images relative to the outline
+    # Save uploaded images to this job's folder and point IMAGE: lines at them
     image_data = []
     for img in (image_files or []):
         if img.filename:
@@ -1824,7 +1997,17 @@ async def create_deck_stream(
             if data:
                 image_data.append((img.filename, data))
     if image_data:
-        _save_image_uploads(md_text, outline_save_path, image_data)
+        image_data, bad = _check_image_uploads(image_data)
+        if bad:
+            return JSONResponse({"error": bad}, status_code=400)
+        md_text = _stage_image_uploads(
+            md_text, os.path.join(uploads_dir, "assets", "jobs", _short_id), image_data)
+
+    # Save outline to disk for IMAGE: directive resolution
+    outline_filename = outline_file.filename if (outline_file and outline_file.filename) else "outline.md"
+    outline_save_path = os.path.join(uploads_dir, f"{_short_id}_{outline_filename}")
+    with open(outline_save_path, 'w', encoding='utf-8') as f:
+        f.write(md_text)
 
     event_q: _queue.Queue = _queue.Queue()
 
@@ -1850,10 +2033,25 @@ async def create_deck_stream(
         def _worker():
             if engine == "pptxgenjs":
                 return _worker_pptxgenjs()
+            if engine == "pptxgenjs-direct":
+                return _worker_pptxgenjs(use_llm=False)
+            if engine == "pptxgenjs-fast":
+                return _worker_pptxgenjs(use_llm=False, layout_plan=True)
+            if engine == "python-pptx-amd":
+                return _worker_python_pptx_amd()
             return _worker_python_pptx()
 
-        def _worker_pptxgenjs():
-            from aippt.pptxgenjs_gen import generate_script, ScriptGenerationError
+        def _worker_pptxgenjs(use_llm=True, layout_plan=False):
+            # use_llm=False is the free "no-LLM" engine: same script format,
+            # workspace, render and catalog path, but rule-based generation.
+            # layout_plan=True is the fast AI engine: one short LLM call picks
+            # the layouts, then the no-LLM engine writes the script.
+            if use_llm:
+                from aippt.pptxgenjs_gen import generate_and_render, ScriptGenerationError
+            elif layout_plan:
+                from aippt.pptxgenjs_plan import generate_script, ScriptGenerationError
+            else:
+                from aippt.pptxgenjs_direct import generate_script, ScriptGenerationError
             from aippt.preview import Renderer
 
             # Stage a per-job workspace so the generated script's ``../lib``
@@ -1864,29 +2062,49 @@ async def create_deck_stream(
             script_path, render_out_dir = _stage_render_workspace(
                 uploads_dir, _short_id, _base_name, project_root
             )
-            try:
-                llm = _make_llm_client(request, operation="create", model_override=model, user_ntid=ntid)
-            except ValueError as exc:
-                event_q.put(("error", {"message": str(exc)}))
-                return None
+            gen_kwargs = {}
+            if use_llm or layout_plan:
+                try:
+                    gen_kwargs["llm_client"] = _make_llm_client(
+                        request, operation="enhance", model_override=model, user_ntid=ntid)
+                except ValueError as exc:
+                    event_q.put(("error", {"message": str(exc)}))
+                    return None
 
+            renderer = Renderer(project_root=project_root)
+            from aippt import icons as _icons
+            from aippt.user_assets import write_sidecar
             try:
-                generate_script(
-                    outline_text=md_text,
-                    output_script_path=script_path,
-                    llm_client=llm,
-                    theme="amd",
-                    progress_callback=create_progress,
-                )
+                with _icons.user_icons(user_icons):
+                    # The helpers read this next to the script: my-* icon files + co-brand
+                    write_sidecar(os.path.dirname(script_path), _icons.user_icon_paths(), cobrand)
+                    if use_llm:
+                        # Render inside the generator so Node errors get repaired
+                        render_result = generate_and_render(
+                            outline_text=md_text,
+                            output_script_path=script_path,
+                            renderer=renderer,
+                            out_dir=render_out_dir,
+                            theme=theme,
+                            progress_callback=create_progress,
+                            **gen_kwargs,
+                        )
+                    else:
+                        generate_script(
+                            outline_text=md_text,
+                            output_script_path=script_path,
+                            theme=theme,
+                            progress_callback=create_progress,
+                            **gen_kwargs,
+                        )
             except ScriptGenerationError as exc:
                 event_q.put(("error", {"message": str(exc)}))
                 return None
 
             persist_file(request.app.state, script_path)
-            create_progress("render", "Executing script…")
-
-            renderer = Renderer(project_root=project_root)
-            render_result = renderer.render(script_path, render_out_dir)
+            if not use_llm:
+                create_progress("render", "Executing script…")
+                render_result = renderer.render(script_path, render_out_dir)
             if not render_result.success:
                 msg = render_result.stderr_tail or "Script render failed (no .pptx produced)"
                 event_q.put(("error", {"message": msg}))
@@ -1921,12 +2139,16 @@ async def create_deck_stream(
                 _shutil.copy2(script_path, stable_script)
                 persist_file(request.app.state, stable_outline)
                 persist_file(request.app.state, stable_script)
+                _sidecar = os.path.join(os.path.dirname(script_path), "user-assets.json")
+                if os.path.isfile(_sidecar):
+                    _shutil.copy2(_sidecar, os.path.join(stable_dir, "user-assets.json"))
+                    persist_file(request.app.state, os.path.join(stable_dir, "user-assets.json"))
                 _conn = get_db(db_path)
                 _conn.execute(
                     "UPDATE decks SET outline_path = ?, source_engine = ?, source_script_path = ?, "
-                    "source_generated_at = datetime('now'), updated_at = datetime('now') "
+                    "source_theme = ?, source_generated_at = datetime('now'), updated_at = datetime('now') "
                     "WHERE id = ?",
-                    (stable_outline, "pptxgenjs", stable_script, deck_id),
+                    (stable_outline, "pptxgenjs", stable_script, theme, deck_id),
                 )
                 _conn.commit()
                 _conn.close()
@@ -1935,6 +2157,97 @@ async def create_deck_stream(
 
             return {"output_path": pptx_path, "slide_count": ingest_result.get("slide_count", 0),
                     "title": _base_name, **ingest_result}
+
+        def _worker_python_pptx_amd():
+            from aippt.pptx_amd_gen import generate_script, ScriptGenerationError
+            from aippt.preview import Renderer
+
+            project_root = str(Path(__file__).resolve().parents[2])
+            # Reuse the same per-job workspace layout as pptxgenjs — script
+            # sits in <uploads>/<short_id>/script/<name>.py, rendered to out/
+            script_path, render_out_dir = _stage_render_workspace(
+                uploads_dir, _short_id, _base_name, project_root
+            )
+            # Stage produces a .mjs path — rename to .py
+            script_path = re.sub(r'\.mjs$', '.py', script_path)
+
+            try:
+                llm = _make_llm_client(request, operation="enhance", model_override=model, user_ntid=ntid)
+            except ValueError as exc:
+                event_q.put(("error", {"message": str(exc)}))
+                return None
+
+            try:
+                generate_script(
+                    outline_text=md_text,
+                    output_script_path=script_path,
+                    llm_client=llm,
+                    theme="amd",
+                    progress_callback=create_progress,
+                )
+            except ScriptGenerationError as exc:
+                event_q.put(("error", {"message": str(exc)}))
+                return None
+
+            persist_file(request.app.state, script_path)
+            create_progress("render", "Running AMD template script…")
+
+            renderer = Renderer(project_root=project_root)
+            render_result = renderer.render(script_path, render_out_dir)
+            if not render_result.success:
+                msg = render_result.stderr_tail or "Script render failed (no .pptx produced)"
+                event_q.put(("error", {"message": msg}))
+                return None
+
+            pptx_path = render_result.pptx_path
+            persist_file(request.app.state, pptx_path)
+            event_q.put(("progress", {"step": "ingest", "status": "running", "detail": "Exporting slide images…"}))
+
+            per_deck_images = _per_deck_images_dir(request, pptx_path)
+            _export_images_libreoffice(pptx_path, per_deck_images)
+
+            event_q.put(("progress", {"step": "ingest", "status": "running", "detail": "Cataloging generated deck…"}))
+            ingest_result = ingest_deck(
+                deck_path=pptx_path,
+                db_path=db_path,
+                images_dir=per_deck_images,
+                gateway_config=gateway_config,
+                require_images=False,
+                progress_callback=ingest_progress,
+                source_script_path=script_path,
+                outline_path=outline_save_path,
+                ntid=ntid,
+            )
+
+            deck_id = ingest_result.get("deck_id")
+            try:
+                import shutil as _shutil
+                stable_dir = _sources_dir(uploads_dir, deck_id) if deck_id else os.path.join(uploads_dir, "scripts")
+                os.makedirs(stable_dir, exist_ok=True)
+                stable_outline = os.path.join(stable_dir, "outline.md")
+                stable_script = os.path.join(stable_dir, f"{_base_name}.py")
+                _shutil.copy2(outline_save_path, stable_outline)
+                _shutil.copy2(script_path, stable_script)
+                persist_file(request.app.state, stable_outline)
+                persist_file(request.app.state, stable_script)
+                if deck_id:
+                    _conn = get_db(db_path)
+                    _conn.execute(
+                        "UPDATE decks SET outline_path = ?, source_engine = ?, source_script_path = ?, "
+                        "source_theme = ?, source_generated_at = datetime('now'), updated_at = datetime('now') "
+                        "WHERE id = ?",
+                        (stable_outline, "python-pptx-amd", stable_script, "amd", deck_id),
+                    )
+                    _conn.commit()
+                    _conn.close()
+            except Exception as _exc:
+                logger.warning("Failed to persist AMD template origin for deck %s: %s", deck_id, _exc)
+
+            event_q.put(("complete", {
+                "deck_id": deck_id,
+                "title": _base_name,
+                **ingest_result,
+            }))
 
         def _worker_python_pptx():
             pipeline_config = PipelineConfig(
@@ -2270,6 +2583,106 @@ async def serve_deck_pptx(deck_id: int, request: Request):
         file_path,
         media_type='application/vnd.openxmlformats-officedocument.presentationml.presentation',
     )
+
+
+def _asset_folder(request: Request):
+    """``(folder, None)`` for the caller's asset library, or ``(None, 4xx)``.
+
+    Assets are per user, so unlike deck creation the NTID header is required.
+    """
+    from aippt import user_assets
+
+    ntid, err = _ntid_or_400(request)
+    if err is not None:
+        return None, err
+    if not ntid:
+        return None, JSONResponse(
+            {"error": "Set your NTID (top right) to use your asset library."},
+            status_code=400)
+    folder = user_assets.user_dir(request.app.state.uploads_dir, ntid)
+    materialize_file(request.app.state, user_assets.manifest_path(folder))
+    return folder, None
+
+
+@router.get('/api/assets')
+async def list_user_assets(request: Request):
+    """API: the caller's own icons and logos."""
+    from aippt import user_assets
+
+    folder, err = _asset_folder(request)
+    if err is not None:
+        return err
+    return {"assets": user_assets.list_assets(folder),
+            "max_assets": user_assets.MAX_ASSETS}
+
+
+@router.post('/api/assets')
+async def upload_user_asset(
+    request: Request,
+    file: UploadFile = File(...),
+    kind: str = Form(...),
+    name: str = Form(""),
+    tags: str = Form(""),
+):
+    """API: add an icon (name + tags pick the slide it fits) or a partner logo.
+
+    SVGs are cleaned (scripts, outside links removed); PNG/JPEG must be real
+    images. Stored under ``uploads/assets/users/<ntid>/``.
+    """
+    from aippt import user_assets
+
+    if getattr(request.app.state, "view_only", False):
+        return JSONResponse({"error": "Asset uploads are disabled in view-only mode"},
+                            status_code=403)
+    folder, err = _asset_folder(request)
+    if err is not None:
+        return err
+    data = await file.read()
+    try:
+        entry = user_assets.add_asset(folder, kind, file.filename, data, name=name, tags=tags)
+    except user_assets.AssetError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
+    persist_file(request.app.state, user_assets.asset_path(folder, entry))
+    persist_file(request.app.state, user_assets.manifest_path(folder))
+    return {"asset": entry}
+
+
+@router.get('/api/assets/{asset_id}/file')
+async def get_user_asset_file(request: Request, asset_id: str):
+    """API: one of the caller's asset files (for the library thumbnails)."""
+    from aippt import user_assets
+
+    folder, err = _asset_folder(request)
+    if err is not None:
+        return err
+    entry = next((a for a in user_assets.list_assets(folder) if a["id"] == asset_id), None)
+    path = entry and user_assets.asset_path(folder, entry)
+    if not entry or not materialize_file(request.app.state, path):
+        return JSONResponse({"error": "Asset not found"}, status_code=404)
+    # Cleaned already; the CSP is a second guard if the SVG is opened directly
+    return FileResponse(path, headers={
+        "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; img-src data:",
+        "X-Content-Type-Options": "nosniff"})
+
+
+@router.delete('/api/assets/{asset_id}')
+async def delete_user_asset(request: Request, asset_id: str):
+    """API: remove one of the caller's assets (other users' ids are 404)."""
+    from aippt import user_assets
+    from aippt.web.asset_sync import unpersist_file
+
+    if getattr(request.app.state, "view_only", False):
+        return JSONResponse({"error": "Asset uploads are disabled in view-only mode"},
+                            status_code=403)
+    folder, err = _asset_folder(request)
+    if err is not None:
+        return err
+    entry = user_assets.delete_asset(folder, asset_id)
+    if entry is None:
+        return JSONResponse({"error": "Asset not found"}, status_code=404)
+    unpersist_file(request.app.state, user_assets.asset_path(folder, entry))
+    persist_file(request.app.state, user_assets.manifest_path(folder))
+    return {"deleted": entry["id"]}
 
 
 @router.get('/api/logs')

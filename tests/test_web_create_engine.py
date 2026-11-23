@@ -9,6 +9,7 @@ These tests verify that:
 All LLM calls, ingest, and render calls are mocked.
 """
 import pytest
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 from httpx import AsyncClient, ASGITransport
 
@@ -185,3 +186,154 @@ async def test_validation_failure_blocks_renderer(app, tmp_path, ms_token_header
         # The SSE stream still returns 200 (errors are in the event payload)
         assert resp.status_code == 200
         mock_render.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# pptxgenjs-direct path: no-LLM generate → render
+# ---------------------------------------------------------------------------
+
+@pytest.mark.anyio
+async def test_direct_engine_renders_without_llm(app, tmp_path, ms_token_headers):
+    """engine=pptxgenjs-direct uses the rule-based generator and never builds an LLM client."""
+    with (
+        patch("aippt.web.routes._make_llm_client") as mock_llm_factory,
+        patch("aippt.pptxgenjs_gen.generate_script") as mock_llm_gen,
+        patch("aippt.pptxgenjs_direct.generate_script", return_value=_GOOD_SCRIPT) as mock_direct_gen,
+        patch("aippt.preview.Renderer.render") as mock_render,
+        patch("aippt.web.routes.ingest_deck", return_value={"deck_id": 1, "slide_count": 2}),
+        patch("aippt.web.routes.persist_file"),
+        patch("aippt.web.routes.persist_tree"),
+        patch("aippt.web.routes._per_deck_images_dir", return_value=str(tmp_path / "images")),
+        patch("aippt.web.routes._sources_dir", return_value=str(tmp_path / "sources")),
+        patch("aippt.web.routes.get_db"),
+        patch("aippt.web.routes._require_images_for_render", return_value=False),
+        patch("aippt.web.routes._pipeline_module") as mock_pipeline,
+    ):
+        from aippt.preview import RenderResult
+        mock_render.return_value = RenderResult(
+            success=True, pptx_path=str(tmp_path / "deck.pptx"), duration_ms=100
+        )
+        (tmp_path / "sources").mkdir(exist_ok=True)
+        (tmp_path / "deck.pptx").write_bytes(b"PK fake")
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await _post_create(client, _OUTLINE, "pptxgenjs-direct", ms_token_headers)
+            body = resp.text
+
+        assert resp.status_code == 200
+        mock_direct_gen.assert_called_once()
+        assert "llm_client" not in mock_direct_gen.call_args.kwargs
+        mock_llm_factory.assert_not_called()
+        mock_llm_gen.assert_not_called()
+        mock_pipeline.run_pipeline.assert_not_called()
+        mock_render.assert_called_once()
+        assert "event: complete" in body
+
+
+# ---------------------------------------------------------------------------
+# pptxgenjs-fast path: one LLM layout plan → deterministic script → render
+# ---------------------------------------------------------------------------
+
+@pytest.mark.anyio
+async def test_fast_engine_plans_with_llm_then_renders(app, tmp_path, ms_token_headers):
+    """engine=pptxgenjs-fast builds an LLM client for the plan, not the code-writing generator."""
+    with (
+        patch("aippt.web.routes._make_llm_client") as mock_llm_factory,
+        patch("aippt.pptxgenjs_gen.generate_and_render") as mock_llm_gen,
+        patch("aippt.pptxgenjs_plan.generate_script", return_value=_GOOD_SCRIPT) as mock_plan_gen,
+        patch("aippt.preview.Renderer.render") as mock_render,
+        patch("aippt.web.routes.ingest_deck", return_value={"deck_id": 1, "slide_count": 2}),
+        patch("aippt.web.routes.persist_file"),
+        patch("aippt.web.routes.persist_tree"),
+        patch("aippt.web.routes._per_deck_images_dir", return_value=str(tmp_path / "images")),
+        patch("aippt.web.routes._sources_dir", return_value=str(tmp_path / "sources")),
+        patch("aippt.web.routes.get_db"),
+        patch("aippt.web.routes._require_images_for_render", return_value=False),
+    ):
+        from aippt.preview import RenderResult
+        mock_render.return_value = RenderResult(
+            success=True, pptx_path=str(tmp_path / "deck.pptx"), duration_ms=100
+        )
+        (tmp_path / "sources").mkdir(exist_ok=True)
+        (tmp_path / "deck.pptx").write_bytes(b"PK fake")
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await _post_create(client, _OUTLINE, "pptxgenjs-fast", ms_token_headers)
+            body = resp.text
+
+        assert resp.status_code == 200
+        mock_llm_factory.assert_called_once()
+        mock_plan_gen.assert_called_once()
+        assert mock_plan_gen.call_args.kwargs["llm_client"] is mock_llm_factory.return_value
+        mock_llm_gen.assert_not_called()
+        mock_render.assert_called_once()
+        assert "event: complete" in body
+
+
+# ---------------------------------------------------------------------------
+# Theme picker: the theme reaches every pptxgenjs engine and is recorded
+# ---------------------------------------------------------------------------
+
+_ENGINE_TARGETS = {
+    "pptxgenjs": "aippt.pptxgenjs_gen.generate_and_render",
+    "pptxgenjs-fast": "aippt.pptxgenjs_plan.generate_script",
+    "pptxgenjs-direct": "aippt.pptxgenjs_direct.generate_script",
+}
+
+
+async def _create_with_theme(app, tmp_path, headers, engine, theme=None):
+    """POST a create request; return (response, generator mock, get_db mock)."""
+    from aippt.preview import RenderResult
+    ok = RenderResult(success=True, pptx_path=str(tmp_path / "deck.pptx"), duration_ms=100)
+    (tmp_path / "sources").mkdir(exist_ok=True)
+    (tmp_path / "deck.pptx").write_bytes(b"PK fake")
+    data = {"outline_text": _OUTLINE, "engine": engine}
+
+    def write_script(**kwargs):
+        Path(kwargs["output_script_path"]).write_text(_GOOD_SCRIPT)
+        return ok if engine == "pptxgenjs" else _GOOD_SCRIPT
+
+    if theme:
+        data["theme"] = theme
+    with (
+        patch("aippt.web.routes._make_llm_client"),
+        patch(_ENGINE_TARGETS[engine], side_effect=write_script) as gen,
+        patch("aippt.preview.Renderer.render", return_value=ok),
+        patch("aippt.web.routes.ingest_deck", return_value={"deck_id": 1, "slide_count": 2}),
+        patch("aippt.web.routes.persist_file"),
+        patch("aippt.web.routes.persist_tree"),
+        patch("aippt.web.routes._per_deck_images_dir", return_value=str(tmp_path / "images")),
+        patch("aippt.web.routes._sources_dir", return_value=str(tmp_path / "sources")),
+        patch("aippt.web.routes.get_db") as get_db,
+        patch("aippt.web.routes._require_images_for_render", return_value=False),
+    ):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.post("/api/decks/create", data=data, headers=headers)
+            await resp.aread()
+    return resp, gen, get_db
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("engine", list(_ENGINE_TARGETS))
+async def test_theme_reaches_pptxgenjs_engines(app, tmp_path, ms_token_headers, engine):
+    resp, gen, get_db = await _create_with_theme(app, tmp_path, ms_token_headers, engine, "corp_white")
+    assert resp.status_code == 200
+    assert gen.call_args.kwargs["theme"] == "corp_white"
+    sql, params = get_db.return_value.execute.call_args.args
+    assert "source_theme" in sql and "corp_white" in params
+
+
+@pytest.mark.anyio
+async def test_theme_defaults_to_amd(app, tmp_path, ms_token_headers):
+    resp, gen, _ = await _create_with_theme(app, tmp_path, ms_token_headers, "pptxgenjs-direct")
+    assert resp.status_code == 200
+    assert gen.call_args.kwargs["theme"] == "amd"
+
+
+@pytest.mark.anyio
+async def test_unknown_theme_is_rejected(app, tmp_path, ms_token_headers):
+    resp, gen, _ = await _create_with_theme(app, tmp_path, ms_token_headers, "pptxgenjs-direct",
+                                            "../../etc/passwd")
+    assert resp.status_code == 400
+    assert "Unknown theme" in resp.json()["error"]
+    gen.assert_not_called()

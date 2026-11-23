@@ -273,6 +273,8 @@ tone: technical
 - Pattern A: `#` = sections, `##` = slides (most common)
 - Pattern B: `#` = deck title, `##` = sections, `###` = slides (hierarchical)
 - Simple: `#` = slides directly (short flat decks, 5 or fewer slides)
+- 30-3-30: `# 30 Seconds` / `# 3 Minutes` / `# 30 Minutes` / `# Appendix` sections, `##` = slides; earlier tiers repeat in later ones automatically, so each tier lists only its new slides (`TIER: no-repeat` opts out). See the format reference.
+- Brand layouts (icon grid, KPI tiles, hero number, metric/spec tables, competitive chart, check matrix, timeline, stage flow, endnotes): shape the slide as in the format reference's *Brand layouts* table or name one with `LAYOUT:`. Keep feature labels short and concrete so they match an icon; put `Source: …` / `Endnote: PERF-01` lines under performance claims.
 
 **Content elements:**
 - `- item` = bullet (level 1)

@@ -6,6 +6,7 @@ Usage from output/ scripts:
     from pptx_helpers import load_template, save_deck, set_placeholder, add_bullets, ...
 """
 
+import copy
 import os
 import re
 
@@ -326,5 +327,681 @@ def add_column_divider(slide, prs):
 
 def set_notes(slide, text):
     """Set speaker notes on a slide."""
-    notes_slide = slide.notes_slide
-    notes_slide.notes_text_frame.text = text
+    try:
+        notes_slide = slide.notes_slide
+        tf = notes_slide.notes_text_frame
+        if tf is not None:
+            tf.text = text
+    except Exception:
+        pass  # notes are non-critical; swallow errors silently
+
+
+# ---------------------------------------------------------------------------
+# Title slide library
+# ---------------------------------------------------------------------------
+
+# Variants available in templates/title-slides/
+#   "default" — dot/pattern background, general use
+#   "rocm"    — full-bleed photo + AMD Instinct graphic, ROCm-specific
+#   "corp"    — corporate template title slide (from templates/corp.pptx)
+_TITLE_SLIDE_DIR  = os.path.join(os.path.dirname(__file__), '..', 'templates', 'title-slides')
+_AGENDA_SLIDE_DIR = os.path.join(os.path.dirname(__file__), '..', 'templates', 'agenda-slides')
+_CORP_TEMPLATE    = os.path.join(os.path.dirname(__file__), '..', 'templates', 'corp.pptx')
+
+
+def open_title_deck(title, subtitle='', variant='default'):
+    """Load a branded title slide PPTX as a fresh deck base.
+
+    The title slide files carry the full AMD slide master (33 layouts), so
+    you can add content slides directly to the returned Presentation using
+    the same layout indices as corp.pptx.  Call ``save_deck`` when done.
+
+    Parameters
+    ----------
+    title : str
+        Main title text.
+    subtitle : str
+        Subtitle, speaker name, or date string (e.g. "August 2026").
+    variant : str
+        ``"default"`` (dot/pattern background, general use),
+        ``"rocm"``    (full-bleed photo + AMD Instinct graphic),
+        ``"corp"``    (corporate template title from corp.pptx layout 0).
+
+    Returns
+    -------
+    Presentation
+        A Presentation with the title slide as slide 0, ready for
+        ``prs.slides.add_slide(prs.slide_layouts[N])``.
+    """
+    if variant == 'corp':
+        src_path = _CORP_TEMPLATE
+    else:
+        src_path = os.path.join(_TITLE_SLIDE_DIR, f'{variant}.pptx')
+        if not os.path.exists(src_path):
+            raise FileNotFoundError(
+                f"Title slide variant '{variant}' not found at {src_path}. "
+                "Available: default, rocm, corp"
+            )
+
+    prs = Presentation(src_path)
+    title_slide = prs.slides[0]
+
+    for shape in title_slide.shapes:
+        if not shape.has_text_frame:
+            continue
+        name = shape.name.lower()
+        tf = shape.text_frame
+        if 'title' in name and title:
+            if tf.paragraphs and tf.paragraphs[0].runs:
+                tf.paragraphs[0].runs[0].text = title
+            else:
+                tf.paragraphs[0].text = title
+        elif any(k in name for k in ('placeholder', 'speaker', 'subtitle', 'date')) and subtitle:
+            if tf.paragraphs and tf.paragraphs[0].runs:
+                tf.paragraphs[0].runs[0].text = subtitle
+            else:
+                tf.paragraphs[0].text = subtitle
+
+    return prs
+
+
+def add_agenda_slide(prs, section_title, items, variant='full'):
+    """Append a branded agenda slide to *prs*.
+
+    Parameters
+    ----------
+    prs : Presentation
+        The deck to append into (use ``open_title_deck`` or ``load_template``).
+    section_title : str
+        Left-side section label (e.g. "Test" or "What's New: August 2026").
+    items : list of str
+        Agenda line items — up to 6. Each becomes a numbered row (01, 02…).
+    variant : str
+        ``"full"`` — standard agenda with photo background.
+        ``"whats-new"`` — alternate background, suited for update decks.
+
+    Returns
+    -------
+    Presentation
+        Updated presentation with the agenda slide appended. Use this
+        return value — do not continue using the original *prs* reference.
+    """
+    import zipfile, tempfile, re as _re
+
+    src_path = os.path.join(_AGENDA_SLIDE_DIR, f'{variant}.pptx')
+    if not os.path.exists(src_path):
+        raise FileNotFoundError(
+            f"Agenda variant '{variant}' not found at {src_path}. "
+            "Available: full, whats-new"
+        )
+
+    with tempfile.NamedTemporaryFile(suffix='.pptx', delete=False) as tf:
+        tmp_deck = tf.name
+    prs.save(tmp_deck)
+
+    out_path = tmp_deck + '_merged.pptx'
+    rel_ns = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
+    prs_ns = 'http://schemas.openxmlformats.org/presentationml/2006/main'
+    ct_ns  = 'http://schemas.openxmlformats.org/package/2006/content-types'
+
+    with zipfile.ZipFile(src_path, 'r') as za, \
+         zipfile.ZipFile(tmp_deck, 'r') as zd, \
+         zipfile.ZipFile(out_path, 'w', zipfile.ZIP_DEFLATED) as zo:
+
+        # Detect actual slide filename (may be slide1.xml or slide2.xml depending on extraction)
+        a_slides = sorted([f for f in za.namelist() if _re.match(r'ppt/slides/slide\d+\.xml$', f)])
+        A_SLIDE = a_slides[0]
+        A_REL   = A_SLIDE.replace('slides/', 'slides/_rels/') + '.rels'
+        N_SLIDE = 'ppt/slides/slide_agenda.xml'
+        N_REL   = 'ppt/slides/_rels/slide_agenda.xml.rels'
+
+        # Collect agenda media
+        agenda_media = {}
+        if A_REL in za.namelist():
+            rroot = etree.fromstring(za.read(A_REL))
+            for r in rroot:
+                tgt = r.get('Target', '')
+                if '../media/' in tgt:
+                    fname = tgt.split('/')[-1]
+                    mpath = f'ppt/media/{fname}'
+                    if mpath in za.namelist():
+                        agenda_media[fname] = za.read(mpath)
+
+        zo.writestr(N_SLIDE, za.read(A_SLIDE))
+        if A_REL in za.namelist():
+            zo.writestr(N_REL, za.read(A_REL))
+        for fname, data in agenda_media.items():
+            zo.writestr(f'ppt/media/{fname}', data)
+
+        ct_map = {'jpeg': 'image/jpeg', 'jpg': 'image/jpeg', 'png': 'image/png',
+                  'svg': 'image/svg+xml', 'wdp': 'image/vnd.ms-photo'}
+
+        for item in zd.infolist():
+            if item.filename.startswith('ppt/media/') and \
+               item.filename.split('/')[-1] in agenda_media:
+                continue
+
+            data = zd.read(item.filename)
+
+            if item.filename == 'ppt/presentation.xml':
+                root = etree.fromstring(data)
+                sldIdLst = root.find(f'.//{{{prs_ns}}}sldIdLst')
+                if sldIdLst is not None:
+                    existing_ids = [int(s.get('id', 256)) for s in sldIdLst]
+                    new_id = max(existing_ids) + 1 if existing_ids else 257
+                    new_sld = etree.SubElement(sldIdLst, f'{{{prs_ns}}}sldId')
+                    new_sld.set('id', str(new_id))
+                    new_sld.set(f'{{{rel_ns}}}id', 'rIdAgenda')
+                data = etree.tostring(root, xml_declaration=True, encoding='UTF-8', standalone=True)
+
+            elif item.filename == 'ppt/_rels/presentation.xml.rels':
+                root = etree.fromstring(data)
+                new_rel = etree.SubElement(root, 'Relationship')
+                new_rel.set('Id', 'rIdAgenda')
+                new_rel.set('Type', f'{rel_ns}/slide')
+                new_rel.set('Target', 'slides/slide_agenda.xml')
+                data = etree.tostring(root, xml_declaration=True, encoding='UTF-8', standalone=True)
+
+            elif item.filename == '[Content_Types].xml':
+                root = etree.fromstring(data)
+                new_ct = etree.SubElement(root, f'{{{ct_ns}}}Override')
+                new_ct.set('PartName', '/ppt/slides/slide_agenda.xml')
+                new_ct.set('ContentType',
+                    'application/vnd.openxmlformats-officedocument.presentationml.slide+xml')
+                existing_ext = {e.get('Extension') for e in root.findall(f'{{{ct_ns}}}Default')}
+                for fname in agenda_media:
+                    ext = fname.rsplit('.', 1)[-1].lower()
+                    if ext not in existing_ext:
+                        dm = etree.SubElement(root, f'{{{ct_ns}}}Default')
+                        dm.set('Extension', ext)
+                        dm.set('ContentType', ct_map.get(ext, f'image/{ext}'))
+                        existing_ext.add(ext)
+                data = etree.tostring(root, xml_declaration=True, encoding='UTF-8', standalone=True)
+
+            zo.writestr(item, data)
+
+    merged = Presentation(out_path)
+    os.unlink(tmp_deck)
+    os.unlink(out_path)
+
+    # Populate section title
+    agenda_slide = merged.slides[-1]
+    for shape in agenda_slide.shapes:
+        if shape.has_text_frame and 'title' in shape.name.lower() and section_title:
+            tf = shape.text_frame
+            if tf.paragraphs and tf.paragraphs[0].runs:
+                tf.paragraphs[0].runs[0].text = section_title
+            else:
+                tf.paragraphs[0].text = section_title
+
+    # Populate table rows
+    for shape in agenda_slide.shapes:
+        if shape.shape_type == 19:
+            table = shape.table
+            for ri, row in enumerate(table.rows):
+                if ri < len(items):
+                    if row.cells[0].text_frame.paragraphs[0].runs:
+                        row.cells[0].text_frame.paragraphs[0].runs[0].text = f'{ri+1:02d}'
+                    txt_para = row.cells[1].text_frame.paragraphs[0]
+                    if txt_para.runs:
+                        txt_para.runs[0].text = items[ri]
+                    else:
+                        txt_para.text = items[ri]
+                else:
+                    for cell in row.cells:
+                        for para in cell.text_frame.paragraphs:
+                            for run in para.runs:
+                                run.text = ''
+
+    return merged
+
+
+# ---------------------------------------------------------------------------
+# Stat-callout slide  ("Title and text side by side 2" pattern)
+# ---------------------------------------------------------------------------
+
+_ASSETS_DIR = os.path.join(os.path.dirname(__file__), '..', 'themes', 'assets')
+
+
+def add_stat_callout_slide(prs, title, body, bg_image=None, title_color='FFFFFF',
+                           body_color='E5E5E5', notes=''):
+    """Append a full-bleed photo slide with large left title and right body text.
+
+    Replicates the AMD 'Title and text side by side 2' pattern:
+    - Full-bleed background image (or solid black if omitted)
+    - Left panel: large bold title (up to ~36pt, ~4" wide, vertically centered)
+    - Right panel: body text / quote (14pt, ~7" wide, vertically centered)
+    - Thin white rule separating the two panels
+
+    Parameters
+    ----------
+    prs : Presentation
+        Deck to append to.
+    title : str
+        Left-side headline. Can be a stat ("3.7× faster"), a phrase, or a claim.
+        Keep to 2–5 words — this is meant to be large and punchy.
+    body : str
+        Right-side supporting text. Can be a quote, explanation, or bullets
+        separated by newlines.
+    bg_image : str or None
+        Path to a full-bleed background image (JPEG/PNG). Defaults to
+        ``themes/assets/title-bg.jpeg`` if None.
+    title_color : str
+        Hex RGB for the left title text (default white ``'FFFFFF'``).
+    body_color : str
+        Hex RGB for the right body text (default light gray ``'E5E5E5'``).
+
+    Returns
+    -------
+    slide
+        The newly added slide object.
+    """
+    if bg_image is None:
+        bg_image = os.path.join(_ASSETS_DIR, 'title-bg.jpeg')
+
+    # Slide dimensions (widescreen 13.33" × 7.5")
+    W, H = Inches(13.33), Inches(7.5)
+
+    # Use a blank layout (last layout that is truly blank, or layout 6 on AMD master)
+    blank_layout = None
+    for layout in prs.slide_layouts:
+        if layout.name.lower() in ('blank', '1_blank', 'blank slide'):
+            blank_layout = layout
+            break
+    if blank_layout is None:
+        blank_layout = prs.slide_layouts[-1]
+
+    slide = prs.slides.add_slide(blank_layout)
+
+    # --- Background image (behind everything) ---
+    if os.path.exists(bg_image):
+        pic = slide.shapes.add_picture(bg_image, 0, 0, W, H)
+        # Push to back by moving its XML element before all others
+        slide.shapes._spTree.remove(pic._element)
+        slide.shapes._spTree.insert(2, pic._element)
+
+    # --- Dark semi-transparent overlay (left ~40% of slide) so text pops ---
+    # We achieve this with a solid rect at low alpha; python-pptx doesn't expose
+    # alpha directly so we patch the XML
+    OVERLAY_W = Inches(5.0)
+    overlay = slide.shapes.add_shape(1, 0, 0, OVERLAY_W, H)
+    overlay.line.fill.background()
+    overlay.fill.solid()
+    overlay.fill.fore_color.rgb = RGBColor(0x00, 0x00, 0x00)
+    # Set 55% transparency via XML solidFill → alpha
+    solidFill = overlay.fill._xPr.find(qn('a:solidFill'))
+    if solidFill is not None:
+        srgb = solidFill.find(qn('a:srgbClr'))
+        if srgb is not None:
+            alpha = etree.SubElement(srgb, qn('a:alpha'))
+            alpha.set('val', '45000')  # 45000/100000 = 45% opaque (55% transparent)
+
+    # --- Thin vertical rule between panels ---
+    rule = slide.shapes.add_shape(1, Inches(5.0), Inches(0.8), Inches(0.02), Inches(5.9))
+    rule.fill.solid()
+    rule.fill.fore_color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+    rule.line.fill.background()
+
+    # --- Left: large title text box ---
+    title_box = slide.shapes.add_textbox(Inches(0.32), Inches(1.8), Inches(4.5), Inches(4.0))
+    tf = title_box.text_frame
+    tf.word_wrap = True
+    tf.auto_size = None
+
+    # Size the font based on title length
+    font_size = 36 if len(title) <= 30 else (28 if len(title) <= 50 else 22)
+
+    p = tf.paragraphs[0]
+    p.alignment = PP_ALIGN.LEFT
+    run = p.add_run()
+    run.text = title
+    run.font.bold = True
+    run.font.size = Pt(font_size)
+    run.font.color.rgb = RGBColor(
+        int(title_color[0:2], 16),
+        int(title_color[2:4], 16),
+        int(title_color[4:6], 16),
+    )
+
+    # --- Right: body text box ---
+    body_box = slide.shapes.add_textbox(Inches(5.30), Inches(0.5), Inches(7.6), Inches(6.7))
+    tf2 = body_box.text_frame
+    tf2.word_wrap = True
+
+    body_color_rgb = RGBColor(
+        int(body_color[0:2], 16),
+        int(body_color[2:4], 16),
+        int(body_color[4:6], 16),
+    )
+
+    lines = body.split('\n')
+    for i, line in enumerate(lines):
+        p2 = tf2.paragraphs[0] if i == 0 else tf2.add_paragraph()
+        p2.alignment = PP_ALIGN.LEFT
+        # Detect bold lead-in pattern
+        m = re.match(r'^\*\*(.+?)\*\*(.*)', line)
+        if m:
+            r1 = p2.add_run()
+            r1.text = m.group(1)
+            r1.font.bold = True
+            r1.font.size = Pt(16)
+            r1.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+            if m.group(2).strip():
+                r2 = p2.add_run()
+                r2.text = m.group(2)
+                r2.font.size = Pt(14)
+                r2.font.color.rgb = body_color_rgb
+        else:
+            run2 = p2.add_run()
+            run2.text = line
+            run2.font.size = Pt(14)
+            run2.font.color.rgb = body_color_rgb
+
+    if notes:
+        set_notes(slide, notes)
+    return slide
+
+
+# ---------------------------------------------------------------------------
+# Closing slide
+# ---------------------------------------------------------------------------
+
+def add_closing_slide(prs):
+    """Append the AMD branded closing slide (logo centered, dark background).
+
+    Uses slide layout index 30 ('Closing logo slide') from the AMD master.
+    No parameters needed — the layout carries all branding.
+
+    Returns
+    -------
+    slide
+    """
+    layout = prs.slide_layouts[30]
+    return prs.slides.add_slide(layout)
+
+
+# ---------------------------------------------------------------------------
+# Section divider slide
+# ---------------------------------------------------------------------------
+
+def add_section_divider_slide(prs, section_title, subtitle=''):
+    """Append a section divider slide.
+
+    Full-bleed photo background (section-divider-bg.jpeg) with a dark overlay
+    on the left ~55%, large section title, and optional subtitle below.
+
+    Layout mirrors AMD Deck 1 slide 10:
+    - Background photo covers full slide
+    - Dark gradient rect left 55%
+    - Title at x=0.64" y=3.29" (large, white, bold)
+    - Subtitle at x=0.64" y=4.10" (smaller, light gray)
+    - Right panel (x=7.0") left clear so photo shows through
+
+    Parameters
+    ----------
+    prs : Presentation
+    section_title : str
+        Large section label, e.g. "What's New?" or "Inference Performance".
+    subtitle : str
+        Optional descriptor line below the title.
+
+    Returns
+    -------
+    slide
+    """
+    bg_image = os.path.join(_ASSETS_DIR, 'section-divider-bg.jpeg')
+
+    blank_layout = None
+    for layout in prs.slide_layouts:
+        if layout.name.lower() in ('blank', '1_blank', 'blank slide'):
+            blank_layout = layout
+            break
+    if blank_layout is None:
+        blank_layout = prs.slide_layouts[-1]
+
+    slide = prs.slides.add_slide(blank_layout)
+    W, H = Inches(13.33), Inches(7.5)
+
+    # Background image
+    if os.path.exists(bg_image):
+        pic = slide.shapes.add_picture(bg_image, 0, 0, W, H)
+        slide.shapes._spTree.remove(pic._element)
+        slide.shapes._spTree.insert(2, pic._element)
+
+    # Dark overlay left 55%
+    overlay = slide.shapes.add_shape(1, 0, 0, Inches(7.0), H)
+    overlay.line.fill.background()
+    overlay.fill.solid()
+    overlay.fill.fore_color.rgb = RGBColor(0x00, 0x00, 0x00)
+    solidFill = overlay.fill._xPr.find(qn('a:solidFill'))
+    if solidFill is not None:
+        srgb = solidFill.find(qn('a:srgbClr'))
+        if srgb is not None:
+            alpha = etree.SubElement(srgb, qn('a:alpha'))
+            alpha.set('val', '60000')  # 60% opaque
+
+    # Section title
+    title_box = slide.shapes.add_textbox(Inches(0.64), Inches(3.10), Inches(6.0), Inches(0.9))
+    tf = title_box.text_frame
+    tf.word_wrap = True
+    p = tf.paragraphs[0]
+    run = p.add_run()
+    run.text = section_title
+    run.font.bold = True
+    run.font.size = Pt(32)
+    run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+
+    # Subtitle
+    if subtitle:
+        sub_box = slide.shapes.add_textbox(Inches(0.64), Inches(4.10), Inches(6.0), Inches(1.2))
+        tf2 = sub_box.text_frame
+        tf2.word_wrap = True
+        p2 = tf2.paragraphs[0]
+        run2 = p2.add_run()
+        run2.text = subtitle
+        run2.font.size = Pt(16)
+        run2.font.color.rgb = RGBColor(0xCC, 0xCC, 0xCC)
+
+    return slide
+
+
+# ---------------------------------------------------------------------------
+# Performance image slide  ("Title Slide with Picture" pattern)
+# ---------------------------------------------------------------------------
+
+def add_performance_image_slide(prs, title, image_path, subtitle=''):
+    """Append a full-bleed performance/chart image slide with title bar on left.
+
+    Replicates AMD Deck 1 slides 21–28 ('Title Slide with Picture' pattern):
+    - Full-bleed chart/screenshot image on the right ~48% of slide
+    - Dark left panel (~53%) with large title and optional subtitle
+    - Thin vertical separator rect between the two panels
+
+    Parameters
+    ----------
+    prs : Presentation
+    title : str
+        Section title, e.g. "Inference Performance".
+    image_path : str
+        Path to the chart screenshot or benchmark image (JPEG/PNG).
+    subtitle : str
+        Optional one-liner below the title, e.g. "Serving on Instinct GPUs".
+
+    Returns
+    -------
+    slide
+    """
+    blank_layout = None
+    for layout in prs.slide_layouts:
+        if layout.name.lower() in ('blank', '1_blank', 'blank slide'):
+            blank_layout = layout
+            break
+    if blank_layout is None:
+        blank_layout = prs.slide_layouts[-1]
+
+    slide = prs.slides.add_slide(blank_layout)
+    W, H = Inches(13.33), Inches(7.5)
+
+    img_x = Inches(7.0)
+    panel_w = Inches(6.33)
+
+    # Left panel: dark background (pushed to back)
+    left_bg = slide.shapes.add_shape(1, 0, 0, Inches(7.0), H)
+    left_bg.fill.solid()
+    left_bg.fill.fore_color.rgb = RGBColor(0x0A, 0x0A, 0x0A)
+    left_bg.line.fill.background()
+    slide.shapes._spTree.remove(left_bg._element)
+    slide.shapes._spTree.insert(2, left_bg._element)
+
+    # Right panel: chart image — aspect-ratio preserved, centered in panel
+    if os.path.exists(image_path):
+        # Add with only width set so pptx auto-calculates height from aspect ratio
+        pic = slide.shapes.add_picture(image_path, img_x, 0, panel_w)
+        if pic.height > H:
+            # Too tall — fit to height instead and center horizontally
+            scale = H / pic.height
+            pic.height = H
+            pic.width = int(pic.width * scale)
+            pic.left = img_x + (panel_w - pic.width) // 2
+        else:
+            # Center vertically within the panel
+            pic.top = (H - pic.height) // 2
+    else:
+        ph = slide.shapes.add_shape(1, img_x, 0, panel_w, H)
+        ph.fill.solid()
+        ph.fill.fore_color.rgb = RGBColor(0x22, 0x22, 0x22)
+        ph.line.fill.background()
+
+    # Title text
+    font_size = 40 if len(title) <= 20 else (32 if len(title) <= 35 else 24)
+    title_box = slide.shapes.add_textbox(Inches(0.64), Inches(2.5), Inches(6.0), Inches(1.5))
+    tf = title_box.text_frame
+    tf.word_wrap = True
+    p = tf.paragraphs[0]
+    run = p.add_run()
+    run.text = title
+    run.font.bold = True
+    run.font.size = Pt(font_size)
+    run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+
+    # Subtitle
+    if subtitle:
+        sub_box = slide.shapes.add_textbox(Inches(0.64), Inches(4.15), Inches(5.5), Inches(0.6))
+        tf2 = sub_box.text_frame
+        p2 = tf2.paragraphs[0]
+        run2 = p2.add_run()
+        run2.text = subtitle
+        run2.font.size = Pt(16)
+        run2.font.color.rgb = RGBColor(0xAA, 0xAA, 0xAA)
+
+    return slide
+
+
+# ---------------------------------------------------------------------------
+# Two-column text slide
+# ---------------------------------------------------------------------------
+
+def add_two_column_slide(prs, title, left_header, left_items,
+                         right_header, right_items, notes=''):
+    """Append a two-column content slide with optional column headers.
+
+    Replicates the AMD 'Two Content' layout:
+    - Title bar at top
+    - Left column: header + bulleted items
+    - Right column: header + bulleted items
+    - Thin gray vertical rule between columns
+
+    Parameters
+    ----------
+    prs : Presentation
+    title : str
+        Slide title shown at top.
+    left_header : str
+        Bold teal header for the left column (empty string to omit).
+    left_items : list of str
+        Bullet items for the left column. Bold lead-in (**bold** text) supported.
+    right_header : str
+        Bold teal header for the right column.
+    right_items : list of str
+        Bullet items for the right column.
+    notes : str
+        Optional speaker notes.
+
+    Returns
+    -------
+    slide
+    """
+    # Always use blank layout — Two Content layout causes inherited title to
+    # double-render alongside any textbox title we add.
+    blank_layout = None
+    for layout in prs.slide_layouts:
+        if layout.name.lower() in ('blank', '1_blank', 'blank slide'):
+            blank_layout = layout
+            break
+    if blank_layout is None:
+        blank_layout = prs.slide_layouts[-1]
+
+    slide = prs.slides.add_slide(blank_layout)
+    W, H = Inches(13.33), Inches(7.5)
+
+    # Title
+    title_box = slide.shapes.add_textbox(Inches(0.5), Inches(0.3), Inches(12.3), Inches(0.65))
+    tf = title_box.text_frame
+    p = tf.paragraphs[0]
+    run = p.add_run()
+    run.text = title
+    run.font.bold = True
+    run.font.size = Pt(24)
+    run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+
+    # Vertical rule
+    rule = slide.shapes.add_shape(1, Inches(6.66), Inches(1.1), Inches(0.02), Inches(5.8))
+    rule.fill.solid()
+    rule.fill.fore_color.rgb = RGBColor(0x63, 0x64, 0x66)
+    rule.line.fill.background()
+
+    TEAL = RGBColor(0x00, 0xC2, 0xDE)
+
+    def _fill_column(x_in, header, items):
+        y = Inches(1.15)
+        col_w = Inches(6.0)
+        if header:
+            hbox = slide.shapes.add_textbox(Inches(x_in), y, col_w, Inches(0.45))
+            htf = hbox.text_frame
+            hp = htf.paragraphs[0]
+            hp.alignment = PP_ALIGN.CENTER
+            hr = hp.add_run()
+            hr.text = header
+            hr.font.bold = True
+            hr.font.size = Pt(18)
+            hr.font.color.rgb = TEAL
+            y += Inches(0.55)
+        bbox = slide.shapes.add_textbox(Inches(x_in), y, col_w, Inches(5.5))
+        btf = bbox.text_frame
+        btf.word_wrap = True
+        for i, item in enumerate(items):
+            bp = btf.paragraphs[0] if i == 0 else btf.add_paragraph()
+            m = re.match(r'^\*\*(.+?)\*\*(.*)', item)
+            if m:
+                r1 = bp.add_run()
+                r1.text = m.group(1)
+                r1.font.bold = True
+                r1.font.size = Pt(16)
+                r1.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+                if m.group(2).strip():
+                    r2 = bp.add_run()
+                    r2.text = m.group(2)
+                    r2.font.size = Pt(15)
+                    r2.font.color.rgb = RGBColor(0xCC, 0xCC, 0xCC)
+            else:
+                br = bp.add_run()
+                br.text = item
+                br.font.size = Pt(15)
+                br.font.color.rgb = RGBColor(0xCC, 0xCC, 0xCC)
+
+    _fill_column(0.5, left_header, left_items)
+    _fill_column(6.83, right_header, right_items)
+
+    if notes:
+        set_notes(slide, notes)
+    return slide

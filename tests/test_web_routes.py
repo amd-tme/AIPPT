@@ -411,7 +411,7 @@ class TestCreateDeckEndpoint:
         md_content = "# Saved\n## Slide 1: Check\n- Content\n"
         resp = client.post(
             "/api/decks/create",
-            data={"outline_text": md_content, "enhance": "false"},
+            data={"outline_text": md_content, "enhance": "false", "engine": "python-pptx"},
             headers={"Authorization": "Bearer tok"},
         )
         assert resp.status_code == 200
@@ -462,14 +462,16 @@ class TestCreateDeckEndpoint:
         assert resp.status_code == 200
         assert "event: complete" in resp.text
 
-        # Verify image was saved to the correct subdirectory
+        # The image is saved in this job's own folder under uploads/assets and
+        # the saved outline's IMAGE: line points at it
         uploads_dir = client.app.state.uploads_dir
         md_files = [f for f in os.listdir(uploads_dir) if f.endswith(".md")]
         assert len(md_files) >= 1
-        outline_dir = os.path.dirname(os.path.join(uploads_dir, md_files[0]))
-        img_path = os.path.join(outline_dir, "imgs", "photo.png")
-        assert os.path.exists(img_path)
+        job = md_files[0].split("_", 1)[0]
+        img_path = os.path.abspath(os.path.join(uploads_dir, "assets", "jobs", job, "photo.png"))
         assert open(img_path, 'rb').read() == test_png
+        outline = open(os.path.join(uploads_dir, md_files[0]), encoding="utf-8").read()
+        assert f"IMAGE: {img_path}" in outline
 
     def test_create_passes_outline_path_to_create_deck(self, client, tmp_path, monkeypatch):
         """run_pipeline() should receive outline_path for IMAGE: resolution."""
@@ -581,7 +583,7 @@ class TestCreateDeckHardening:
     def test_missing_bearer_returns_401(self, client, template_setup):
         resp = client.post(
             "/api/decks/create",
-            data={"outline_text": "# T\n## S1\n- x\n", "enhance": "false"},
+            data={"outline_text": "# T\n## S1\n- x\n", "enhance": "false", "engine": "python-pptx"},
         )
         assert resp.status_code == 401
         assert "sign-in" in resp.json()["error"].lower() or \
@@ -590,7 +592,7 @@ class TestCreateDeckHardening:
     def test_basic_auth_is_rejected(self, client, template_setup):
         resp = client.post(
             "/api/decks/create",
-            data={"outline_text": "# T\n## S1\n- x\n", "enhance": "false"},
+            data={"outline_text": "# T\n## S1\n- x\n", "enhance": "false", "engine": "python-pptx"},
             headers={"Authorization": "Basic dXNlcjpwYXNz"},
         )
         assert resp.status_code == 401
@@ -771,7 +773,7 @@ class TestNtidValidation:
             return
         resp = client.post(
             "/api/decks/create",
-            data={"outline_text": "# T\n## S1\n- x\n", "enhance": "false"},
+            data={"outline_text": "# T\n## S1\n- x\n", "enhance": "false", "engine": "python-pptx"},
             headers={
                 "Authorization": "Bearer tok",
                 "X-AIPPT-NTID": bad,
@@ -796,7 +798,7 @@ class TestNtidValidation:
             resp = client.post(
                 "/api/decks/create",
                 data={"outline_text": "# T\n## S1\n- x\n",
-                      "enhance": "false"},
+                      "enhance": "false", "engine": "python-pptx"},
                 headers={
                     "Authorization": "Bearer tok",
                     "X-AIPPT-NTID": good,

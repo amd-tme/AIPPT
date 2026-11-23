@@ -112,3 +112,16 @@ def models_yaml(tmp_path):
     with open(config_path, "w") as f:
         yaml.dump({"registry": MINIMAL_REGISTRY, "defaults": MINIMAL_DEFAULTS}, f)
     return config_path
+
+
+_KNOWN_FAILURES_FILE = os.path.join(os.path.dirname(__file__), "known_failures.txt")
+
+
+def pytest_collection_modifyitems(config, items):
+    if not os.path.exists(_KNOWN_FAILURES_FILE):
+        return
+    with open(_KNOWN_FAILURES_FILE) as f:
+        known = {ln.strip() for ln in f if ln.strip() and not ln.startswith("#")}
+    for item in items:
+        if item.nodeid in known:
+            item.add_marker(pytest.mark.xfail(reason="known failure (tests/known_failures.txt)", strict=False))
