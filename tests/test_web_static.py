@@ -144,3 +144,14 @@ def test_create_sends_the_cobrand_logo(html_source: str):
     body = _extract_function_body(html_source, "createDeck")
     assert "formData.append('cobrand_logo'" in body
     assert 'id="create-cobrand"' in html_source
+
+
+def test_asset_errors_are_shown_as_errors(html_source: str):
+    # A rejected upload (too big, wrong type) must be visibly flagged, not
+    # shown as plain text the user can miss.
+    notice = _extract_function_body(html_source, "assetsNotice")
+    assert "pico-del-color" in notice
+    for fn in ("uploadAsset", "deleteAsset"):
+        body = _extract_function_body(html_source, fn)
+        failures = re.findall(r"assetsNotice\('(?:Upload|Delete) failed: [^;]*;", body)
+        assert failures and all(f.endswith(", true);") for f in failures), fn

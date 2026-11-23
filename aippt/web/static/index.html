@@ -4712,10 +4712,13 @@
         let myAssets = [];
         let assetThumbUrls = [];
 
-        function assetsNotice(msg) {
+        // Errors are shown in red so a failed upload is not missed
+        function assetsNotice(msg, isError = false) {
             const el = document.getElementById('assets-notice');
             el.textContent = msg || '';
             el.style.display = msg ? '' : 'none';
+            el.style.color = isError ? 'var(--pico-del-color, #c0392b)' : '';
+            el.style.fontWeight = isError ? '600' : '';
         }
 
         // Fetch the library; returns an error message, or '' on success.
@@ -4840,7 +4843,8 @@
                 const resp = await msAuth.fetchWithAuth('api/assets', {method: 'POST', body: formData});
                 const data = await resp.json().catch(() => ({}));
                 if (!resp.ok) {
-                    assetsNotice('Upload failed: ' + (data.error || data.detail || resp.statusText));
+                    assetsNotice('Upload failed: ' + (data.error || data.detail || resp.statusText), true);
+                    fileInput.value = '';
                     return;
                 }
                 fileInput.value = '';
@@ -4850,7 +4854,7 @@
                 assetsNotice(await loadAssets());
                 renderAssets();
             } catch (e) {
-                assetsNotice('Upload failed: ' + e.message);
+                assetsNotice('Upload failed: ' + e.message, true);
             } finally {
                 btn.disabled = false;
             }
@@ -4862,14 +4866,14 @@
                 const resp = await msAuth.fetchWithAuth(`api/assets/${encodeURIComponent(asset.id)}`, {method: 'DELETE'});
                 if (!resp.ok) {
                     const data = await resp.json().catch(() => ({}));
-                    assetsNotice('Delete failed: ' + (data.error || data.detail || resp.statusText));
+                    assetsNotice('Delete failed: ' + (data.error || data.detail || resp.statusText), true);
                     return;
                 }
                 toast(`Deleted "${asset.name}"`);
                 assetsNotice(await loadAssets());
                 renderAssets();
             } catch (e) {
-                assetsNotice('Delete failed: ' + e.message);
+                assetsNotice('Delete failed: ' + e.message, true);
             }
         }
 
