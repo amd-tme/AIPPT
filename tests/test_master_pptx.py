@@ -6,10 +6,12 @@ structure using python-pptx.
 
 import os
 import subprocess
-import tempfile
+from pathlib import Path
 
 import pytest
 from pptx import Presentation
+from PIL import Image
+import yaml
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 NODE_PATH = subprocess.check_output(
@@ -17,11 +19,11 @@ NODE_PATH = subprocess.check_output(
 ).strip()
 
 
-def _generate_deck(use_master: bool, output_path: str) -> str:
+def _generate_deck(use_master: bool, output_path: str, theme_path: str = None) -> str:
     """Generate a minimal pptxgenjs deck with or without masters."""
     master_flag = "true" if use_master else "false"
     helpers_path = os.path.join(REPO_ROOT, "lib", "pptxgenjs-helpers.mjs")
-    theme_path = os.path.join(REPO_ROOT, "themes", "default.yaml")
+    theme_path = theme_path or os.path.join(REPO_ROOT, "themes", "default.yaml")
     script = f"""\
 import {{ createDeck, addTitleSlide, addBulletSlide, addSectionDivider,
          addClosingSlide, addProcessFlow, addCardGrid, SW, SH
@@ -41,8 +43,8 @@ addClosingSlide(deck, 6, 'Thank you');
 
 await deck.save('{output_path}');
 """
-    script_path = os.path.join(tempfile.gettempdir(), "test_master_gen.mjs")
-    with open(script_path, "w") as f:
+    script_path = str(Path(output_path).with_suffix(".mjs"))
+    with open(script_path, "w", encoding="utf-8") as f:
         f.write(script)
 
     env = {**os.environ, "NODE_PATH": NODE_PATH}
@@ -57,6 +59,20 @@ await deck.save('{output_path}');
     assert result.returncode == 0, f"Generation failed:\n{result.stderr}"
     assert os.path.exists(output_path), f"Output not created: {output_path}"
     return output_path
+
+
+@pytest.fixture
+def branded_theme(tmp_path):
+    logo = tmp_path / "logo.png"
+    Image.new("RGB", (80, 20), "teal").save(logo)
+    theme = yaml.safe_load((Path(REPO_ROOT) / "themes/default.yaml").read_text(encoding="utf-8"))
+    theme["logo"] = {
+        "path": str(logo), "width_inches": 0.8, "height_inches": 0.2,
+        "x_inches": 0.3, "y_inches": 0.3,
+    }
+    path = tmp_path / "branded.yaml"
+    path.write_text(yaml.safe_dump(theme), encoding="utf-8")
+    return str(path), logo.read_bytes()
 
 
 class TestMasterDefinition:
@@ -90,14 +106,24 @@ class TestMasterDefinition:
 class TestChromeNotDuplicated:
     """Content slides have no logo/footer shapes when masters are active."""
 
-    def test_content_slides_have_no_image_shapes(self, tmp_path):
+    def test_content_slides_have_no_image_shapes(self, tmp_path, branded_theme):
         """Logo should be on the master, not baked into individual slides."""
         out = str(tmp_path / "master.pptx")
-        _generate_deck(use_master=True, output_path=out)
+        theme_path, logo = branded_theme
+        _generate_deck(use_master=True, output_path=out, theme_path=theme_path)
         p = Presentation(out)
         from pptx.enum.shapes import MSO_SHAPE_TYPE
 
+        content_slides = 0
         for i, slide in enumerate(p.slides):
+            if slide.slide_layout.name != "CONTENT_MASTER":
+                continue
+            content_slides += 1
+            inherited_logos = [
+                shape for shape in slide.slide_layout.shapes
+                if shape.shape_type == MSO_SHAPE_TYPE.PICTURE and shape.image.blob == logo
+            ]
+            assert len(inherited_logos) == 1, "content layout must supply the logo exactly once"
             images = [
                 s for s in slide.shapes
                 if s.shape_type == MSO_SHAPE_TYPE.PICTURE
@@ -106,6 +132,7 @@ class TestChromeNotDuplicated:
                 f"Slide {i + 1} ({slide.slide_layout.name}) has {len(images)} "
                 f"image shapes — logo should be on the master, not the slide"
             )
+        assert content_slides > 0, "no content slides were checked"
 
     def test_content_slides_use_placeholder_slide_numbers(self, tmp_path):
         """Slide numbers should come from the master placeholder, not addFooter."""

@@ -1,9 +1,15 @@
 # Testing Guide - AIPPT v2
 
-## Test Status
-- **Total Tests**: 211 passing, 3 skipped
-- **Test Coverage**: All modules have unit tests
-- **Gateway Tests**: Skipped unless `AMD_LLM_KEY` env var is set
+## Fast and live checks
+
+The default suite excludes the `e2e` and `live` markers. It needs no provider
+credentials or proprietary corporate template. Template-merge tests generate
+temporary PPTX fixtures and inspect the real saved files; branded-template
+inventory and appearance still need separate integration validation.
+
+Full-mode route fixtures set their mode explicitly. View-only/autodetection tests
+exercise their own environments, so a developer's API keys do not decide which
+route behavior the tests reach.
 
 ## Running Tests
 
@@ -13,7 +19,13 @@ source venv/Scripts/activate  # Windows Git Bash
 # OR
 source venv/bin/activate      # Linux/Mac
 
-# Run all tests
+# Install Python dependencies in the active venv
+pip install -r requirements.txt
+
+# Put Node 22.13+ LTS or >=23.5 on PATH and install locked Node dependencies
+npm ci
+
+# Run the fast suite (no provider credentials required)
 pytest tests/ -v
 
 # Run specific test module
@@ -23,6 +35,17 @@ pytest tests/test_analyze.py -v
 # Run with coverage
 pytest tests/ --cov=aippt --cov-report=html
 ```
+
+For a clean-environment Linux check:
+
+```bash
+env -u ANTHROPIC_API_KEY -u OPENAI_API_KEY -u AIPPT_VIEW_ONLY \
+  venv/bin/python -m pytest tests/ -q
+```
+
+Use `pytest -m live` or `pytest -m e2e` only when intentionally exercising external
+services with the required credentials. Build changed Sphinx pages with
+`venv/bin/sphinx-build -M html docs docs/_build -W`.
 
 ## Manual Testing Guide
 

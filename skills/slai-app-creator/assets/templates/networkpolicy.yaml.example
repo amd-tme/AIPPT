@@ -1,0 +1,115 @@
+# Example NetworkPolicy — WHITELIST-ONLY EGRESS (app-platform default posture).
+#
+# REQUIRED for slai-app-prod (default-deny namespace). Without this file, even a healthy
+# pod is unreachable from the Ingress controller and other pods. The validator
+# (skills/slai-app-creator/scripts/main.py) treats networkpolicy.yaml as mandatory for
+# slai-app-prod and rejects bundles that omit it.
+#
+# CRITICAL — Ingress port MUST equal deployment.yaml containerPort (NOT the Service port).
+# A common failure mode is to copy this template with port 8080 while the app actually
+# listens on 4000 (or 3000, 5000, etc.); the pod is then unreachable in-cluster even
+# though it serves traffic. The validator cross-checks containerPort vs ingress port.
+#
+# Only the egress rules below are permitted for selected pods. There is NO blanket allow:
+# you MUST add an explicit rule (destination + TCP/UDP port) for every downstream resource
+# (MySQL :3306, Postgres :5432, HTTPS :443 to a known API, Redis, etc.).
+#
+# Standard minimum (platform baseline): cluster DNS (:53) + OTLP gRPC (:4317) to the collector
+# http://atlvslaiapp03:4317 (see skills/slai-app-creator/references/platform-context.md). Egress uses
+# explicit collector destination IPs resolved immediately before authoring.
+#
+# Pair with deployment.yaml.example (same pod labels). Ingress/DNS: deploy/README.md or platform.
+# metadata.namespace must match deployment.yaml and the deploy/<namespace>/<app_id>/ folder.
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: YOUR_APP_NAME-net
+  namespace: slai-app-prod
+  labels:
+    app.kubernetes.io/name: YOUR_APP_NAME
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: YOUR_APP_NAME
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Verified platform controller selectors; recheck labels for another cluster.
+    # Replace 8080 with the actual pod listener port, not the Service port.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/component: controller
+              app.kubernetes.io/instance: rke2-ingress-nginx
+              app.kubernetes.io/name: rke2-ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 8080
+  egress:
+    # Keycloak SSO: when auth-policy.json enables SSO, the agent MUST run
+    # scripts/keycloak_egress.py <bundle-directory> --apply before submitting.
+    # It adds explicit TCP 443 to every packaged platform SSO destination.
+    # DNS and OTLP alone are insufficient for SSO.
+    # --- Standard minimum (do not remove unless Eng IT documents a different DNS model) ---
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # OTLP gRPC — recorded endpoint http://atlvslaiapp03:4317 (OTEL_EXPORTER_OTLP_ENDPOINT).
+    # Resolve the collector host now; replace the placeholder with each current IP.
+    # Record the resolution date. No destination-unrestricted OTLP rule.
+    - to:
+        - ipBlock:
+            cidr: REPLACE_WITH_CURRENT_COLLECTOR_IPV4/32
+      ports:
+        - protocol: TCP
+          port: 4317
+    # --- Application whitelist — REQUIRED for each non-standard dependency (uncomment + edit) ---
+    # MySQL in-cluster:
+    # - to:
+    #     - namespaceSelector:
+    #         matchLabels:
+    #           kubernetes.io/metadata.name: data-services
+    #       podSelector:
+    #         matchLabels:
+    #           app.kubernetes.io/name: mysql
+    #   ports:
+    #     - protocol: TCP
+    #       port: 3306
+    # Managed MySQL by IP:
+    # - to:
+    #     - ipBlock:
+    #         cidr: REPLACE_WITH_CURRENT_MYSQL_IPV4/32
+    #   ports:
+    #     - protocol: TCP
+    #       port: 3306
+    # Outbound HTTPS to a specific corporate API (whitelist IP/CIDR + 443 only):
+    # - to:
+    #     - ipBlock:
+    #         cidr: 203.0.113.10/32
+    #   ports:
+    #     - protocol: TCP
+    #       port: 443
+    # Anonymous LDAPS for POSIX-group / point is-member checks:
+    # Resolve ldap.amd.com immediately before authoring; NetworkPolicy cannot
+    # match an FQDN. Add one narrow entry for each current address and record
+    # the resolution date. Do not copy an old measured address blindly.
+    # - to:
+    #     - ipBlock:
+    #         cidr: REPLACE_WITH_CURRENT_LDAP_IPV4/32
+    #   ports:
+    #     - protocol: TCP
+    #       port: 636

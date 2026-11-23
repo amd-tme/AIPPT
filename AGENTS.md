@@ -4,30 +4,36 @@ Guidance for AI coding assistants working on AIPPT. This is the vendor-neutral
 entry point — any agent (Claude Code, Cursor, OpenAI Codex, Aider, Goose,
 Gemini CLI, etc.) should read this first.
 
-**Process is process.** AIPPT's contribution rules apply equally to humans and
-to AI assistants. Read `CONTRIBUTING.md` end-to-end before making your first
-change. This file does not duplicate it.
+Read `CONTRIBUTING.md` before making your first change. Apply its workflow in
+proportion to the work. The project owner's explicit directions take precedence
+over workflow defaults.
 
-## The required loop
+## Workflow defaults
 
-Every non-trivial change goes through this loop. No exceptions for AI agents.
+Choose the lightest process that makes a change understandable and reviewable.
 
-1. **PRD** — copy `~/git/swproductmgmt/projects/aippt/PRD-TEMPLATE.md` (shared repo)
-   and fill every section. File at
-   `~/git/swproductmgmt/projects/aippt/prds/YYYY-MM-DD-feature-name.md`, then publish for
-   review (`/github publish … --no-merge`, reviewer requested — never self-merge
-   in swproductmgmt). See `CONTRIBUTING.md` §4.
-2. **Branch / worktree** — `feature/<name>` off `main`. Worktrees in
-   `.worktrees/<short-name>/` (gitignored) are preferred.
-3. **TDD** — write the failing test first, then the minimum code to pass.
-   Fast suite (`pytest tests/`) must stay green before every commit.
-4. **CHANGELOG.md** — add an entry under `[Unreleased]`. Keep-a-Changelog
-   format.
-5. **Sphinx docs** — update the relevant `docs/*.rst` page. `make html -W`
-   must stay clean.
+1. **Planning** — a scoped issue or short plan is sufficient for bounded fixes,
+   test repairs, documentation and routine maintenance. Prefer a PRD for new
+   features or substantial behavior, architecture or operational changes. Use
+   `~/git/swproductmgmt/projects/aippt/PRD-TEMPLATE.md`, fill each section, and
+   publish under `projects/aippt/prds/` for review. swproductmgmt's separate
+   human-review/merge policy still applies (`/github publish … --no-merge`).
+   Review can proceed alongside bounded implementation when the owner agrees.
+2. **Branch / worktree** — use a descriptive branch off `main`. An isolated
+   worktree is preferred when useful; reusing a suitable clean one is fine.
+3. **Verification** — prefer a failing regression test before a behavior fix.
+   An existing reproducible failure can provide that baseline. Run checks relevant
+   to the change and the fast suite before publishing code when practical.
+   Investigate failures and distinguish regressions from existing/environment
+   failures; document evidence and limitations rather than hiding them.
+4. **Changelog** — record user-visible and material developer-workflow changes
+   under `[Unreleased]`. Routine prose edits need no ceremonial entry.
+5. **Documentation** — update affected guidance when behavior or setup changes.
+   Build Sphinx changes with warnings treated as errors.
 
-If you skip any of those steps without an explicit reason from the user, you
-are out of bounds.
+Use judgment for routine choices, and explain material deviations in the handoff.
+Do not repeatedly ask the owner to approve harmless workflow details. Preserve
+separate production, access-control and shared-repository review gates.
 
 ## Tool-specific guidance
 

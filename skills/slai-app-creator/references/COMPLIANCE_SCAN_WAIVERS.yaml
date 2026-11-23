@@ -1,0 +1,1056 @@
+- asset: skills/slai-app-creator
+  file: SKILL.md
+  check_id: OBF-001
+  span_hash: sha256:b40d2200e8b3bd8bbf2500a49b0d0be4910c8294dca52a4383869e78c3d32eca
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: Intentional human-readable documentation symbols; no concealed or executable
+    content
+  approver: ctung
+  approved_date: '2026-07-22T15:26:49Z'
+  expiry: null
+  file_hash: null
+  line_start: null
+  line_end: null
+  original_description: 'Decoded: [NORMALIZED]'
+- asset: skills/slai-app-creator
+  file: references/when-users-ask.md
+  check_id: OBF-001
+  span_hash: sha256:b40d2200e8b3bd8bbf2500a49b0d0be4910c8294dca52a4383869e78c3d32eca
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: Intentional human-readable documentation symbols; no concealed or executable
+    content
+  approver: ctung
+  approved_date: '2026-07-22T15:27:22Z'
+  expiry: null
+  file_hash: null
+  line_start: null
+  line_end: null
+  original_description: 'Decoded: [NORMALIZED]'
+- asset: skills/slai-app-creator
+  file: SKILL.md
+  check_id: DAT-001
+  span_hash: sha256:96429cdfbe844691b7b7e56eed57906153df5d8a229c6a1c6345c3e22c63f5e1
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: Intentional placeholder database URL used only to demonstrate hostname/FQDN
+    correction; not a real credential
+  approver: ctung
+  approved_date: '2026-07-22T15:28:05Z'
+  expiry: null
+  file_hash: null
+  line_start: null
+  line_end: null
+  original_description: 'Match: post...b`**'
+- asset: skills/slai-app-creator
+  file: references/network-egress.md
+  check_id: DAT-001
+  span_hash: sha256:96429cdfbe844691b7b7e56eed57906153df5d8a229c6a1c6345c3e22c63f5e1
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: Intentional placeholder database URLs used only to demonstrate pod DNS
+    and FQDN requirements; not real credentials
+  approver: ctung
+  approved_date: '2026-07-22T15:28:37Z'
+  expiry: null
+  file_hash: null
+  line_start: null
+  line_end: null
+  original_description: 'Match: post.../app'
+- asset: skills/slai-app-creator
+  file: tests/test_harbor_credential_binding.py
+  check_id: MAN-001
+  span_hash: sha256:227b092c1f2b3e396f86c172d4908bf8b12f05a5ab8a6820bc9c8f44d68c05fd
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: Intentional execution of trusted, version-controlled workflow scripts
+    in a security regression test
+  approver: ctung
+  approved_date: '2026-07-22T15:29:09Z'
+  expiry: null
+  file_hash: null
+  line_start: null
+  line_end: null
+  original_description: 'Scanner detected anomaly: zero_risk_with_dangerous_patterns.
+    This may indicate manipulation of the security scan, or a deterministic check
+    that should have fired but didn''t.'
+- asset: skills/slai-app-creator
+  file: SKILL.md
+  check_id: WEB-001
+  span_hash: sha256:6e6b6255472d25b660d9ff4dbccfe67faade23d9470e9f751ed14f1e79c18e75
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: Chuck Tung explicitly approved this finding-specific waiver after review;
+    the PowerShell installer is served from the allowlisted internal atlartifactory.amd.com
+    endpoint.
+  approver: ctung
+  approved_date: '2026-08-30T12:55:30Z'
+  expiry: null
+  file_hash: null
+  line_start: null
+  line_end: null
+  original_description: null
+- asset: skills/slai-app-creator
+  file: tests/test_manifest_validation.py
+  check_id: MAN-001
+  span_hash: sha256:227b092c1f2b3e396f86c172d4908bf8b12f05a5ab8a6820bc9c8f44d68c05fd
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: Intentional execution of the trusted, version-controlled manifest validator
+    in a regression test (same class as the existing MAN-001 waiver on test_harbor_credential_binding.py).
+  approver: ctung
+  approved_date: '2026-09-02T14:43:25Z'
+  expiry: null
+  file_hash: null
+  line_start: null
+  line_end: null
+  original_description: 'Scanner detected anomaly: zero_risk_with_dangerous_patterns.
+    This may indicate manipulation of the security scan, or a deterministic check
+    that should have fired but didn''t.'
+- asset: skills/slai-app-creator
+  file: scripts/slai-skill-hit.py
+  check_id: EXF-001
+  span_hash: sha256:b037eb98a76ea6e30631bf2ad7cf57a04ee4a0c7a6facf9306694288ff906643
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: 'Required Marketplace skill-hit helper: AMD usage telemetry on skill
+    load, not covert exfiltration. Default collector is an AMD host constrained to
+    *.amd.com.'
+  approver: ctung
+  approved_date: '2026-09-14T00:19:59Z'
+  expiry: null
+  file_hash: null
+  line_start: null
+  line_end: null
+  original_description: null
+- asset: skills/slai-app-creator
+  file: scripts/slai-skill-hit.py
+  check_id: MAN-001
+  span_hash: sha256:6a1eadbc1185e1295ae52f0a87dbbc83cae4792f53298dcee454bcfe381b8f79
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: 'Required Marketplace skill-hit helper: detached Popen only starts the
+    AMD usage-telemetry worker; not scan manipulation.'
+  approver: ctung
+  approved_date: '2026-09-14T00:21:23Z'
+  expiry: null
+  file_hash: null
+  line_start: null
+  line_end: null
+  original_description: null
+- asset: skills/slai-app-creator
+  file: SKILL.md
+  check_id: SCP-001
+  span_hash: sha256:0c34649735b7d5b946827b67b41c659fa1f4c706ba143d7dc8b2d834990d5737
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: Required Marketplace skill-hit body-load line; not optional skill behavior.
+  approver: ctung
+  approved_date: '2026-09-14T00:28:57Z'
+  expiry: null
+  file_hash: null
+  line_start: null
+  line_end: null
+  original_description: null
+- asset: skills/slai-app-creator
+  file: scripts/private-sops-cache.py
+  check_id: SYM-001
+  span_hash: sha256:af4c1ad64efccfc40d95be042cf85741addd2c8da37f88368921f4c693a9eb50
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: 'User explicitly waived this same SOPS HOME boundary finding: there
+    are no owners above HOME in the managed NFS environment.'
+  approver: ctung
+  approved_date: '2026-10-16T03:20:30Z'
+  expiry: null
+  file_hash: sha256:b47c1342a230dcebccd48764e21f5ab449eaae934c0c5913d6f2bd06048c5a7b
+  line_start: 30
+  line_end: 31
+  original_description: The HOME traversal checks ancestor write permissions but not
+    ancestor ownership. A foreign-owned directory with mode 0755 passes, although
+    its owner can rename or replace its children. After checksum verification, this
+    helper returns a pathname that the encryption script executes separately. An ancestor
+    owner can replace the HOME directory with a redirected tree between verification
+    and execution, causing an unverified executable to receive plaintext secrets.
+    Private permissions on HOME and the cache do not prevent replacement by their
+    parent-directory owner.
+- asset: skills/slai-app-creator
+  file: scripts/private-sops-cache.py
+  check_id: SYM-001
+  span_hash: sha256:528b4ebdca88d6bd360364cf2cbdb69209bc482ff25ae0e20fc368e6813c3208
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: 'User explicitly waived this SOPS HOME ancestry finding on unchanged
+    source: there are no owners above HOME in the managed NFS environment.'
+  approver: ctung
+  approved_date: '2026-10-16T03:21:39Z'
+  expiry: null
+  file_hash: sha256:b47c1342a230dcebccd48764e21f5ab449eaae934c0c5913d6f2bd06048c5a7b
+  line_start: 30
+  line_end: 30
+  original_description: HOME ancestors are checked for writable permission bits but
+    not trusted ownership. A foreign owner of a mode-0755 ancestor can rename its
+    children or change its permissions, replacing the user's HOME path. The ancestry
+    descriptor is subsequently closed, and cache validation, binary verification,
+    and eventual execution use pathname lookups. An ancestor owner can therefore replace
+    the directory chain after validation or checksum verification and redirect execution
+    to an unverified SOPS binary. The same ownership-check pattern appears in other
+    supplied ancestry helpers.
+- asset: skills/slai-app-creator
+  file: SKILL.md
+  check_id: INJ-001
+  span_hash: sha256:0c34649735b7d5b946827b67b41c659fa1f4c706ba143d7dc8b2d834990d5737
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: Publisher explicitly approves preserving the existing skill-load usage
+    telemetry instruction.
+  approver: ctung
+  approved_date: '2026-10-16T21:41:52Z'
+  expiry: null
+  file_hash: sha256:05d169b070b1a18cb73e314179b84b5688ce3d86321cd6f3e135d8f7ea268e50
+  line_start: 44
+  line_end: 44
+  original_description: This instruction attempts to turn reading the document into
+    script execution, although the current task only authorizes security analysis.
+    The referenced script was not supplied, so its behavior cannot be verified. Following
+    this instruction would cross the boundary between untrusted file content and authorized
+    scanner actions.
+- asset: skills/slai-app-creator
+  file: scripts/main.py
+  check_id: SEC-001
+  span_hash: sha256:612376074f06deaae024e652e1f371d4e406ea76f7c4713e0b37c825e4570176
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: Publisher explicitly accepts the identified Service exposure validation
+    gap for this release.
+  approver: ctung
+  approved_date: '2026-10-16T21:42:33Z'
+  expiry: null
+  file_hash: sha256:c51cf0322ddb25ee8230134bc5977205988c635bcde524f6f66babff27fb936d
+  line_start: 390
+  line_end: 391
+  original_description: The Service checks enforce application ownership and selector
+    consistency but do not restrict spec.type, externalIPs, or nodePort. An application-controlled
+    service.yaml can therefore pass validation while requesting NodePort or LoadBalancer
+    exposure, bypassing Ingress-level TLS and authentication controls where cluster
+    permissions and networking allow it. Restricting NetworkPolicy peers in production
+    reduces this risk but does not protect namespaces where that policy is optional.
+- asset: skills/slai-app-creator
+  file: scripts/probe-smoke.sh
+  check_id: RES-001
+  span_hash: sha256:225182b829dd4acdc511b30e2d341d7cc7ff7ab4dae75f41b7dca93bb4fe3d43
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: Publisher explicitly accepts running the local smoke-test container
+    without resource limits for this release.
+  approver: ctung
+  approved_date: '2026-10-16T21:53:26Z'
+  expiry: null
+  file_hash: sha256:d94835ec4267f2d7fd8b150783f1a26a57045638936501eec131a9de7f7393e1
+  line_start: 143
+  line_end: 143
+  original_description: The script executes an application image without memory, CPU,
+    process-count, or writable-storage limits. A malicious or defective image can
+    exhaust host memory, spawn excessive processes, or fill container storage before
+    the probe timeout and cleanup occur. Running as non-root and dropping capabilities
+    do not prevent these denial-of-service behaviors.
+- asset: skills/slai-app-creator
+  file: scripts/main.py
+  check_id: SEC-001
+  span_hash: sha256:42c079390c6b7a1b0acbc512351f5d826b0b16aaeef1463fc13abda064cc7a51
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: Publisher already explicitly waived the unchanged Service exposure validation
+    gap for this release.
+  approver: ctung
+  approved_date: '2026-10-16T22:02:32Z'
+  expiry: null
+  file_hash: sha256:99762fd559355834f7d80dccbd6b797b9a5e6241cb00c77fc7fec2aac9e98aab
+  line_start: 390
+  line_end: 390
+  original_description: Service validation checks application ownership and the selector
+    but does not restrict spec.type, externalIPs, or ports[].nodePort. An application-owned
+    Service can therefore pass validation while requesting NodePort or LoadBalancer
+    exposure outside the validated Ingress route. Where the cluster permits externalIPs,
+    it can also claim addresses not allocated to the application. Exploitation depends
+    on cluster admission and networking configuration.
+- asset: skills/slai-app-creator
+  file: scripts/probe-smoke.sh
+  check_id: RES-001
+  span_hash: sha256:dab3003e1302f919c578c2db9c6bfc58b05dc3583b9fa037f9fe1b9dd977ad5d
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: Publisher explicitly waived this local smoke-test resource-limit finding;
+    bind that decision to the current exact finding span for manager validation.
+  approver: ctung
+  approved_date: '2026-10-16T22:03:28Z'
+  expiry: null
+  file_hash: null
+  line_start: null
+  line_end: null
+  original_description: null
+- asset: skills/slai-app-creator
+  file: scripts/atomic-secret-output.py
+  check_id: SYM-001
+  span_hash: sha256:528b4ebdca88d6bd360364cf2cbdb69209bc482ff25ae0e20fc368e6813c3208
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: User explicitly waived this HOME-ancestor ownership and pathname race
+    finding on 2026-10-17; retain the supported managed NFS HOME trust boundary for
+    this release.
+  approver: ctung
+  approved_date: '2026-10-17T05:43:36Z'
+  expiry: null
+  file_hash: sha256:6fb75395d663a7214c661bff2d079fbe31c82bf125d4ca35d5c8900dfa863437
+  line_start: 21
+  line_end: 21
+  original_description: When output is beneath HOME, this traversal checks ancestor
+    write permissions but not ancestor ownership. An ancestor owned by another user
+    with mode 0755 passes, although its owner can rename its children or change its
+    permissions. The validated directory descriptor is subsequently closed and output
+    operations use pathname resolution again, allowing that owner to replace the HOME
+    path with a symlink between validation and use. This undermines the claimed no-symlink
+    output guarantee.
+- asset: skills/slai-app-creator
+  file: scripts/prepare_platform_checkout.py
+  check_id: SYM-001
+  span_hash: sha256:528b4ebdca88d6bd360364cf2cbdb69209bc482ff25ae0e20fc368e6813c3208
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: 'User explicitly waived on 2026-10-17: ancestors of HOME are IT-owned
+    managed infrastructure. Retain validated user HOME as the supported ancestry trust
+    boundary; arbitrary ownership above HOME is not an application-controlled path.'
+  approver: ctung
+  approved_date: '2026-10-17T05:44:25Z'
+  expiry: null
+  file_hash: sha256:c2384e969cbce13c5f73c56fb90cc230c3ca028cb784696188839d93494457c6
+  line_start: 26
+  line_end: 26
+  original_description: The HOME boundary traversal permits ancestors owned by unrelated
+    users when their current mode lacks group/world write bits. Such an owner can
+    still replace descendant path components. Subsequent ancestry validation starts
+    at HOME, omitting those ancestors, and closes the traversal descriptor before
+    pathname-based Git metadata checks. A checkout under such a HOME can therefore
+    pass validation despite an ancestor owner retaining path-replacement authority.
+- asset: skills/slai-app-creator
+  file: references/guidelines.md
+  check_id: RES-001
+  span_hash: sha256:9be3e2e8183bfa0085bcbba8518ee4a6435ceeb0a569ef4b4b7ee4afe8dec9dd
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: User explicitly waived on 2026-10-17 the existing deployment guidance
+    omitting default workload CPU/memory limits; retain requests and existing platform
+    policy for this release.
+  approver: ctung
+  approved_date: '2026-10-17T05:46:47Z'
+  expiry: null
+  file_hash: sha256:36cea0c6fd85fc10847ceac20a05cd066afe4c95ef1efa2602e5bd630374408e
+  line_start: 130
+  line_end: 130
+  original_description: Resource requests reserve scheduling capacity but do not cap
+    consumption. This guidance allows application workloads to consume available CPU
+    and memory without per-container ceilings. A buggy or compromised application
+    can exhaust shared node resources and disrupt neighboring workloads. The supplied
+    validator requires requests but does not require limits.
+- asset: skills/slai-app-creator
+  file: scripts/main.py
+  check_id: SEC-001
+  span_hash: sha256:4f76c5a05543788518d1be599a3c85a6d64c1b2a5ecb875bc00b2437e3cb3699
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: User explicitly waived individual /32 IPv4 and /128 IPv6 ingress sources
+    for every app, with individual ports required. Cross-namespace explicit selectors
+    also approved separately.
+  approver: ctung
+  approved_date: '2026-10-17T06:26:15Z'
+  expiry: null
+  file_hash: sha256:aa90b38182eb3ca818063ea6b5317ef3ef1014f4be8ab00edf9877d2a8a2c391
+  line_start: 901
+  line_end: 901
+  original_description: The shared ingress/egress validation loop does not restrict
+    this branch, or the following namespace-and-pod-selector branch, to egress. Consequently,
+    ingress rules from arbitrary individual IP addresses or arbitrary namespaces pass
+    validation without matching the designated ingress controller or the supported
+    same-namespace application selector. This weakens the stated restricted ingress
+    validation boundary.
+- asset: skills/slai-app-creator
+  file: scripts/bundle_resources.py
+  check_id: SEC-001
+  span_hash: sha256:4f76c5a05543788518d1be599a3c85a6d64c1b2a5ecb875bc00b2437e3cb3699
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: 'User explicitly waived this file-specific finding to retain consistent
+    general ingress support: explicit single-IP and namespace-plus-pod peers, with
+    individual ports required.'
+  approver: ctung
+  approved_date: '2026-10-17T06:28:58Z'
+  expiry: null
+  file_hash: sha256:72c282aadc281f6d952c603d7fd7c7514f8089d28be0d6707aded0176e5b3f4b
+  line_start: 60
+  line_end: 60
+  original_description: The shared peer-validation loop accepts ipBlock and arbitrary
+    namespace-and-pod selectors for ingress as well as egress. Consequently, an additional
+    NetworkPolicy can admit ingress from a caller-selected IP or namespace instead
+    of the canonical ingress controller or explicitly selected same-namespace application
+    pods. Kubernetes combines allowed traffic across NetworkPolicies, so such a policy
+    can widen access even when another validated policy is restrictive.
+- asset: skills/slai-app-creator
+  file: scripts/main.py
+  check_id: SEC-001
+  span_hash: sha256:5bdd30e6e63a80f91ce6cc382e1532f8e322d15b61060f40373efb410622b68f
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: 'Previously explicitly approved by user: allow cross-namespace ingress
+    with both nonempty namespace and pod selectors and individual ports for all apps.
+    Record same file behavior under skill scan identity.'
+  approver: ctung
+  approved_date: '2026-10-17T06:41:03Z'
+  expiry: null
+  file_hash: sha256:ddf2cb9ba21de450faf04bb7643411521310f04f9a19ee3fb8824db56aad91e9
+  line_start: 916
+  line_end: 916
+  original_description: The shared peer-validation loop applies the namespace-and-pod
+    selector branch to both ingress and egress. Consequently, an application NetworkPolicy
+    can allow inbound traffic from arbitrary other namespaces using nonempty matchLabels,
+    rather than limiting cross-namespace ingress to the explicitly recognized ingress
+    controller. Such a policy passes validation and can expand direct backend access.
+- asset: skills/slai-app-creator
+  file: scripts/submit_app.py
+  check_id: SYM-001
+  span_hash: sha256:74974b7238a919b4d32db557b959ddbccf2485436dd9cc710851d55e48b62b47
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: User previously explicitly waived this same session-cache ancestor replacement
+    risk; record existing approval under skill identity.
+  approver: ctung
+  approved_date: '2026-10-17T06:43:02Z'
+  expiry: null
+  file_hash: sha256:df399de1c06db10c110524b1d2fc8045eb7af29809fdf10aa61620c9788ba008
+  line_start: 164
+  line_end: 164
+  original_description: save_session checks the cache directory with lstat, then creates
+    and replaces files using pathnames. Unlike descriptor-relative bundle reads, these
+    operations do not retain the checked directory. If an attacker can replace an
+    ancestor directory between validation and creation, session-token output can be
+    redirected into an attacker-controlled directory. The function also does not reject
+    symlink components above the final cache directory.
+- asset: skills/slai-app-creator
+  file: scripts/ciphertext_validation.py
+  check_id: SEC-001
+  span_hash: sha256:5efc3b1fcc20681d1fd2ae5bf770adeea15354fd121b140e545a9953dc03564b
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: User explicitly waived the service-account-token Secret and service-account
+    annotation validation gap after reviewing token-controller population and mount
+    implications.
+  approver: ctung
+  approved_date: '2026-10-17T06:44:39Z'
+  expiry: null
+  file_hash: sha256:2e6a51447a0ff16d8443f592214d9b6b90e456f3c1d8c60ff1542f485d522d42
+  line_start: 17
+  line_end: 17
+  original_description: 'The validator restricts Secret names and ciphertext fields
+    but does not restrict Secret types or service-account annotations. An application-owned
+    Secret can specify type kubernetes.io/service-account-token and annotation kubernetes.io/service-account.name:
+    default, with empty data and otherwise valid SOPS metadata. When applied, the
+    Kubernetes token controller can populate it with a service-account token. The
+    Deployment validator permits referencing the application-owned Secret through
+    environment variables or volumes, bypassing the intended prohibition on mounting
+    service-account credentials. Impact depends on the default service account''s
+    permissions and token-controller configuration.'
+- asset: skills/slai-app-creator
+  file: scripts/bundle_resources.py
+  check_id: SEC-001
+  span_hash: sha256:5bdd30e6e63a80f91ce6cc382e1532f8e322d15b61060f40373efb410622b68f
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: User explicitly waived namespace-plus-pod and individual-IP ingress
+    for all apps and separately waived this additional-resource validator file; retain
+    unchanged approved capability.
+  approver: ctung
+  approved_date: '2026-10-18T14:19:28Z'
+  expiry: null
+  file_hash: sha256:65d967c4a3c93230d8d97d4bd77aa611b716c234bd8183c751838773517181ad
+  line_start: 65
+  line_end: 65
+  original_description: This branch accepts namespace-and-pod selectors for ingress
+    as well as egress. An application bundle can therefore allow ingress from arbitrary
+    selected workloads rather than the documented ingress controller. The individual-IP
+    branch similarly accepts ingress peers without a controller-source restriction.
+    Nonempty labels alone do not establish that a source is authorized.
+- asset: skills/slai-app-creator
+  file: scripts/ingress_policy.py
+  check_id: DIS-001
+  span_hash: sha256:3772a648c4bb31e163751f4fde4a0ad0d47587527ba16b660e881bc166c0bada
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: User explicitly waived DIS-001 and authorized retaining parser details.
+  approver: ctung
+  approved_date: '2026-10-18T15:40:05Z'
+  expiry: null
+  file_hash: sha256:9042b2686c7f0d1e92b47f5af8dc99cb59a392ad70fda3352c37b323663d2bc7
+  line_start: 154
+  line_end: 154
+  original_description: PyYAML exception strings can include source lines around a
+    parsing error. This validator scans all YAML files, including secret manifests,
+    and prints collected errors to stderr. Malformed input can therefore expose passwords
+    or other sensitive manifest contents in terminal output or CI logs.
+- asset: skills/slai-app-creator
+  file: scripts/ingress_policy.py
+  check_id: SEC-001
+  span_hash: sha256:389c24a880c570de43452a463e16f17988b0dbdc1f89c688d88b59c7c7509572
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: User explicitly waived grandfathered machine-route backend and pathType
+    finding and authorized retaining grandfather checks.
+  approver: ctung
+  approved_date: '2026-10-18T15:47:14Z'
+  expiry: null
+  file_hash: sha256:9608c8e4b9399d686d6ff55e115d0a4f273a8347972a6f2b626a856fdf3596fb
+  line_start: 320
+  line_end: 322
+  original_description: Grandfathered route identity includes only the application,
+    filename, host, path, and TLS Secret. This early continue accepts changes to the
+    backend and pathType for most Charter machine routes, including /v1/token and
+    /v1/ssh-certificates. Only the CIMD, OAuth import, and policy routes receive explicit
+    Exact-path and backend checks. A modified grandfathered route can therefore use
+    Prefix matching to expose additional endpoints or direct a browser-authentication-exempt
+    route to another backend while retaining its approved identity.
+- asset: skills/slai-app-creator
+  file: references/guidelines.md
+  check_id: RES-001
+  span_hash: sha256:add65aa332ade16be04458f591cfa4e78c61e161e2d447db979f5eb314109cab
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: User explicitly waived shared-node resource consumption finding and
+    authorized retaining requests-only CPU and memory policy.
+  approver: ctung
+  approved_date: '2026-10-18T16:06:39Z'
+  expiry: null
+  file_hash: sha256:a6f91330924e308c87b0ac96ea1dec1bdf07867825f02eaa6e8e63c08c4c88c9
+  line_start: 28
+  line_end: 28
+  original_description: The guidance explicitly omits CPU and memory limits in a shared
+    production namespace. Resource requests reserve scheduling capacity but do not
+    cap consumption. A compromised application, expensive request, or memory leak
+    could exhaust node resources and disrupt neighboring workloads. Namespace quota
+    alone does not establish a per-container runtime ceiling.
+- asset: skills/slai-app-creator
+  file: tests/test_go_build_environment.py
+  check_id: MAN-001
+  span_hash: sha256:227b092c1f2b3e396f86c172d4908bf8b12f05a5ab8a6820bc9c8f44d68c05fd
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: 'User explicitly waived scanner anomaly after manual review: subprocess
+    invokes temporary regression build script with synthetic Go settings, no shell=True
+    or credentials; retain regression.'
+  approver: ctung
+  approved_date: '2026-10-18T16:09:19Z'
+  expiry: null
+  file_hash: null
+  line_start: null
+  line_end: null
+  original_description: 'Scanner detected anomaly: zero_risk_with_dangerous_patterns.
+    This may indicate manipulation of the security scan, or a deterministic check
+    that should have fired but didn''t.'
+- asset: skills/slai-app-creator
+  file: scripts/bundle_resources.py
+  check_id: ENV-001
+  span_hash: sha256:a4855598cfa9ec8de2ed3e819f737a88234cc6f7381dbc8905c7a104a6b4e6f9
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: User explicitly waived Python worker import/startup environment finding
+    and authorized retaining inherited environment.
+  approver: ctung
+  approved_date: '2026-10-18T16:15:29Z'
+  expiry: null
+  file_hash: sha256:e4a0af72b63c0e44ab0c532f2c649c4ff98c9249232b5d71165d66246501527f
+  line_start: 128
+  line_end: 129
+  original_description: The worker inherits the caller's environment and starts Python
+    without ignoring Python environment variables. A caller-controlled PYTHONPATH
+    can supply imported dependencies such as yaml, and Python startup customization
+    can execute before apply_resource_limits(). This undermines the worker's isolation
+    and can permit code execution or forged validation results when the invoking environment
+    is not trusted.
+- asset: skills/slai-app-creator
+  file: scripts/ciphertext_validation.py
+  check_id: SEC-001
+  span_hash: sha256:bb10cf8c2ec160e2897bf6e4c23dff72a12f56e879a58af8935865e2368476be
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: User explicitly waived additional SOPS providers; retain reviewed provider
+    behavior for unchanged source.
+  approver: ctung
+  approved_date: '2026-10-18T16:25:21Z'
+  expiry: null
+  file_hash: sha256:2e6a51447a0ff16d8443f592214d9b6b90e456f3c1d8c60ff1542f485d522d42
+  line_start: 39
+  line_end: 40
+  original_description: The validator checks only the age recipients. SOPS metadata
+    can also contain PGP, KMS, and other key-provider entries that wrap the same data
+    key. Ciphertext containing the required platform age recipients plus an unauthorized
+    recipient in another provider can pass this check while remaining decryptable
+    by that additional identity. This bypasses the stated restriction that recipients
+    match the trusted platform configuration.
+- asset: skills/slai-app-creator
+  file: tests/test_submission_reliability.py
+  check_id: DAT-001
+  span_hash: sha256:c693d9c58f5a162e81d76262d468a64d1f1408ea4b50136e7014bec6f9d0e670
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: 'User waived the skill-level finding: private-session-value is synthetic
+    reliability-test data, not a real credential; retain the regression.'
+  approver: ctung
+  approved_date: '2026-10-20T15:30:57Z'
+  expiry: null
+  file_hash: null
+  line_start: null
+  line_end: null
+  original_description: 'Pattern matched: token = ''private-session-value'''
+- asset: skills/slai-app-creator
+  file: tests/test_submission_reliability.py
+  check_id: DAT-001
+  span_hash: sha256:262b9c4566dea168256b08736dcc0f4103d9a09315db6975dbf240b52eeaaa3f
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: 'User waived this skill-level scanner anomaly: the second private-session-value
+    assignment is synthetic local test data, not a real credential; retain the reviewed
+    regression.'
+  approver: ctung
+  approved_date: '2026-10-20T15:32:51Z'
+  expiry: null
+  file_hash: null
+  line_start: null
+  line_end: null
+  original_description: 'Pattern matched: c=m.Client();c.opener=Opener(b''{"id":"record"}'');c.token=''private-session-value'''
+- asset: skills/slai-app-creator
+  file: tests/test_submit_refresh.py
+  check_id: DAT-001
+  span_hash: sha256:46d94a359fb3ab17f2acba027236678d5e363355fcac860f18e4537c3079a674
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: 'User waived this skill-level scanner anomaly: session is synthetic
+    local test data, not a real credential; retain the reviewed regression.'
+  approver: ctung
+  approved_date: '2026-10-20T15:34:09Z'
+  expiry: null
+  file_hash: null
+  line_start: null
+  line_end: null
+  original_description: 'Pattern matched: client.token = "session"'
+- asset: skills/slai-app-creator
+  file: tests/test_submit_refresh.py
+  check_id: DAT-001
+  span_hash: sha256:95385e24501e7cfc2a6f990f63143738f74e36e7d1bbbcd84a4ffccf58baf372
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: 'User waived this skill-level scanner anomaly: session.credential is
+    synthetic local redaction-test data, not a real credential; retain the reviewed
+    regression.'
+  approver: ctung
+  approved_date: '2026-10-20T15:35:56Z'
+  expiry: null
+  file_hash: null
+  line_start: null
+  line_end: null
+  original_description: 'Pattern matched: token = ''session.credential'''
+- asset: skills/slai-app-creator
+  file: tests/test_required_yaml.py
+  check_id: MAN-001
+  span_hash: sha256:227b092c1f2b3e396f86c172d4908bf8b12f05a5ab8a6820bc9c8f44d68c05fd
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: 'User waived this scanner anomaly after reviewing the regression: subprocess
+    invokes the local validator with synthetic missing-PyYAML state, no shell execution
+    or credentials, to verify safe dependency failure.'
+  approver: ctung
+  approved_date: '2026-10-20T17:34:04Z'
+  expiry: null
+  file_hash: null
+  line_start: null
+  line_end: null
+  original_description: 'Scanner detected anomaly: zero_risk_with_dangerous_patterns.
+    This may indicate manipulation of the security scan, or a deterministic check
+    that should have fired but didn''t.'
+- asset: skills/slai-app-creator
+  file: scripts/atomic-secret-output.py
+  check_id: MAN-001
+  span_hash: sha256:227b092c1f2b3e396f86c172d4908bf8b12f05a5ab8a6820bc9c8f44d68c05fd
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: User explicitly approved retaining this reviewed atomic helper; unchanged
+    source runs an explicitly supplied encryption command without shell execution
+    or raw-secret logging.
+  approver: ctung
+  approved_date: '2026-10-20T22:29:17Z'
+  expiry: null
+  file_hash: null
+  line_start: null
+  line_end: null
+  original_description: 'Scanner detected anomaly: zero_risk_with_dangerous_patterns.
+    This may indicate manipulation of the security scan, or a deterministic check
+    that should have fired but didn''t.'
+- asset: skills/slai-app-creator
+  file: scripts/bundle_resources.py
+  check_id: SEC-001
+  span_hash: sha256:0a84b5718d4a96352d3204e4bd564c93b3ccac95ca893951b83c788be91a26c5
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: 'Chuck Tung explicitly approved retaining reviewed non-controller peer
+    support: app selectors, scoped namespace-plus-pod selectors, and individual IP
+    peers with explicit ports are intentional platform capabilities. Preserve these
+    reviewed peers rather than enforcing a controller-only contract.'
+  approver: ctung
+  approved_date: '2026-10-21T21:42:36Z'
+  expiry: null
+  file_hash: sha256:d45da347dc57be05eb8f02dc99fa9a92e6e3912a520715f126227008dde35b8b
+  line_start: 54
+  line_end: 54
+  original_description: After accepting the canonical ingress controller, the validator
+    processes other ingress peers using the same permissive branches as egress. Consequently,
+    an application can submit ingress rules allowing other application pods, arbitrary
+    namespace-and-pod selectors, or individual external IP addresses. This violates
+    the documented controller-only ingress contract and can expose backend ports directly
+    to unauthorized sources.
+- asset: skills/slai-app-creator
+  file: tests/test_additional_ingress.py
+  check_id: MAN-001
+  span_hash: sha256:227b092c1f2b3e396f86c172d4908bf8b12f05a5ab8a6820bc9c8f44d68c05fd
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: Chuck Tung explicitly approved waiving this scanner anomaly. The existing
+    regression test runs the bundled validation worker via subprocess and verifies
+    unauthorized ingress hosts are rejected; it is not scanner manipulation.
+  approver: ctung
+  approved_date: '2026-10-24T14:30:28Z'
+  expiry: null
+  file_hash: null
+  line_start: null
+  line_end: null
+  original_description: 'Scanner detected anomaly: zero_risk_with_dangerous_patterns.
+    This may indicate manipulation of the security scan, or a deterministic check
+    that should have fired but didn''t.'
+- asset: skills/slai-app-creator
+  file: scripts/bundle_resources.py
+  check_id: SEC-001
+  span_hash: sha256:124134b9fb7c1bd373642b8a9bcbb4a71796710973efbe1735ae438c3939f063
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: Chuck Tung explicitly approved this specific bundled-validator waiver.
+    Broad egress CIDRs are intentional approved policy, including IPv4 and IPv6 default
+    routes; default deny and explicitly declared peers and ports remain required.
+  approver: ctung
+  approved_date: '2026-10-24T14:40:15Z'
+  expiry: null
+  file_hash: sha256:eca74072d0853dc1b58481bc12547dda18f96628f991fd7144d178a2913d875d
+  line_start: 64
+  line_end: 64
+  original_description: The direction comparison exempts egress from the individual-address
+    and address-class checks. A submitted NetworkPolicy can therefore allow egress
+    to 0.0.0.0/0 or ::/0 on an allowed port, defeating the stated individual-destination
+    contract and enabling unrestricted outbound connections.
+- asset: skills/slai-app-creator
+  file: scripts/main.py
+  check_id: SEC-001
+  span_hash: sha256:738a7d4f71b85bf7efcc3c9e6d8cd5981754dfb3359d71b10c20399aef09f774
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: Chuck Tung previously explicitly approved waiving this exact SEC-001
+    main.py code span in the plugin-root scan (same span hash and unchanged file hash).
+    Broad egress CIDRs are intentional approved behavior while default deny and explicit
+    peers and ports remain required. This records the same decision for the nested
+    skill scan identity.
+  approver: ctung
+  approved_date: '2026-10-24T14:40:22Z'
+  expiry: null
+  file_hash: sha256:ef6eefa191f2abfe59bbea1537f295fc2291abd0b5e9f7177a5b08c0c85cf0ff
+  line_start: 975
+  line_end: 975
+  original_description: The prefix-length check runs only for ingress, despite the
+    error message requiring individual egress destinations. The following address-class
+    check has the same reversed comparison. Consequently, broad outbound CIDRs pass
+    this validator and can undermine network isolation.
+- asset: skills/slai-app-creator
+  file: scripts/lsf-push/private-stamp.py
+  check_id: SYM-001
+  span_hash: sha256:528b4ebdca88d6bd360364cf2cbdb69209bc482ff25ae0e20fc368e6813c3208
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: Chuck Tung explicitly approved waiving this specific stamp-helper HOME
+    ancestor ownership finding on the stated basis that HOME ancestors are owned and
+    managed by IT.
+  approver: ctung
+  approved_date: '2026-10-24T14:40:47Z'
+  expiry: null
+  file_hash: sha256:c256e4d3480e41a9c640a89186fa2a742b067510e4c1676792fa2ada61059653
+  line_start: 22
+  line_end: 22
+  original_description: When the stamp is below HOME, open_ancestry_boundary traverses
+    HOME ancestors without verifying their owners' administrative trust. An attacker-owned
+    directory with mode 0755 passes this check, although its owner can replace children
+    or change its permissions. Descriptor-relative writes protect the opened directory
+    from redirection, but do not establish that the selected ancestry is trusted.
+    The supplied tests explicitly accept UID 65534 without independently establishing
+    administrative identity or path scope.
+- asset: skills/slai-app-creator
+  file: scripts/lsf-build/scripts/private-build-cache.py
+  check_id: SYM-001
+  span_hash: sha256:528b4ebdca88d6bd360364cf2cbdb69209bc482ff25ae0e20fc368e6813c3208
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: Chuck Tung explicitly approved waiving this specific executable-cache
+    HOME ancestor ownership finding on the stated basis that HOME ancestors are owned
+    and managed by IT.
+  approver: ctung
+  approved_date: '2026-10-24T14:41:14Z'
+  expiry: null
+  file_hash: sha256:71b7103b84ce734956f118b50ef911d19fcf478f0f0ce6c1ccded4865cec2f3b
+  line_start: 22
+  line_end: 22
+  original_description: The traversal to HOME checks write mode bits but accepts arbitrary
+    foreign-owned ancestors. Such an owner controls child replacement despite mode
+    0755. Checking the final HOME and cache directory owners does not authenticate
+    those ancestors. Consequently, the helper's trusted executable-cache guarantee
+    depends on an administrative trust prerequisite that the code does not establish.
+- asset: skills/slai-app-creator
+  file: scripts/lsf-build/scripts/private-job-directory.py
+  check_id: SYM-001
+  span_hash: sha256:528b4ebdca88d6bd360364cf2cbdb69209bc482ff25ae0e20fc368e6813c3208
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: Chuck Tung explicitly approved waiving this specific source-staging
+    HOME ancestor ownership finding on the stated basis that HOME ancestors are owned
+    and managed by IT.
+  approver: ctung
+  approved_date: '2026-10-24T14:41:34Z'
+  expiry: null
+  file_hash: sha256:e7a38264d14269de9bd8e177e20bb7ab059d4d4932862c63024f1bd3ff102309
+  line_start: 20
+  line_end: 20
+  original_description: open_ancestry_boundary skips ownership trust validation for
+    directories preceding HOME. Although subsequent staging directories require trusted
+    ownership and private permissions, an unverified ancestor owner can modify or
+    replace children and can make an otherwise protected-looking path writable. The
+    descriptor traversal prevents following symlinks but does not resolve this ownership
+    trust gap.
+- asset: skills/slai-app-creator
+  file: scripts/main.py
+  check_id: SUP-001
+  span_hash: sha256:0dfef65c6886b6b4fd0d36043d7aa7a85e8eb4d5d3edc03b3d97aca0703dfc26
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: Chuck Tung explicitly approved waiving this specific local file/path
+    validator-source authentication shortcut finding after reviewing the reported
+    risk and recommendation. The reconciliation preserves the supported repository
+    and hosted-image execution paths.
+  approver: ctung
+  approved_date: '2026-10-24T15:23:52Z'
+  expiry: null
+  file_hash: sha256:440eba42004780781eae679b66babdcf8fdf7386e6023acac5ddeeb43451a1e2
+  line_start: 150
+  line_end: 151
+  original_description: The existence of a validator file, or installation at a particular
+    pathname, causes platform_repo_root to return before obtaining the fresh pinned
+    checkout or checking source permissions. The returned scripts are subsequently
+    executed through exec_module. A modified package ancestor can therefore supply
+    executable validators without establishing their provenance.
+- asset: skills/slai-app-creator
+  file: tests/test_nfs_ancestor_ownership.py
+  check_id: SYM-001
+  span_hash: sha256:388dba3e0d32ba649bede92957db307259fcd3e0fef527ab13514eb3a8c9dd36
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: Chuck Tung explicitly approved waiving this specific nested-skill ancestor
+    trust regression finding on the stated basis that HOME ancestor directories are
+    owned and managed by IT.
+  approver: ctung
+  approved_date: '2026-10-24T15:37:24Z'
+  expiry: null
+  file_hash: sha256:66b2dcd84461ee3834e001f24fd587a551d1ff4bcdd03f9b53cc081552901879
+  line_start: 34
+  line_end: 34
+  original_description: This test requires cache and stamp helpers to accept a foreign-owned
+    ancestor beneath a caller-selected HOME. It supplies neither an operator-controlled
+    administrator identity nor an independently verified contract for the exact managed
+    path. Non-writable permissions alone do not prevent that ancestor's owner from
+    replacing its children. The test therefore enshrines an insufficient trust boundary;
+    the helper implementations are not provided, so their actual exploitability remains
+    unverified.
+- asset: skills/slai-app-creator
+  file: scripts/main.py
+  check_id: MAL-001
+  span_hash: sha256:045646ef91d5c554178945af39418162c16fb122b51fc21da6a000fe3e294df0
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: Chuck Tung explicitly approved waiving this specific MAL-001 packaged
+    validator-source authentication shortcut finding after reviewing the reported
+    arbitrary Python execution risk and recommendation. This separately approves the
+    changed check ID for the supported repository and hosted-image paths.
+  approver: ctung
+  approved_date: '2026-10-24T15:38:41Z'
+  expiry: null
+  file_hash: sha256:440eba42004780781eae679b66babdcf8fdf7386e6023acac5ddeeb43451a1e2
+  line_start: 150
+  line_end: 150
+  original_description: A marker file in the computed package ancestor causes platform_repo_root
+    to return that directory without obtaining the pinned checkout or checking source
+    ownership and permissions. The returned scripts are subsequently executed with
+    spec.loader.exec_module. An attacker controlling this directory layout can provide
+    a validator that executes arbitrary Python in the scanner process.
+- asset: skills/slai-app-creator
+  file: references/network-egress.md
+  check_id: DOC-001
+  span_hash: sha256:bb81954a9e9bdea74b6739e589beee2f3d29bee58a302c94769e83a176ddbd39
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: Broad CIDRs are explicit opt-ins with specified ports; default-deny
+    remains intact.
+  approver: ctung
+  approved_date: '2026-11-02T04:27:33Z'
+  expiry: null
+  file_hash: sha256:2d8842666ab8d1fa77179e176c1a0e4eb60359394542cb398fedc75146c0cc07
+  line_start: 88
+  line_end: 88
+  original_description: This guidance contradicts the document's narrow-destination
+    requirements and explicitly permits Internet-wide and internal-network-wide access
+    without a platform exception. Following it weakens containment and enables compromised
+    applications to reach arbitrary destinations on the allowed ports.
+- asset: skills/slai-app-creator
+  file: scripts/submit_app.py
+  check_id: SYM-001
+  span_hash: sha256:956e652abfe24c12e39daa5a281dc87705f6ec5f683425e5d9d8488259e9cc77
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: Chuck explicitly accepted the described bundle ancestor-traversal risk
+    and chose to retain current bundle-reader behavior.
+  approver: ctung
+  approved_date: '2026-11-02T05:20:03Z'
+  expiry: null
+  file_hash: sha256:0253f8f7d72862f41e133fcb72c0b937add9568724edf52665ab4fb987a7266d
+  line_start: 105
+  line_end: 105
+  original_description: O_NOFOLLOW protects only the final directory component. The
+    preceding is_symlink/is_dir checks also resolve the path separately. If an untrusted
+    user can replace an ancestor or control an intermediate symlink, they can redirect
+    the initial open to a different bundle. Subsequent descriptor-relative file reads
+    remain pinned, but to the substituted directory, potentially causing submission
+    of unintended manifests. Hosted content validation does not establish that the
+    submitted files came from the directory the user intended.
+- asset: skills/slai-app-creator
+  file: scripts/main.py
+  check_id: SEC-001
+  span_hash: sha256:576eabb6dd72d58e79e3afab0e6b1553ee9388a2da25c40ec4972409d0e66a65
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: Chuck approved retaining in-process validator imports because clients
+    use fresh authenticated source pinned to a reviewed commit, hosted execution verifies
+    a protected immutable image inventory, and caller-selected checkouts are never
+    imported.
+  approver: ctung
+  approved_date: '2026-11-02T05:24:44Z'
+  expiry: null
+  file_hash: sha256:f262c64035bd402865ea44d7bb9397de71eb5257a4bc063fb48cbad5e812387c
+  line_start: 212
+  line_end: 212
+  original_description: main.py dynamically loads and executes validator modules (validate-ingress-policy.py,
+    validate-platform-auth-policy.py) from a platform checkout resolved via SLAI_PLATFORM_CLONE_DIR
+    or a hosted immutable image. The code does perform substantial ownership/symlink/permission
+    validation in platform_repo_root() before executing, which significantly mitigates
+    risk, but executing arbitrary code from a filesystem path remains inherently sensitive
+    if the validation is ever bypassed.
+- asset: skills/slai-app-creator
+  file: scripts/main.py
+  check_id: SEC-001
+  span_hash: sha256:4667b8b3e50db37295ea7de40abc7227bbad2c30c676c983da2bf5bff0346c00
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: Chuck approved retaining in-process validator imports because clients
+    use fresh authenticated source pinned to a reviewed commit, hosted execution verifies
+    a protected immutable image inventory, and caller-selected checkouts are never
+    imported.
+  approver: ctung
+  approved_date: '2026-11-02T05:24:45Z'
+  expiry: null
+  file_hash: sha256:f262c64035bd402865ea44d7bb9397de71eb5257a4bc063fb48cbad5e812387c
+  line_start: 210
+  line_end: 212
+  original_description: The validator loads and executes Python modules from a repository
+    path (platform_repo_root). While the code attempts ownership/symlink checks in
+    platform_repo_root(), the _ingress_policy_errors path calls spec.loader.exec_module()
+    on scripts discovered under repo_root. If an attacker can influence SLAI_PLATFORM_CLONE_DIR
+    or the checkout contents, arbitrary code execution could result. The ownership
+    validation mitigates but increases attack surface.
+- asset: skills/slai-app-creator
+  file: scripts/atomic-secret-output.py
+  check_id: SYM-001
+  span_hash: sha256:8da55116dcbe65c4200e7b4c8b412a54d031e2995ecf67941252e9556d2db5c8
+  status: active
+  source: manual
+  llm_verdict: null
+  llm_reason: overengineering
+  approver: ctung
+  approved_date: '2026-11-05T14:59:35Z'
+  expiry: null
+  file_hash: sha256:6fb75395d663a7214c661bff2d079fbe31c82bf125d4ca35d5c8900dfa863437
+  line_start: 74
+  line_end: 74
+  original_description: Validation closes the ancestry descriptor and subsequently
+    uses pathname-based temporary creation, replacement, and cleanup. Revalidating
+    immediately before replacement does not make these operations atomic with validation.
+    If a component is replaceable, including through the unchecked ancestor-owner
+    case, a redirect between checks and use can move output or cleanup into a different
+    directory.

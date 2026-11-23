@@ -1,0 +1,3 @@
+apiVersion: slai.amd.com/v1alpha1
+kind: PlatformCliAuthPolicy
+enabled: true

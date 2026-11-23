@@ -1,0 +1,38 @@
+# Example — commit as z-ingress.yaml next to deployment/service in handoff.
+#
+# Naming: leading z- so plain kubectl apply -f <dir>/ sorts Ingress after Deployment/Service.
+# New applications use wildcard DNS and a platform-managed certificate for
+# <app_id>.slai-app.amd.com. Existing legacy
+# routes are preserved only through config/ingress-policy.yaml.
+# Omit spec.ingressClassName when your cluster applies a default ingress controller (common on slai-app-platform).
+# Backend port: use port.name matching Service ports[].name (e.g. http), not only port.number.
+# With auth-policy.json, this file is protectedIngress. Keep exactly host `/`
+# Prefix, and do not add nginx auth-* annotations; the platform gateway owns
+# authentication. Paths under /oauth2 and /_slai/auth are reserved.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: hosted-slai-YOUR_APP_ID
+  namespace: slai-app-prod
+  labels:
+    app.kubernetes.io/name: YOUR_APP_NAME
+    app.kubernetes.io/instance: hosted-slai-YOUR_APP_ID
+    app.kubernetes.io/managed-by: slai-app-platform
+    hosted-by: slai-app-platform
+    customer-team: YOUR_TEAM_LABEL
+spec:
+  rules:
+    - host: YOUR_APP_ID.slai-app.amd.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: YOUR_SERVICE_NAME
+                port:
+                  name: http
+  tls:
+    - hosts:
+        - YOUR_APP_ID.slai-app.amd.com
+      secretName: YOUR_APP_ID-tls

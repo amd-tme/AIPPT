@@ -88,6 +88,7 @@ registry:
 
 # Per-operation defaults -- each value must reference a model in the registry above.
 defaults:
+  create: "claude-sonnet-4-6"     # Used by: web UI create-deck (pptxgenjs script generation)
   enhance: "claude-sonnet-4-6"    # Used by: outline2ppt create --enhance
   improve: "claude-sonnet-4-6"   # Used by: outline2ppt improve
   feedback: "claude-sonnet-4-6"              # Used by: outline2ppt analyze --mode feedback

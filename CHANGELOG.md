@@ -6,8 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Image-only changes deploy without a placeholder edit.** The Factory deploy
+  target now watches the image's build inputs (the Dockerfile's `COPY` sources),
+  so a merge that changes only app code or the Dockerfile is a deploy candidate.
+  The note asking for a placeholder edit in `deployment.yaml` is gone, and the
+  adoption baseline moves to #50, whose image is live. Needs a Factory release
+  with target `watch_paths` on the deploy host; older releases ignore the key.
+- Refresh the complete slai-app-creator asset to 0.1.22 and reconcile AIPPT's
+  existing apex route with the platform-reviewed `platform-apex-tls` binding.
+  Include packaged creator templates previously hidden by the broad template
+  ignore rule, so a fresh checkout has the complete asset.
+  The current helper validates TLS before upload; the app bundle contains no
+  platform certificate material. Deployment remains a separately approved step.
+
 ### Added
 
+- **Factory app gate and CI.** Node permission preflight, offline locked npm
+  setup, the full fast suite and Sphinx checks now have matching local and
+  pull-request checks. Agent issue templates and observation-only control bands
+  support manual onboarding without enabling a queue.
 - **AI Fast and No-LLM pptxgenjs engines, and 30-3-30 decks.** AI Fast
   (`aippt.pptxgenjs_plan`) asks the LLM for a small slide plan (~2 s) and
   builds the script locally; No-LLM (`aippt.pptxgenjs_direct`) maps the outline
@@ -185,6 +204,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   is drawn at 200 px per inch of its size on the slide instead of 512 px.
 - **Competitive chart labels dropped decimals** (1.3 shown as 1). The value
   format now keeps the decimals the data has.
+- **Portable fast-test baseline.** Route tests select full mode explicitly,
+  template-merge tests use generated PPTX fixtures, and theme/master assertions
+  verify legacy input and content branding without relying on developer
+  credentials, proprietary templates or obsolete bundled-theme values.
+- **Preview sandbox test Node gate.** `tests/test_preview_sandbox.py` now requires
+  Node 22.13+ LTS or >= 23.5 (stable `--permission`) instead of >= 20, and rejects nonzero
+  `node --version` exits; gate covered by `tests/test_preview_sandbox_gate.py`.
 - **Thumbnail invalidation never fired for script-origin decks.** Real chat
   Edit patches wrap the changed text in code (e.g.
   `addBulletSlide(deck, 'Title', [`), so the raw patch text was never a
@@ -216,7 +242,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   stays editable and the gate still trusts only the explicit header.
 
 ### Changed
+- Refresh the bundled LLM Gateway and SLAI app creator skills and align contributor deployment guidance with Harbor-verified digests and hosted submission.
 
+- **Factory deployment is disabled by default.** Worker readiness and app checks
+  do not connect automatic apply; production remains separately scoped and
+  approved. Factory documentation covers durable state, identity boundaries and
+  a bounded manual dispatch.
+- **Proportionate contribution guidance.** Planning, TDD, changelog and docs
+  practices now scale with the change, allowing owner-approved review alongside
+  bounded work while preserving repository, credential and deployment safeguards.
 - **Slide thumbnails invalidate on content change.** When a slide's content
   changes via chat Edit apply/revert, the affected slides' thumbnails are nulled
   (precise, per-slide) so the deck view falls back to a placeholder rather than

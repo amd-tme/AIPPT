@@ -1,0 +1,164 @@
+version: 1
+namespace: slai-app-prod
+standard:
+  host_suffix: slai-app.amd.com
+  # Required application root route; additional paths on this host are allowed.
+  path: /
+  path_type: Prefix
+  tls_secret_name: "{app_id}-tls"
+
+# Existing app bindings are frozen at cutover; migration is a separate effort.
+legacy_tls_secrets:
+  access-demo: slai-app-wildcard-tls
+  agentbench: slai-app-wildcard-tls
+  agentmq: slai-app-wildcard-tls
+  ahds-gateway: slai-app-wildcard-tls
+  ai-initiatives-portal: slai-app-wildcard-tls
+  ai-monthly-review: slai-app-wildcard-tls
+  ai-monthly-review-hort: slai-app-wildcard-tls
+  ai-performance-portal: slai-app-wildcard-tls
+  ai-writing-detector: slai-app-wildcard-tls
+  aidentity: slai-app-wildcard-tls
+  arcaida-hsio-checklist: slai-app-wildcard-tls
+  atlassian-cli-proxy: hosted-slai-atlassian-cli-proxy-tls
+  bdcloc: hosted-slai-bdcloc-tls
+  bisr-ai-review: slai-app-wildcard-tls
+  bv-strata-pilot: slai-app-wildcard-tls
+  ce-portal: slai-app-wildcard-tls
+  cg-prism: slai-app-wildcard-tls
+  cgaim-allochub: slai-app-wildcard-tls
+  charter: slai-app-wildcard-tls
+  china-cloud-cpu-portal: slai-app-wildcard-tls
+  cip-atlas: slai-app-wildcard-tls
+  competes-operator-report: slai-app-wildcard-tls
+  connex-portal: slai-app-wildcard-tls
+  cortex: slai-app-wildcard-tls
+  cpl-feature-health-dashboard: slai-app-wildcard-tls
+  cpm-npi-collective-roadmap: slai-app-wildcard-tls
+  dashboard-orchestrator: slai-app-wildcard-tls
+  dc-studio: slai-app-wildcard-tls
+  dcgpu-cloud-spend: slai-app-wildcard-tls
+  demo-hub: slai-app-wildcard-tls
+  demofsi: slai-app-wildcard-tls
+  devrel-portal: slai-app-wildcard-tls
+  df-epics: slai-app-wildcard-tls
+  dfm-via-dashboard: slai-app-wildcard-tls
+  dfpmo-grm1: slai-app-wildcard-tls
+  drc-tracker: slai-app-wildcard-tls
+  dremio-cli: hosted-slai-dremio-cli-tls
+  entitlement-pdp: slai-app-wildcard-tls
+  evddr-hub: slai-app-wildcard-tls
+  factory-canary: slai-app-wildcard-tls
+  florence-sp7-dashboard: slai-app-wildcard-tls
+  flowdeck: slai-app-wildcard-tls
+  formalone: slai-app-wildcard-tls
+  fuse-blob-hdt: slai-app-wildcard-tls
+  gfxarch-jama-network: slai-app-wildcard-tls
+  github-agent-setup: slai-app-wildcard-tls
+  holmes: hosted-slai-holmes-tls
+  home: slai-app-wildcard-tls
+  hsioval-dashboard: slai-app-wildcard-tls
+  intelliscope: slai-app-wildcard-tls
+  ipcr-jira-service: slai-app-wildcard-tls
+  jira-link: hosted-slai-jira-link-tls
+  kbhub: slai-app-wildcard-tls
+  knowledgeops: slai-app-wildcard-tls
+  ldap-app: slai-app-wildcard-tls
+  llmd-localai: slai-app-wildcard-tls
+  localai: slai-app-wildcard-tls
+  localai-router: slai-app-wildcard-tls
+  lqe-tools: hosted-slai-lqe-tools-tls
+  mi410p-rmfw-assistant: slai-app-wildcard-tls
+  northstar-dashboard: slai-app-wildcard-tls
+  northstar-jama: slai-app-wildcard-tls
+  northstar-jira: slai-app-wildcard-tls
+  npi-dashboard-test: slai-app-wildcard-tls
+  ogmatic-query-insights: slai-app-wildcard-tls
+  pcie-schemes: hosted-slai-pcie-schemes-tls
+  pm-dashboard: slai-app-wildcard-tls
+  pmfwtarf: slai-app-wildcard-tls
+  qualityloop: slai-app-wildcard-tls
+  rabbit: slai-app-wildcard-tls
+  redflame: slai-app-wildcard-tls
+  repo-coverage-dashboard: slai-app-wildcard-tls
+  rocm-ai: slai-app-wildcard-tls
+  rocm-ai-portal: slai-app-wildcard-tls
+  run-compare-server: slai-app-wildcard-tls
+  sample-ogmatic-design-browser: slai-app-wildcard-tls
+  servo: slai-app-wildcard-tls
+  servo-dev: slai-app-wildcard-tls
+  silo-ops-reporting: slai-app-wildcard-tls
+  silo-ops-reporting-dev: slai-app-wildcard-tls
+  siloai-plugins: slai-app-wildcard-tls
+  simnow-dashboards: slai-app-wildcard-tls
+  simnow-project-review: slai-app-wildcard-tls
+  simnow-qa: slai-app-wildcard-tls
+  sip-productivity: slai-app-wildcard-tls
+  slai-app-submission: slai-app-wildcard-tls
+  slai-devsecops-guide: slai-app-wildcard-tls
+  slai-plugins: slai-app-wildcard-tls
+  spec-atlas: spec-atlas-tls
+  sso-hello-poc: slai-app-wildcard-tls
+  ssw-skills-catalog: hosted-slai-ssw-skills-catalog-tls
+  step-ca-mcp: slai-app-wildcard-tls
+  ta-pmpbi: slai-app-wildcard-tls
+  test-gap-review: slai-app-wildcard-tls
+  tile-doe-dashboard: slai-app-wildcard-tls
+  traceweaver-trial: slai-app-wildcard-tls
+  ucode: slai-app-wildcard-tls
+  varda: hosted-slai-varda-tls
+  veturi-dashboard: slai-app-wildcard-tls
+  walle: slai-app-wildcard-tls
+  walle-dev: slai-app-wildcard-tls
+  yopass: slai-app-wildcard-tls
+  zstate-model: slai-app-wildcard-tls
+
+# Platform-owned dedicated-certificate prototype; ordinary route checks still apply.
+dedicated_tls_secrets:
+  ssl-test: ssl-test-tls
+
+# Exact routes that predate the subdomain-only policy. Entries are intentionally
+# strict: changing a host, path, file, or Secret requires platform-infra review.
+# One-time certificate transitions preserve every frozen legacy URL. This does
+# not authorize new deployments under apex paths or additional legacy hosts.
+legacy_host_tls_secrets:
+  slai-app.amd.com: platform-apex-tls
+  dcgpu-hub.amd.com: platform-dcgpu-hub-tls
+
+grandfathered_routes:
+  # Platform broker exposes only its public realm and static-resource surfaces.
+  # A root route would also expose Keycloak administration and is forbidden.
+  - {app_id: platform-sso-keycloak, file: z-ingress.yaml, host: sso.slai-app.amd.com, path: /realms/slai-app, secret_name: slai-app-wildcard-tls, path_type: Prefix}
+  - {app_id: platform-sso-keycloak, file: z-ingress.yaml, host: sso.slai-app.amd.com, path: /resources, secret_name: slai-app-wildcard-tls, path_type: Prefix}
+  - {app_id: aippt, file: z-ingress.yaml, host: slai-app.amd.com, path: '/aippt(/|$)(.*)', secret_name: slai-app-amd-com-tls, path_type: ImplementationSpecific}
+  - {app_id: atlassian-cli-proxy, file: z-ingress.yaml, host: atlassian-cli-proxy.slai-app.amd.com, path: /, secret_name: hosted-slai-atlassian-cli-proxy-tls, path_type: Prefix}
+  # Applications own authentication and public endpoint routing.
+  - {app_id: bdcloc, file: z-ingress.yaml, host: bdcloc.slai-app.amd.com, path: /, secret_name: hosted-slai-bdcloc-tls, path_type: Prefix}
+  - {app_id: competes-am-regen, file: z-ingress.yaml, host: slai-app.amd.com, path: /competes-am-regen, secret_name: slai-app-amd-com-tls, path_type: Prefix}
+  - {app_id: coresperf-ai-telemetry, file: z-ingress.yaml, host: slai-app.amd.com, path: /coresperf-ai-telemetry, secret_name: slai-app-amd-com-tls, path_type: Prefix}
+  - {app_id: dcgpu-hub, file: z-ingress-vanity.yaml, host: dcgpu-hub.amd.com, path: /, secret_name: dcgpu-hub-amd-com-tls, path_type: Prefix}
+  - {app_id: dcgpu-hub, file: z-ingress.yaml, host: slai-app.amd.com, path: /dcgpu-hub, secret_name: slai-app-amd-com-tls, path_type: Prefix}
+  - {app_id: dremio-cli, file: z-ingress.yaml, host: dremio-cli.slai-app.amd.com, path: /, secret_name: hosted-slai-dremio-cli-tls, path_type: Prefix}
+  - {app_id: gce-hub, file: z-ingress-vanity.yaml, host: gce-hub.amd.com, path: /, secret_name: gce-hub-amd-com-tls, path_type: Prefix}
+  - {app_id: gce-hub, file: z-ingress.yaml, host: slai-app.amd.com, path: /gce-hub, secret_name: slai-app-amd-com-tls, path_type: Prefix}
+  - {app_id: harbor-cli-proxy, file: z-ingress.yaml, host: slai-app.amd.com, path: /harbor-cli-proxy, secret_name: slai-app-amd-com-tls, path_type: Prefix}
+  - {app_id: hima, file: z-ingress.yaml, host: slai-app.amd.com, path: /hima, secret_name: slai-app-amd-com-tls, path_type: Prefix}
+  - {app_id: holmes, file: z-ingress.yaml, host: holmes.slai-app.amd.com, path: /, secret_name: hosted-slai-holmes-tls, path_type: Prefix}
+  - {app_id: instinct-signals, file: z-ingress.yaml, host: slai-app.amd.com, path: /instinct-signals, secret_name: slai-app-amd-com-tls, path_type: Prefix}
+  - {app_id: jira-link, file: z-ingress.yaml, host: jira-link.slai-app.amd.com, path: /, secret_name: hosted-slai-jira-link-tls, path_type: Prefix}
+  - {app_id: ldap-oauth, file: z-ingress.yaml, host: slai-app.amd.com, path: '/ldap-oauth(/|$)(.*)', secret_name: slai-app-amd-com-tls, path_type: ImplementationSpecific}
+  - {app_id: llm-sizer, file: z-ingress.yaml, host: slai-app.amd.com, path: /llm-sizer, secret_name: slai-app-amd-com-tls, path_type: Prefix}
+  - {app_id: lqe-tools, file: z-ingress.yaml, host: lqe-tools.slai-app.amd.com, path: /, secret_name: hosted-slai-lqe-tools-tls, path_type: Prefix}
+  - {app_id: pcie-schemes, file: z-ingress.yaml, host: pcie-schemes.slai-app.amd.com, path: /, secret_name: hosted-slai-pcie-schemes-tls, path_type: Prefix}
+  - {app_id: pcie_dv_ai_tools_tutorial, file: z-ingress.yaml, host: slai-app.amd.com, path: /pcie_dv_ai_tools_tutorial, secret_name: slai-app-amd-com-tls, path_type: Prefix}
+  - {app_id: pr-coverage-dashboard, file: z-ingress.yaml, host: slai-app.amd.com, path: /pr-coverage-dashboard, secret_name: slai-app-amd-com-tls, path_type: Prefix}
+  - {app_id: rocm-ai, file: z-ingress-apex-redirect.yaml, host: slai-app.amd.com, path: /rocm-ai, secret_name: slai-app-amd-com-tls, path_type: Prefix}
+  - {app_id: rocm-cli, file: z-ingress.yaml, host: slai-app.amd.com, path: /rocm-cli, secret_name: slai-app-amd-com-tls, path_type: Prefix}
+  - {app_id: rocm-cli-feedback, file: z-ingress.yaml, host: slai-app.amd.com, path: /rocm-cli/feedback, secret_name: slai-app-amd-com-tls, path_type: Prefix}
+  - {app_id: slai-asset-submission, file: z-ingress.yaml, host: slai-app.amd.com, path: /slai-asset-submission, secret_name: slai-app-amd-com-tls, path_type: Prefix}
+  - {app_id: slai-registry, file: z-ingress.yaml, host: slai-registry.amd.com, path: /, secret_name: slai-registry-amd-com-tls, path_type: Prefix}
+  - {app_id: spec-atlas, file: z-ingress.yaml, host: spec-atlas.slai-app.amd.com, path: /, secret_name: spec-atlas-tls, path_type: Prefix}
+  - {app_id: ssw-skills-catalog, file: z-ingress.yaml, host: ssw-skills-catalog.slai-app.amd.com, path: /, secret_name: hosted-slai-ssw-skills-catalog-tls, path_type: Prefix}
+  - {app_id: ssw-skills-catalog, file: z-ingress.yaml, host: ssw-skills-catalog.slai-app.amd.com, path: /mcp, secret_name: hosted-slai-ssw-skills-catalog-tls, path_type: Prefix}
+  - {app_id: umami, file: z-ingress.yaml, host: dcgpu-hub.amd.com, path: /analytics, secret_name: dcgpu-hub-amd-com-tls, path_type: Prefix}
+  - {app_id: varda, file: z-ingress.yaml, host: varda.slai-app.amd.com, path: /, secret_name: hosted-slai-varda-tls, path_type: Prefix}

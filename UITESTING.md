@@ -1,14 +1,21 @@
-# UI & Feature Testing Guide - Tasks 9-16
+# UI & Feature Testing Guide
 
 Manual validation walkthrough for export, search, remix, and web UI features.
+Refreshed 2026-08-03 to match the app as shipped through the AMD Theme
+Tightening, Chat-with-a-Deck, and Live Script Render / Live Preview work
+(all live since 07-09/07-17) — the previous "Tasks 9-16" version of this doc
+described the pre-SPA dashboard/modal UI and was no longer accurate.
 
 **Prerequisites:**
-- Virtual environment activated: `source venv/Scripts/activate`
+- Virtual environment activated: `source venv/Scripts/activate` (Windows Git Bash) or `source venv/bin/activate` (Linux/Mac/WSL)
 - Test deck available: `decks/4Q25-Instinct-Partitioning.pptx` (61 slides)
 - Slide images available: `decks/4Q25-Instinct-Partitioning/` (61 PNGs)
 - Test database from prior testing: `decks/test-slides.db`
+- To exercise **Chat / Create / Regen** (anything that calls the LLM gateway): either sign in via **"Sign in to Microsoft"** in the nav, or set `AIPPT_USER_NTID=<your ntid>` before starting the server. Without one of these, those actions correctly fail with a visible "User NTID is required" error in the UI — that's expected behavior, not a bug, so don't report it as one.
 
 **Note:** All commands below assume you are in the project root directory.
+
+**Known issue going in:** the top nav has no responsive breakpoint between roughly 945px and 1440px viewport width — nav items visibly overlap and become unclickable in that range (tracked in Linear MAT-53). Maximize your browser window, or expect to see this.
 
 ---
 
@@ -22,9 +29,10 @@ python -m pytest tests/ -v --tb=short
 
 | Check | Expected |
 |-------|----------|
-| Total tests | 211 passing |
-| Skipped | 3 (gateway live tests) |
-| Failures | 0 |
+| Total tests | ~1600 passing (suite has grown substantially — don't be alarmed if the exact count has shifted) |
+| Skipped | ~5 (gateway live tests + others) |
+| Known failures | 4, all pre-existing test-fixture drift, not live bugs: 2 in `test_theme_tokens.py` (assert pre-theme-rewrite colors/fonts), 1 in `test_master_pptx.py` (assumes title slides never carry their own logo art, which they now intentionally do), 1 in `test_web_images_dir.py` (mock patch-target likely stale after a route refactor). See `Scratch/2026/08 - August/AIPPT Testing 2026-08-03/AIPPT Agent Testing Findings.md` for detail. |
+| New/unexpected failures | Report these — they're the ones that matter |
 
 ---
 
@@ -239,7 +247,7 @@ python aippt.py remix nonexistent.yaml output.pptx
 
 ---
 
-## 4. Web UI (Task 13)
+## 4. Web UI
 
 ### 4.1 Install web dependencies (if not already)
 
@@ -253,100 +261,111 @@ pip install fastapi uvicorn python-multipart
 python aippt.py serve --db decks/test-slides.db --port 8000
 ```
 
+For full-mode testing (Chat/Create/Regen calling the real LLM gateway), also export `AMD_LLM_KEY` and set `AIPPT_USER_NTID` first, or plan to sign in via the nav once the server is up.
+
 | Check | Expected |
 |-------|----------|
-| Console output | `Starting AIPPT web UI on http://127.0.0.1:8000` |
+| Console output | `Starting AIPPT web UI on http://127.0.0.1:8000 (full mode)` (or `(view-only mode)` if `AIPPT_VIEW_ONLY=1`) |
 | Server running | Uvicorn logs show `Application startup complete` |
 
 Keep this terminal open; use a separate terminal or browser for the remaining tests.
 
-### 4.3 Dashboard (Deck List)
+### 4.3 Dashboard (Cataloged Decks)
 
-Open `http://127.0.0.1:8000` in a browser.
+Open `http://127.0.0.1:8000` in a browser. **Maximize the window first** — see the known nav-overflow issue above.
 
 | Check | Expected |
 |-------|----------|
 | Page loads | "AIPPT" header visible |
-| Navigation | "Decks", "Search", "Export CSV" links in nav bar |
-| Deck table | Shows cataloged deck(s) with name, slide count, dates |
-| Styling | Pico CSS applied (clean, modern look) |
+| Navigation | "Tags", "Decks", "Search", "Settings", "Live Preview", "Docs" in the left nav group; "Export CSV", sign-in button, appearance toggle on the right |
+| Onboarding tour | A "1/6 Welcome to AIPPT" tour pops up on first load — confirm "Skip" and "Next" both work, and re-verify MAT-53's tour-restart nit (does "Tour" in the bottom-right reopen at step 1, or resume at a later step?) |
+| Deck grid | Shows cataloged decks as thumbnail cards with slide count + date; "Create Deck from Outline" tile is always first |
+| Card actions | Download / Notes / Chat / Regen / Delete buttons present per card (Regen/Delete only on decks with a source script) |
+| Sign-in gating | Without signing in, upload/create-related actions show "Sign in to Microsoft" / "Sign in to upload" rather than failing silently |
 
-### 4.4 Slide Browser
+### 4.4 Deck Detail (slide grid + Live Preview + Chat)
 
-Click on a deck name in the table.
-
-| Check | Expected |
-|-------|----------|
-| View switches | Deck list hidden, slide grid shown |
-| Back link | "Back to decks" link visible at top |
-| Deck name | Shown as heading |
-| Slide cards | Grid of cards, one per slide |
-| Thumbnails | Slide images displayed (or "No image" placeholder) |
-| Card content | Shows "Slide N: Title" and any tags |
-
-### 4.5 Slide Detail Modal
-
-Click on any slide card.
+Click on a deck card.
 
 | Check | Expected |
 |-------|----------|
-| Dialog opens | Modal/dialog appears over the page |
-| Title | Shows "Slide N: Title" |
-| Image | Full slide image displayed (or "No image available") |
-| Tags section | Shows existing tags (or "none") |
-| Add tag input | Text input and "Add Tag" button visible |
-| Speaker Notes | Expandable "Speaker Notes" section with slide notes |
-| Close button | X button in header closes the dialog |
+| View switches | Deck detail replaces the dashboard; "← Back to decks" link at top |
+| Slide grid | One card per slide, each with thumbnail + "Slide N: Title" |
+| Live Preview panel | Right-side panel, initially "No live preview — open Live Preview to render." with disabled ‹ › controls |
+| Chat panel | Below Live Preview: conversation picker (defaults to "Chat"), "+ New" / "✕ Delete" conversation buttons, a Scope selector (All slides or a specific slide), Ask/Edit/★ Review mode radios, and a message box |
 
-### 4.6 Manual Tagging via Web UI
+### 4.5 Chat with a Deck
 
-In the slide detail modal:
+With a deck open and either signed in or `AIPPT_USER_NTID` set:
 
-1. Type `test-web-tag` in the "Add tag..." input
-2. Click "Add Tag"
+1. Leave mode on **Ask**, type a question (e.g. "In one sentence, what is this deck about?"), send (button or Ctrl+Enter).
 
 | Check | Expected |
 |-------|----------|
-| Toast notification | "Tagged: test-web-tag" appears briefly at bottom-right |
-| Tag display | `test-web-tag` now shows in the tags section of the modal |
-| Persistence | Close and re-open the modal -- tag is still there |
+| Message appears | Your question shows in the thread immediately |
+| Response streams in | A coherent answer appears within a few seconds (SSE) |
+| Without sign-in/NTID | Instead of a response, the thread shows "Error: User NTID is required for LLM gateway requests..." — this is correct, expected behavior, not a bug |
 
-**Verify in database:**
-```bash
-sqlite3 decks/test-slides.db "SELECT t.name, t.source FROM tags t WHERE t.name = 'test-web-tag';"
-```
+2. Try **Edit** mode against a single slide (Scope = one slide, describe a change) — confirm it proposes a patch rather than answering conversationally.
+3. Try **★ Review** mode — confirm it produces a findings/review pass rather than a chat answer.
+4. Use "+ New" to start a second conversation, confirm the picker lets you switch between them, and "✕ Delete" removes one.
+
+### 4.6 Live Preview
+
+From a deck's Live Preview panel, or via the **Live Preview** nav link (which opens a standalone "Script Preview" page with a script picker):
+
+1. Pick a `.py`/`.js`/`.mjs` script from the dropdown (recently-generated decks are listed), or paste a path.
+2. Click **Open**.
 
 | Check | Expected |
 |-------|----------|
-| Tag record | Shows `test-web-tag|manual` |
+| Status | Changes from "Idle" to rendering, then shows "● Updated just now" |
+| Viewer | Renders the deck via PptxViewJS; "Slide 1 of N" with ‹ › navigation |
+| Grid toggle | "⊞ Grid" view shows a thumbnail grid instead of the single-slide viewer |
+| Force render | Re-renders on demand without reopening |
+| Save to Library | Catalogs the currently-open script as a deck |
+| Disclaimer | "⚠ Rendered via PptxViewJS — effects may differ from PowerPoint export" is shown — spot-check one rendered slide against the actual `.pptx` if you want to validate that claim |
 
-### 4.7 Search via Web UI
+### 4.7 Tags
+
+Click **Tags** in the nav (a button, not a page link — it opens as a slide-out panel over whatever page you're on).
+
+| Check | Expected |
+|-------|----------|
+| Panel opens | Left-side overlay, doesn't navigate away from the current page |
+| Tag list | Grouped (e.g. "Other"), each tag shows a count |
+| Clear all | Present; don't click it during testing unless you intend to wipe tags from the test db |
+
+### 4.8 Search via Web UI
 
 Click "Search" in the nav bar.
 
 | Check | Expected |
 |-------|----------|
-| View switches | Search form displayed with title and tags inputs |
+| View switches | Search form with "Title contains" and "Tags (comma-separated)" inputs |
 
 **Search by title:**
-1. Type a known slide title substring (e.g. "ROCm") in "Title contains"
-2. Click "Search"
+1. Type a known slide title substring (e.g. "ROCm") in "Title contains", click "Search".
 
 | Check | Expected |
 |-------|----------|
-| Results | Slide cards matching the title appear |
+| Results | Slide cards matching the title appear, with thumbnails |
 | No results | If no match, shows "No matching slides found." |
 
-**Search by tags:**
-1. Clear the title field
-2. Type `test-web-tag` in "Tags" field (from step 4.6)
-3. Click "Search"
+**Search by tags:** clear the title field, enter a known tag, search — confirm only matching slides return.
+
+### 4.9 Settings (Model Defaults)
+
+Click "Settings" in the nav.
 
 | Check | Expected |
 |-------|----------|
-| Results | Only the slide you tagged in step 4.6 appears |
+| Table | One row per operation (create, enhance, feedback, image, improve, notes, reverse, tags) showing current model + a dropdown to change it |
+| Source line | Shows the `models.yaml` path being used |
+| Save | Per-row Save button persists a model change |
+| Reset All to Defaults | Present at the bottom |
 
-### 4.8 CSV Export via Web UI
+### 4.10 CSV Export via Web UI
 
 Click "Export CSV" button in the nav bar.
 
@@ -355,7 +374,7 @@ Click "Export CSV" button in the nav bar.
 | File download | Browser downloads `slides.csv` |
 | CSV content | Contains all cataloged slides with headers matching export format |
 
-### 4.9 API Endpoints (optional, for thorough testing)
+### 4.11 API Endpoints (optional, for thorough testing)
 
 Test the raw JSON endpoints in a new terminal:
 
@@ -382,7 +401,7 @@ curl -X POST http://127.0.0.1:8000/api/slides/1/tags \
 | `/api/search` | JSON array of matching slides |
 | POST tags | `{"status": "ok", "tags": [...]}` response |
 
-### 4.10 Stop the server
+### 4.12 Stop the server
 
 Press `Ctrl+C` in the terminal running the server.
 

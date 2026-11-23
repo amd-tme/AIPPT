@@ -35,7 +35,7 @@ def app_with_admin(tmp_path, deck_path):
     catalog_deck(deck_path, db_path=db_path)
     app = create_app(
         db_path=db_path, uploads_dir=str(tmp_path / "u"),
-        images_dir=str(tmp_path / "img"),
+        images_dir=str(tmp_path / "img"), view_only=False,
     )
     # Lowercase allowlist (as load_admin_ntids produces). Includes the six
     # NTIDs added alongside the case-insensitivity fix so they're exercised

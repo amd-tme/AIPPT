@@ -1,0 +1,16 @@
+# Retired app-repository deployment template.
+# Current flow: an agent publishes an attributable Harbor image outside Actions
+# and submits via slai-app-creator. Platform CI/CD owns deployment and TLS rotation.
+# Do not install this legacy template in a new application.
+name: Retired app-repository deployment
+on:
+  workflow_call: {}
+permissions:
+  contents: read
+jobs:
+  update-creator:
+    runs-on: [self-hosted, linux, x64]
+    steps:
+      - run: |
+          echo '::error::Update your slai-app-creator plugin and ask your agent to deploy using the hosted submission flow. App-repository Docker builds and direct platform PR pushes are retired.'
+          exit 1

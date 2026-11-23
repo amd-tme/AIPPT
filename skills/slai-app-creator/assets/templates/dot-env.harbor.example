@@ -1,0 +1,13 @@
+# TEMPLATE — copy to .env at your app repo root (gitignored). See SKILL.md §1.
+# Source: skills/slai-app-creator/assets/templates/dot-env.harbor.example
+#
+# IMAGE_NAME must equal platform app_id. Keep .env IMAGE_NAME in sync with
+# the live platform directory name.
+
+# Platform defaults — leave unchanged for normal onboarding.
+# ALTERNATE HARBOR: no approval required; web-app developer owns all checks and maintenance.
+# HARBOR_REGISTRY is a hostname with optional port (no https:// and no path).
+HARBOR_REGISTRY=mkmhub.amd.com
+HARBOR_PROJECT=hw-slaiapp-dev
+IMAGE_NAME=your-app-id
+BUILD_CONTEXT=app

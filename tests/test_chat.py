@@ -738,7 +738,7 @@ class TestChatRoutes:
         conn.commit()
         conn.close()
 
-        app = create_app(db_path=db_file, images_dir=str(tmp_path / "images"))
+        app = create_app(db_path=db_file, images_dir=str(tmp_path / "images"), view_only=False)
         return TestClient(app), db_file
 
     def test_create_and_list_conversation(self, app_client):

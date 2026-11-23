@@ -38,7 +38,7 @@ def client(tmp_path, deck_path):
     db_path = str(tmp_path / "test.db")
     uploads_dir = str(tmp_path / "uploads")
     catalog_deck(deck_path, db_path=db_path)
-    app = create_app(db_path=db_path, uploads_dir=uploads_dir)
+    app = create_app(db_path=db_path, uploads_dir=uploads_dir, view_only=False)
     app.state.admin_ntids = {"admin"}
     return TestClient(app)
 
@@ -353,7 +353,8 @@ class TestCreateDeckEndpoint:
             "/api/decks/create",
             data={
                 "outline_text": "# Test\n## Slide 1: Hello\n- World\n",
-                "enhance": "false", "engine": "python-pptx",
+                "enhance": "false",
+                "engine": "python-pptx",
             },
             headers={"Authorization": "Bearer tok"},
         )
@@ -500,7 +501,11 @@ class TestCreateDeckEndpoint:
         with patch.object(pipeline_module, 'run_pipeline', side_effect=spy_run_pipeline):
             resp = client.post(
                 "/api/decks/create",
-                data={"outline_text": "# Test\n## Slide 1: Hi\n- OK\n", "enhance": "false", "engine": "python-pptx"},
+                data={
+                    "outline_text": "# Test\n## Slide 1: Hi\n- OK\n",
+                    "enhance": "false",
+                    "engine": "python-pptx",
+                },
                 headers={"Authorization": "Bearer tok"},
             )
 
@@ -603,7 +608,11 @@ class TestCreateDeckHardening:
         }
         resp = client.post(
             "/api/decks/create",
-            data={"outline_text": "# T\n## S1\n- x\n", "enhance": "false", "engine": "python-pptx"},
+            data={
+                "outline_text": "# T\n## S1\n- x\n",
+                "enhance": "false",
+                "engine": "python-pptx",
+            },
             headers={
                 "Authorization": "Bearer tok",
                 "X-AIPPT-NTID": "melliott",
@@ -626,7 +635,11 @@ class TestCreateDeckHardening:
         }
         resp = client.post(
             "/api/decks/create",
-            data={"outline_text": "# T\n## S1\n- x\n", "enhance": "false", "engine": "python-pptx"},
+            data={
+                "outline_text": "# T\n## S1\n- x\n",
+                "enhance": "false",
+                "engine": "python-pptx",
+            },
             headers={"Authorization": "Bearer tok"},
         )
         assert resp.status_code == 200
@@ -644,7 +657,11 @@ class TestCreateDeckHardening:
         )
         resp = client.post(
             "/api/decks/create",
-            data={"outline_text": "# T\n## S1\n- x\n", "enhance": "false", "engine": "python-pptx"},
+            data={
+                "outline_text": "# T\n## S1\n- x\n",
+                "enhance": "false",
+                "engine": "python-pptx",
+            },
             headers={"Authorization": "Bearer tok"},
         )
         assert resp.status_code == 200  # SSE always 200
@@ -894,6 +911,7 @@ class TestDeleteDeckRoute:
             db_path=db_path,
             uploads_dir=str(tmp_path / "u"),
             images_dir=images_dir,
+            view_only=False,
         )
         app.state.admin_ntids = {"admin"}
         purge_client = TestClient(app)
@@ -928,6 +946,7 @@ class TestDeleteDeckRoute:
             db_path=db_path,
             uploads_dir=str(tmp_path / "u"),
             images_dir=images_dir,
+            view_only=False,
         )
         app.state.admin_ntids = {"admin"}
         keep_client = TestClient(app)

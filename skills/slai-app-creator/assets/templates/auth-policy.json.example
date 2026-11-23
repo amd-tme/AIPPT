@@ -1,0 +1,13 @@
+{
+  "$schema": "../../../config/schemas/platform-auth-policy.schema.json",
+  "apiVersion": "slai.amd.com/v1alpha1",
+  "enabled": true,
+  "mode": "forward-auth",
+  "host": "YOUR_APP_ID.slai-app.amd.com",
+  "owner": "YOUR_OWNER",
+  "protectedIngress": "z-ingress.yaml",
+  "ldapGroups": {
+    "enabled": false
+  },
+  "logout": "app-session"
+}

@@ -16,4 +16,5 @@ searchable database, and remix slides across decks.
    backup-restore
    export-images
    configuration
+   factory
    sharepoint-setup

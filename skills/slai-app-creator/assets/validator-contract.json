@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "sha256": "3dbcbd8e964e49dedffc773eff7d993e346e19ec4250515c48171996b5d6d4bb",
+  "files": {
+    "scripts/main.py": "67e9da114abab4d6bb175208bb0e644b4280900c992b6ae8e2f03215cafb7b2a",
+    "scripts/bundle_resources.py": "8c9dfee5bc0a691a87cd6b5b063e9693383cfbf05de43622e7d8e8d7329b9529",
+    "scripts/image_release_evidence.py": "ed30c0e16825999b0a051c31f69dd5fa645c6c4bdc7f972d11583ea5ad49453f",
+    "scripts/ciphertext_validation.py": "0d905c2bb9909d531faf21b3cb84e0854f10ba6d67bfa36134952ed9a1b37824",
+    "scripts/ingress_policy.py": "839b7e482a02f5f6e45a71f0bf47b0828f4577e7fc2b1bf22f73c7dcced32159",
+    "scripts/ingress-policy.yaml": "289cce44d46aa575a73b4abb575651c435e7954d7b255ee582674e33a3fbce2d",
+    "scripts/prepare_platform_checkout.py": "00b93550a09d0da49bd1db6243509ce72dc6ea483c09eb6b424918cf5924d499",
+    "scripts/manifest_yaml.py": "06723a7809f16e7b39593417087d5b2a05373377d4aa12c3c49a15571c836e10",
+    "scripts/yaml_limits.py": "032b812744fc828532b8ac421ae2ba8cd9ab182a43f9353b6dc14865dd3cb1cf",
+    "scripts/secret_upload_validation.py": "879eafc8952793dabf99ada648332740f3a74e4c683a8787ccb45f2bb53a1be9",
+    "scripts/keycloak_egress.py": "00fdc900f3c81a95fca0b13c84f3f9f55b2a74fa139526c60b2f4209b726b510",
+    "assets/platform-keycloak-egress.json": "ac16b30a0c4af9ac9db6491c8770971646459dde2bbf87ccd176a873baa248c3",
+    "assets/platform.sops.yaml": "ddd105099691ff707576af717383b96b9388072a26ba4a929e493d346749e2ed",
+    "scripts/per_app_tls_inventory.py": "46cdf8348b9318eb2d7b988c0c2ffb4e8579669b02ea4c31cc155f9a4d566c67",
+    "assets/tls-cutover.json": "3ea2e23f4604b88515f8896953f2f4c2ebf2e86826977598dff538a88a9de7b2",
+    "scripts/hosted_validator_provenance.py": "4de07896808c4dbc89b7fc6724aff58ae7b13dce47262cba8ddbd02aab678841"
+  }
+}

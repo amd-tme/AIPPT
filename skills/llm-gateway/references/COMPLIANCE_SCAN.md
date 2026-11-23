@@ -1,8 +1,11 @@
 ---
-scan_date: "2026-03-10T04:39:46Z"
+scan_date: "2026-08-27T13:11:28Z"
 skill_name: "llm-gateway"
-risk_score: 24
+status: "PASSED"
+compliance_risk_score: 72
+waived_compliance_risk_score: 0
 risk_level: "LOW"
+block_hard: false
 scanner_version: "1.0.0"
 ---
 
@@ -12,27 +15,46 @@ scanner_version: "1.0.0"
 
 | Metric | Value |
 |--------|-------|
-| Risk Score | 24/100 |
-| Risk Level | LOW |
-| Errors | 0 |
-| Warnings | 4 |
-| Info | 0 |
-| Scan Date | 2026-03-10T04:39:46Z |
+| Status | PASSED |
+| Compliance Risk (raw) | 72/100 |
+| Waived Compliance Risk | 0/100 |
+| Risk Level (waived) | LOW |
+| BLOCK-HARD | False |
+| Errors | 4 |
+| Warnings | 0 |
+| Info | 4 |
+| Scan Date | 2026-08-27T13:11:28Z |
 
-## Warnings
+## Coverage
 
-1. **[OBF-001] Obfuscation detected: unknown_executable** - `scripts/.nfs80b7859c01d94544001b93e6`
-   File has executable permission but unrecognized extension
+| Field | Value |
+|-------|-------|
+| Static only | False |
+| Adjudicated | False |
+| Waivers active | 2/2 |
+| Pending proposals | 0 |
+| Waiver source | repo-vendored |
 
-2. **[OBF-001] Obfuscation detected: unknown_executable** - `scripts/.nfs80b7859c01d94564001b93ec`
-   File has executable permission but unrecognized extension
+## Errors
 
-3. **[OBF-001] Obfuscation detected: unknown_executable** - `scripts/.nfs80b7859c01d94573001b93ed`
-   File has executable permission but unrecognized extension
+1. **[DAT-001] Static vulnerability: sensitive_data** - `SKILL.md:222`
+   Pattern matched: api_key="dummy-key-not-used",
 
-4. **[OBF-001] Obfuscation detected: unknown_executable** - `scripts/.nfs80b7859c01d94574001b93f0`
-   File has executable permission but unrecognized extension
+2. **[DAT-001] Static vulnerability: sensitive_data** - `SKILL.md:270`
+   Pattern matched: api_key="dummy-key-not-used",  # AMD Gateway uses header authentication
 
+3. **[DAT-001] Static vulnerability: sensitive_data** - `scripts/main.py:1107`
+   Pattern matched: api_key="dummy-key-not-used",
+
+4. **[DAT-001] Static vulnerability: sensitive_data** - `scripts/main.py:1134`
+   Pattern matched: api_key="dummy-key-not-used",
+
+## Info
+
+1. Auto-find and execute script one-liner: The documentation instructs finding and executing a script via a shell one-liner. While this does not fetch remote content (local file execution only), it encourages blind script execution patterns. The script itself is local, so this is low risk, but the pattern of auto-discovering and executing scripts could be leveraged if an attacker plants a malicious main.py in the skills path.
+2. Skill documentation directs AI to auto-execute scripts: The SKILL.md contains directive language instructing the AI assistant to execute scripts automatically rather than showing code for review. This is characteristic of skill files (which legitimately direct agent behavior), but the emphatic 'EXECUTE the script and return real results' instructions reduce the user's opportunity to review actions before they run against a live gateway with credentials.
+3. Unused internal registry endpoint defined: A REGISTRY_URL constant pointing to an internal host (atlvcpdmapp02) is defined but not used anywhere in the script. Dead configuration referencing internal infrastructure can hint at future scope expansion or leftover code from a broader tool, and exposes an internal hostname in distributed code.
+4. Gateway error bodies returned to output: Raw gateway HTTP error bodies (truncated to 500 chars) are returned in the JSON output. Although the API key is redacted via _redact_secret, other internal gateway details (deployment names, internal Azure resource identifiers) could be disclosed. The code even acknowledges internal resource names like 'pdue-aoai-...' and 'dvue-aoai-001-gpt-5-codex' may appear.
 
 ---
 

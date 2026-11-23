@@ -2,6 +2,8 @@
 
 When generating a usage response for a model, follow this structure:
 
+First ask whether the gateway key is **personal** or **application**; never ask the user to paste it. For an application key, every generated request must include `user: <calling user's AMD NTID>`. `getpass.getuser()` is local-test-only and requires confirming the OS login equals the NTID. In production, the application must supply the actual calling user's NTID; obtaining or validating that identity is outside this skill's scope.
+
 ## Response Format
 
 ```markdown
@@ -79,15 +81,13 @@ print(response.content[0].text)
 
 ```python
 import os
-import getpass
 from openai import OpenAI
 
 client = OpenAI(
     api_key="dummy",
     base_url="https://llm-api.amd.com/openai/deployments/{DEPLOYMENT_ID}",
     default_headers={
-        "Ocp-Apim-Subscription-Key": os.getenv("AMD_LLM_API_KEY"),
-        "user": getpass.getuser()
+        "Ocp-Apim-Subscription-Key": os.getenv("AMD_LLM_API_KEY")
     }
 )
 

@@ -1,0 +1,48 @@
+# App checks are portable; interpreters, credentials and wrappers are host-owned.
+# Deployment stays disabled until a separately scoped operator approval.
+[repo]
+slug = "amd-tme/AIPPT"
+main = "main"
+
+[apply]
+enabled = false
+# Adoption baseline: the merge of PR #50, whose image (built from that tree) is live
+# after the platform job re-run recorded in #51. Merges up to it are deployed; moving
+# it here keeps the earlier image-only merges from becoming candidates once
+# watch_paths counts them. Changes after it must arrive through approved PRs.
+baseline = "8fec4046805f017707c2956421c114f16a9788a5"
+
+[apply.targets.aippt]
+dir = "deploy/slai-app-prod/aippt"
+adapter = "slai-app-platform"
+supersession = "latest"
+# Image inputs: the adapter builds the image from the merged tree, so a merge that
+# changes only these still deploys. Mirrors the Dockerfile's COPY sources.
+watch_paths = [
+  "Dockerfile", ".dockerignore", "deploy/ca/**",
+  "requirements.txt", "package.json", "package-lock.json", "pyproject.toml",
+  "aippt.py", "aippt/**", "lib/**", "themes/**", "examples/**", "docs/**",
+  "dirs.yaml", "gateway.yaml", "models.yaml", "templates.yaml",
+]
+
+[dispatch]
+max_active = 1
+
+[gate]
+protected_paths = [".factory.toml", "factory-bands.toml", ".github/**", "deploy/**", "AGENTS.md", "CONTRIBUTING.md", "REVIEW.md"]
+
+[[gate.check]]
+name = "node-permission"
+run = ["node", "--permission", "--eval", "if (!process.permission) process.exit(1)"]
+
+[[gate.check]]
+name = "node-dependencies"
+run = ["npm", "ci", "--offline", "--ignore-scripts", "--no-audit", "--no-fund", "--logs-max=0"]
+
+[[gate.check]]
+name = "tests"
+run = ["python", "-m", "pytest", "tests/", "-q"]
+
+[[gate.check]]
+name = "docs"
+run = ["python", "-m", "sphinx", "-M", "html", "docs", "docs/_build", "-W"]

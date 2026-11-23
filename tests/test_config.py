@@ -94,7 +94,7 @@ class TestValidOperations:
         assert "reverse" in VALID_OPERATIONS
 
     def test_all_expected_operations_present(self):
-        expected = {"enhance", "feedback", "notes", "tags", "image", "improve", "reverse"}
+        expected = {"create", "enhance", "feedback", "notes", "tags", "image", "improve", "reverse"}
         assert VALID_OPERATIONS == expected
 
 
@@ -176,7 +176,7 @@ class TestLoadModelConfig:
         config_path = str(tmp_path / "models.yaml")
         write_minimal_config(config_path)
         config = load_model_config(config_path)
-        required_ops = VALID_OPERATIONS - {"improve", "reverse"}
+        required_ops = VALID_OPERATIONS - {"create", "improve", "reverse"}
         for op in required_ops:
             assert op in config["defaults"]
 
@@ -215,6 +215,24 @@ class TestLoadModelConfig:
             yaml.dump({"registry": MINIMAL_REGISTRY, "defaults": defaults_with_reverse}, f)
         config = load_model_config(config_path)
         assert config["defaults"]["reverse"] == "claude-3.5-sonnet"
+
+    def test_loads_without_create_default(self, tmp_path):
+        """Backward compat: models.yaml without 'create' key loads successfully."""
+        config_path = str(tmp_path / "models.yaml")
+        write_minimal_config(config_path)
+        config = load_model_config(config_path)
+        assert "create" not in config["defaults"]
+        assert "enhance" in config["defaults"]
+
+    def test_loads_with_create_default(self, tmp_path):
+        """models.yaml with 'create' key includes it in defaults."""
+        config_path = str(tmp_path / "models.yaml")
+        defaults_with_create = dict(MINIMAL_DEFAULTS)
+        defaults_with_create["create"] = "claude-3.5-sonnet"
+        with open(config_path, "w") as f:
+            yaml.dump({"registry": MINIMAL_REGISTRY, "defaults": defaults_with_create}, f)
+        config = load_model_config(config_path)
+        assert config["defaults"]["create"] == "claude-3.5-sonnet"
 
 
 # ---------------------------------------------------------------------------
@@ -317,7 +335,7 @@ class TestGetModelDefault:
     def test_all_required_operations_resolve(self, tmp_path):
         config_path = str(tmp_path / "models.yaml")
         write_minimal_config(config_path)
-        for op in VALID_OPERATIONS - {"improve", "reverse"}:
+        for op in VALID_OPERATIONS - {"create", "improve", "reverse"}:
             result = get_model_default(op, config_path)
             assert isinstance(result, str) and result
 
@@ -353,6 +371,23 @@ class TestGetModelDefault:
         with open(config_path, "w") as f:
             yaml.dump({"registry": MINIMAL_REGISTRY, "defaults": defaults_with_reverse}, f)
         result = get_model_default("reverse", config_path)
+        assert result == "gpt-4o"
+
+    def test_create_raises_key_error_when_missing(self, tmp_path):
+        """get_model_default('create') raises KeyError when not in defaults."""
+        config_path = str(tmp_path / "models.yaml")
+        write_minimal_config(config_path)
+        with pytest.raises(KeyError):
+            get_model_default("create", config_path)
+
+    def test_create_resolves_when_configured(self, tmp_path):
+        """get_model_default('create') works when create is in defaults."""
+        config_path = str(tmp_path / "models.yaml")
+        defaults_with_create = dict(MINIMAL_DEFAULTS)
+        defaults_with_create["create"] = "gpt-4o"
+        with open(config_path, "w") as f:
+            yaml.dump({"registry": MINIMAL_REGISTRY, "defaults": defaults_with_create}, f)
+        result = get_model_default("create", config_path)
         assert result == "gpt-4o"
 
 

@@ -7,7 +7,8 @@ LLM-generated / user-authored scripts:
 - Node runs under the permission model: filesystem writes are confined to the
   output dir, and child-process spawning is denied.
 
-Gated on a Node runtime that supports ``--permission`` (Node >= 20). Skipped
+Gated on a Node runtime that supports ``--permission`` (stable
+flag: Node 22.13+ LTS or >= 23.5). Skipped
 cleanly otherwise, mirroring other Node-dependent tests.
 """
 import os
@@ -29,13 +30,18 @@ def _node_supports_permission() -> bool:
         out = subprocess.run([node, "--version"], capture_output=True, text=True, timeout=10)
     except Exception:
         return False
-    m = re.match(r"v(\d+)\.", out.stdout.strip())
-    return bool(m) and int(m.group(1)) >= 20
+    if out.returncode != 0:
+        return False
+    m = re.match(r"v(\d+)\.(\d+)\.", out.stdout.strip())
+    if not m:
+        return False
+    major, minor = map(int, m.groups())
+    return (major == 22 and minor >= 13) or (major, minor) >= (23, 5)
 
 
 pytestmark = pytest.mark.skipif(
     not _node_supports_permission(),
-    reason="node >= 20 (with --permission) not available",
+    reason="node 22.13+ LTS or >= 23.5 (stable --permission) not available",
 )
 
 

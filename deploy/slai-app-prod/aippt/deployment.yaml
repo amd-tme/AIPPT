@@ -34,7 +34,9 @@ spec:
           type: RuntimeDefault
       containers:
         - name: app
-          image: mkmhub.amd.com/hw-slaiapp-dev/aippt:bd23e5a8a9b59aae4da5f16e65c60bd58350fb52
+          # Stamped at deploy time with the Harbor-served digest of the image built from
+          # this repo's merge commit; Factory submits it through the hosted service.
+          image: mkmhub.amd.com/hw-slaiapp-dev/aippt@sha256:29d88a42eb251ed6400f35da3bef16baee1ebf5238cfbab6d5e2b7ed6f9aa264
           securityContext:
             privileged: false
             allowPrivilegeEscalation: false
@@ -44,19 +46,15 @@ spec:
           ports:
             - containerPort: 8000
           # Requests/limits are mandatory on the platform (admission rejects
-          # pods without them). CPU limit held to 250m to fit the
-          # slai-app-prod namespace quota (limits.cpu 8 total, ~7250m already
-          # in use as of 2026-06-22 pending an increase to 16). Memory kept at
-          # 1Gi for AIPPT's deck/image processing (python-pptx + pdftoppm/
-          # cairosvg render + MinIO streaming). Revisit CPU once the quota
-          # bump lands if render latency suffers.
+          # pods without them). Use the platform default envelope so this app
+          # does not consume extra namespace CPU/memory quota.
           resources:
             requests:
               cpu: 100m
               memory: 256Mi
             limits:
-              cpu: 250m
-              memory: 1Gi
+              cpu: 150m
+              memory: 512Mi
           env:
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: "http://atlvslaiapp03:4317"
