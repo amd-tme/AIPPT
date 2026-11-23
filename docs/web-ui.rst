@@ -221,8 +221,9 @@ new deck from a markdown outline. The panel supports:
   NTID; set it top right first). Upload icons (SVG or PNG, with a name and
   optional tags) and logos (SVG, PNG or JPG), see them as thumbnails and
   delete them. Your icons are matched to slides by name and tags, the same
-  way as the AMD icon bank, and win a tie with it; dark parts of an SVG
-  icon take the slide's icon colour. Uploads and deletes are hidden in
+  way as the AMD icon bank, and win a tie with it. An item whose label is
+  exactly your icon's name or one of its tags ("Burst") always gets your
+  icon. Dark parts of an SVG icon take the slide's icon colour. Uploads and deletes are hidden in
   view-only mode. A dark logo on a dark theme has no backing plate, so
   upload a light version for ``AMD Corporate Black``.
 

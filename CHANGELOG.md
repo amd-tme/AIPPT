@@ -30,7 +30,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **My icons & logos.** A per-user asset library keyed by NTID
   (`aippt.user_assets`; `GET/POST /api/assets`, `GET /api/assets/{id}/file`,
   `DELETE /api/assets/{id}`), with a panel on the create form. The user's icons
-  are matched alongside the bank (`my-*` ids, winning ties), and an optional
+  are matched alongside the bank (`my-*` ids, winning ties; an item label equal
+  to an icon's name or tag always picks it), and an optional
   partner logo (`cobrand_logo` form field) is drawn as an AMD | partner lockup
   on the title and closing slides of pptxgenjs decks. The app passes both to
   the script through a `user-assets.json` sidecar.

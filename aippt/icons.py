@@ -171,6 +171,21 @@ def _scores(text: str, heading: str = "") -> list[tuple[int, str]]:
     return scored
 
 
+def _user_label_match(heading: str) -> Optional[str]:
+    """The user icon whose name or one of whose tags *is* the item label.
+
+    An exact label match is a deliberate choice by the user, so it beats any
+    bank icon, however well that scores on the rest of the line.
+    """
+    label = slug(heading or "")
+    if not label:
+        return None
+    for icon in _USER_ICONS.get():
+        if label == slug(icon["name"]) or label in {slug(t) for t in icon["tags"]}:
+            return icon["id"]
+    return None
+
+
 def _rank(scored: tuple[int, str]):
     """Best score first; on a tie the user's own icon first."""
     return -scored[0], not scored[1].startswith(USER_PREFIX)
@@ -178,11 +193,18 @@ def _rank(scored: tuple[int, str]):
 
 def search(text: str, k: int = 8, heading: str = "") -> list[str]:
     """Icon ids that best fit *text*, best first (at most *k*)."""
-    return [icon_id for _, icon_id in sorted(_scores(text, heading), key=_rank)[:k]]
+    ids = [icon_id for _, icon_id in sorted(_scores(text, heading), key=_rank)]
+    mine = _user_label_match(heading)
+    if mine:
+        ids = [mine] + [i for i in ids if i != mine]
+    return ids[:k]
 
 
 def best_match(text: str, min_score: int = 4, heading: str = "") -> Optional[str]:
     """The single best icon for *text*, only when the match is confident."""
+    mine = _user_label_match(heading)
+    if mine:
+        return mine
     scored = _scores(text, heading)
     if not scored:
         return None

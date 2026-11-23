@@ -54,6 +54,20 @@ def test_user_icon_wins_a_tie_with_the_bank():
     assert sorted(scored, key=icons._rank) == [(6, "cpu"), (5, "my-gpu"), (5, "gpu"), (2, "my-x")]
 
 
+def test_label_naming_a_user_icon_picks_it_over_the_bank():
+    """An item label equal to a user icon's name or tag is a deliberate pick."""
+    entries = [{"name": "Partner Cloud", "tags": ["burst", "cloud"], "path": "/x/a.svg"}]
+    line = "cloud storage that scales"
+    bank = icons.best_match(line, heading="Cloud")
+    with icons.user_icons(entries):
+        assert icons.best_match(line, heading="Cloud") == "my-partner-cloud"
+        assert icons.best_match(line, heading="partner cloud") == "my-partner-cloud"
+        assert icons.search(line, k=2, heading="Cloud")[0] == "my-partner-cloud"
+        # A label that only shares a word is scored as before, so the bank can win
+        assert icons.best_match(line, heading="Cloud storage") == bank
+        assert icons.best_match("scale out when demand spikes", heading="Expand") == "expand"
+
+
 def test_image_size(tmp_path):
     svg = tmp_path / "a.svg"
     svg.write_bytes(b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 100"/>')
